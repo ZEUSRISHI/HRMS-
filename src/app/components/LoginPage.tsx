@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth, Role } from "../contexts/AuthContext";
+import loginImage from "../../assets/hrms-login.png";
 
 interface Props {
   onSignup: () => void;
@@ -15,56 +16,90 @@ export default function LoginPage({ onSignup, onReset }: Props) {
   const [error, setError] = useState("");
 
   const handleLogin = () => {
-    const success = login(email, password, role);
-    if (!success) setError("Invalid Email / Password / Role");
+    if (!email.trim() || !password.trim()) {
+      setError("All fields are required");
+      return;
+    }
+
+    const success = login(email.trim(), password.trim(), role);
+
+    if (!success) {
+      setError("Invalid Email / Password / Role");
+    }
   };
 
   return (
-    <div className="min-h-screen flex justify-center items-center bg-gray-900 text-white">
-      <div className="bg-gray-800 p-8 rounded-lg w-96 space-y-4">
-        <h2 className="text-xl font-bold text-center text-orange-500">
-          Quibo Tech HRMS
-        </h2>
+    <div className="min-h-screen flex bg-gray-900">
 
-        <input
-          className="w-full p-2 bg-gray-700 rounded"
-          placeholder="Email"
-          onChange={(e) => setEmail(e.target.value)}
-        />
+      {/* LEFT SIDE IMAGE */}
+      <div className="hidden md:flex w-1/2 bg-orange-600 items-center justify-center p-10">
+        <div className="text-white text-center space-y-6">
+          <h1 className="text-4xl font-bold">Quibo Tech HRMS</h1>
+          <p className="text-lg">Smart Employee Management System</p>
 
-        <input
-          type="password"
-          className="w-full p-2 bg-gray-700 rounded"
-          placeholder="Password"
-          onChange={(e) => setPassword(e.target.value)}
-        />
+          <img
+            src={loginImage}
+            alt="HRMS Login"
+            className="rounded-xl shadow-xl max-h-[400px] object-contain"
+          />
+        </div>
+      </div>
 
-        <select
-          className="w-full p-2 bg-gray-700 rounded"
-          onChange={(e) => setRole(e.target.value as Role)}
-        >
-          <option value="employee">Employee</option>
-          <option value="manager">Manager</option>
-          <option value="hr">HR</option>
-          <option value="admin">Admin</option>
-        </select>
+      {/* RIGHT SIDE FORM */}
+      <div className="flex w-full md:w-1/2 items-center justify-center p-6">
+        <div className="bg-gray-800 p-8 rounded-xl w-full max-w-md space-y-4 shadow-lg text-white">
 
-        <button
-          onClick={handleLogin}
-          className="w-full bg-orange-500 p-2 rounded"
-        >
-          Login
-        </button>
+          <h2 className="text-2xl font-bold text-center text-orange-500">
+            Login to Your Account
+          </h2>
 
-        {error && <p className="text-red-400 text-sm">{error}</p>}
+          <input
+            className="w-full p-2 bg-gray-700 rounded"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-        <div className="flex justify-between text-sm">
-          <button onClick={onSignup} className="underline text-blue-400">
-            Create Account
+          <input
+            type="password"
+            className="w-full p-2 bg-gray-700 rounded"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+
+          <select
+            className="w-full p-2 bg-gray-700 rounded"
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+          >
+            <option value="employee">Employee</option>
+            <option value="manager">Manager</option>
+            <option value="hr">HR</option>
+            <option value="admin">Admin</option>
+          </select>
+
+          <button
+            onClick={handleLogin}
+            className="w-full bg-orange-500 p-2 rounded"
+          >
+            Login
           </button>
-          <button onClick={onReset} className="underline text-blue-400">
-            Forgot Password?
-          </button>
+
+          {error && (
+            <p className="text-red-400 text-sm text-center">{error}</p>
+          )}
+
+          <div className="flex justify-between text-sm">
+            <button onClick={onSignup} className="text-blue-400 underline">
+              Create Account
+            </button>
+
+            <button onClick={onReset} className="text-blue-400 underline">
+              Forgot Password?
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
