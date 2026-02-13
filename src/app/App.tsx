@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { LoginPage } from "./components/login";
+import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
+
+import LoginPage from "./components/LoginPage";
+import SignupPage from "./components/SignUpPage";
+import ForgotPassword from "./components/ForgotPassword";
+
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
+
 import {
   LayoutDashboard,
   Clock,
@@ -15,8 +20,6 @@ import {
   UserPlus,
   Timer,
   BarChart3,
-  Menu,
-  X,
   LogOut,
 } from "lucide-react";
 
@@ -45,26 +48,35 @@ type ModuleType =
   | "time-tracking"
   | "analytics";
 
-function AppContent() {
-  const { currentUser, switchRole, logout } = useAuth();
-  const [activeModule, setActiveModule] = useState<ModuleType>("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+/* ================= APP CONTENT (AFTER LOGIN) ================= */
 
-  const menuItems = [
-    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "employee"] },
-    { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin", "manager", "employee"] },
-    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin", "manager", "employee"] },
-    { id: "status", name: "Daily Status", icon: FileText, roles: ["admin", "manager", "employee"] },
-    { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin", "manager", "employee"] },
-    { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin", "manager", "employee"] },
+function AppContent() {
+  const { currentUser, logout } = useAuth();
+  const [activeModule, setActiveModule] =
+    useState<ModuleType>("dashboard");
+
+  if (!currentUser) return null;
+
+  const menuItems: {
+    id: ModuleType;
+    name: string;
+    icon: any;
+    roles: Role[];
+  }[] = [
+    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "employee", "hr"] },
+    { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin", "manager", "employee", "hr"] },
+    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin", "manager", "employee", "hr"] },
+    { id: "status", name: "Daily Status", icon: FileText, roles: ["admin", "manager", "employee", "hr"] },
+    { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin", "manager", "employee", "hr"] },
+    { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin", "manager", "hr"] },
     { id: "clients", name: "Clients & Payments", icon: Building2, roles: ["admin", "manager"] },
     { id: "projects", name: "Projects", icon: FolderKanban, roles: ["admin", "manager", "employee"] },
-    { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin", "manager"] },
+    { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin", "hr"] },
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin", "manager", "employee"] },
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin", "manager"] },
   ];
 
-  const visibleMenuItems = menuItems.filter(item =>
+  const visibleMenuItems = menuItems.filter((item) =>
     item.roles.includes(currentUser.role)
   );
 
@@ -85,20 +97,28 @@ function AppContent() {
   };
 
   return (
-    <div className="flex h-screen bg-background">
-      <aside className="w-64 bg-card border-r flex flex-col">
+    <div className="flex h-screen bg-gray-100">
+
+      {/* Sidebar */}
+      <aside className="w-64 bg-white border-r flex flex-col shadow-md">
         <div className="p-4 border-b">
-          <h1 className="font-semibold">HR & Ops System</h1>
+          <h1 className="font-bold text-lg text-orange-600">
+            Quibo Tech HRMS
+          </h1>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
-          {visibleMenuItems.map(item => {
+          {visibleMenuItems.map((item) => {
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveModule(item.id as ModuleType)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-muted"
+                onClick={() => setActiveModule(item.id)}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                  activeModule === item.id
+                    ? "bg-orange-100 text-orange-600"
+                    : "hover:bg-gray-100"
+                }`}
               >
                 <Icon className="h-4 w-4" />
                 {item.name}
@@ -119,6 +139,7 @@ function AppContent() {
         </div>
       </aside>
 
+      {/* Main Content */}
       <main className="flex-1 p-6 overflow-y-auto">
         {renderModule()}
       </main>
@@ -126,10 +147,39 @@ function AppContent() {
   );
 }
 
+/* ================= AUTH SWITCH ================= */
+
 function AppWrapper() {
   const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <AppContent /> : <LoginPage />;
+  const [view, setView] =
+    useState<"login" | "signup" | "forgot">("login");
+
+  if (!isAuthenticated) {
+
+    if (view === "signup") {
+      return (
+        <SignupPage onBack={() => setView("login")} />
+      );
+    }
+
+    if (view === "forgot") {
+      return (
+        <ForgotPassword onBack={() => setView("login")} />
+      );
+    }
+
+    return (
+      <LoginPage
+        onSignup={() => setView("signup")}
+        onReset={() => setView("forgot")}
+      />
+    );
+  }
+
+  return <AppContent />;
 }
+
+/* ================= ROOT ================= */
 
 export default function App() {
   return (
