@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
+import { WorkforceProvider } from "./contexts/WorkforceContext";
+import MainLayout from "../layouts/MainLayout";
 
+/* ===== AUTH PAGES ===== */
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
 import ForgotPassword from "./components/ForgotPassword";
 
-import { Button } from "./components/ui/button";
-import { Badge } from "./components/ui/badge";
-
+/* ===== ICONS ===== */
 import {
   LayoutDashboard,
   Clock,
@@ -20,9 +21,10 @@ import {
   UserPlus,
   Timer,
   BarChart3,
-  LogOut,
+  Briefcase,
 } from "lucide-react";
 
+/* ===== MODULES ===== */
 import { Dashboard } from "./components/Dashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
@@ -34,6 +36,15 @@ import { ProjectManagement } from "./components/modules/ProjectManagement";
 import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
+import { WorkforceModule } from "./components/modules/WorkforceModule";
+
+
+
+/* ===== PROFILE PAGES ===== */
+import ProfilePage from "../pages/ProfilePage";
+import AccountPage from "../pages/AccountPage";
+
+/* ================= TYPES ================= */
 
 type ModuleType =
   | "dashboard"
@@ -46,12 +57,15 @@ type ModuleType =
   | "projects"
   | "onboarding"
   | "time-tracking"
-  | "analytics";
+  | "analytics"
+  | "workforce"
+  | "profile"
+  | "account";
 
-/* ================= APP CONTENT (AFTER LOGIN) ================= */
+/* ================= APP CONTENT ================= */
 
 function AppContent() {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const [activeModule, setActiveModule] =
     useState<ModuleType>("dashboard");
 
@@ -74,6 +88,7 @@ function AppContent() {
     { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin", "hr"] },
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin", "manager", "employee"] },
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin", "manager"] },
+    { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin", "manager", "hr"] },
   ];
 
   const visibleMenuItems = menuItems.filter((item) =>
@@ -92,58 +107,47 @@ function AppContent() {
       case "onboarding": return <OnboardingModule />;
       case "time-tracking": return <TimeTracking />;
       case "analytics": return <AnalyticsReports />;
+      case "workforce": return <WorkforceModule />;
+      case "profile": return <ProfilePage />;
+      case "account": return <AccountPage />;
       default: return <Dashboard />;
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <MainLayout>
+      <div className="flex h-[calc(100vh-64px)]">
 
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r flex flex-col shadow-md">
-        <div className="p-4 border-b">
-          <h1 className="font-bold text-lg text-orange-600">
-            Quibo Tech HRMS
-          </h1>
-        </div>
+        {/* SIDEBAR */}
+        <aside className="w-64 bg-white border-r flex flex-col shadow-sm">
+          <nav className="flex-1 p-4 space-y-2">
+            {visibleMenuItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveModule(item.id)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition ${
+                    activeModule === item.id
+                      ? "bg-orange-100 text-orange-600"
+                      : "hover:bg-gray-100"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.name}
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
 
-        <nav className="flex-1 p-4 space-y-2">
-          {visibleMenuItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveModule(item.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                  activeModule === item.id
-                    ? "bg-orange-100 text-orange-600"
-                    : "hover:bg-gray-100"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.name}
-              </button>
-            );
-          })}
-        </nav>
+        {/* MAIN */}
+        <main className="flex-1 p-6 overflow-y-auto">
+          {renderModule()}
+        </main>
 
-        <div className="p-4 border-t space-y-2">
-          <Badge variant="outline" className="capitalize w-full text-center">
-            {currentUser.role}
-          </Badge>
-
-          <Button variant="ghost" className="w-full" onClick={logout}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Logout
-          </Button>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-6 overflow-y-auto">
-        {renderModule()}
-      </main>
-    </div>
+      </div>
+    </MainLayout>
   );
 }
 
@@ -155,18 +159,8 @@ function AppWrapper() {
     useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
-
-    if (view === "signup") {
-      return (
-        <SignupPage onBack={() => setView("login")} />
-      );
-    }
-
-    if (view === "forgot") {
-      return (
-        <ForgotPassword onBack={() => setView("login")} />
-      );
-    }
+    if (view === "signup") return <SignupPage onBack={() => setView("login")} />;
+    if (view === "forgot") return <ForgotPassword onBack={() => setView("login")} />;
 
     return (
       <LoginPage
@@ -184,7 +178,9 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppWrapper />
+      <WorkforceProvider>
+        <AppWrapper />
+      </WorkforceProvider>
     </AuthProvider>
   );
 }

@@ -1,8 +1,11 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+
+/* ================= TYPES ================= */
 
 export type Role = "admin" | "hr" | "manager" | "employee";
 
-interface User {
+export interface User {
+  id: string;
   name: string;
   email: string;
   password: string;
@@ -10,8 +13,10 @@ interface User {
 }
 
 interface AuthContextType {
+  users: User[];                 // ✅ ADDED
   currentUser: User | null;
   isAuthenticated: boolean;
+
   login: (email: string, password: string, role: Role) => boolean;
   signup: (name: string, email: string, password: string, role: Role) => boolean;
   changePassword: (email: string, oldPass: string, newPass: string) => boolean;
@@ -19,9 +24,13 @@ interface AuthContextType {
   logout: () => void;
 }
 
+/* ================= CONTEXT ================= */
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+/* ================= PROVIDER ================= */
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -32,18 +41,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedCurrent = localStorage.getItem("hrms_current");
 
     const defaultUsers: User[] = [
-      { name: "Admin", email: "admin@quibotech.com", password: "admin123", role: "admin" },
-      { name: "HR", email: "hr@quibotech.com", password: "hr123", role: "hr" },
-      { name: "Manager", email: "manager@quibotech.com", password: "manager123", role: "manager" },
-      { name: "Employee", email: "employee@quibotech.com", password: "employee123", role: "employee" },
+      { id: "1", name: "Admin", email: "admin@quibotech.com", password: "admin123", role: "admin" },
+      { id: "2", name: "HR", email: "hr@quibotech.com", password: "hr123", role: "hr" },
+      { id: "3", name: "Manager", email: "manager@quibotech.com", password: "manager123", role: "manager" },
+      { id: "4", name: "Employee", email: "employee@quibotech.com", password: "employee123", role: "employee" },
     ];
 
     if (storedUsers) {
       const parsedUsers: User[] = JSON.parse(storedUsers);
 
-      // Ensure default users always exist
       const mergedUsers = [...defaultUsers];
-
       parsedUsers.forEach((u) => {
         if (!mergedUsers.find((d) => d.email === u.email)) {
           mergedUsers.push(u);
@@ -94,7 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    const newUser: User = { name, email, password, role };
+    const newUser: User = {
+      id: Date.now().toString(),
+      name,
+      email,
+      password,
+      role,
+    };
+
     setUsers([...users, newUser]);
     return true;
   };
@@ -136,13 +150,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /* ================= LOGOUT ================= */
 
   const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem("hrms_current");
+  setCurrentUser(null);
+  localStorage.removeItem("hrms_current");
   };
+
+  /* ================= PROVIDER VALUE ================= */
 
   return (
     <AuthContext.Provider
       value={{
+        users,                // ✅ IMPORTANT FIX
         currentUser,
         isAuthenticated: !!currentUser,
         login,
@@ -161,8 +178,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used inside AuthProvider");
   return context;
 }
