@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
 import { WorkforceProvider } from "./contexts/WorkforceContext";
+import { NotificationProvider } from "./contexts/NotificationContext"; // ✅ added
 import MainLayout from "../layouts/MainLayout";
 
 /* ===== AUTH PAGES ===== */
@@ -26,6 +27,7 @@ import {
 
 /* ===== MODULES ===== */
 import { Dashboard } from "./components/Dashboard";
+import { EmployeeDashboard } from "./components/modules/EmployeeDashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
 import { DailyStatusModule } from "./components/modules/DailyStatusModule";
@@ -38,9 +40,7 @@ import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { WorkforceModule } from "./components/modules/WorkforceModule";
 
-
-
-/* ===== PROFILE PAGES ===== */
+/* ===== PROFILE ===== */
 import ProfilePage from "../pages/ProfilePage";
 import AccountPage from "../pages/AccountPage";
 
@@ -77,18 +77,19 @@ function AppContent() {
     icon: any;
     roles: Role[];
   }[] = [
-    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "employee", "hr"] },
-    { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin", "manager", "employee", "hr"] },
-    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin", "manager", "employee", "hr"] },
-    { id: "status", name: "Daily Status", icon: FileText, roles: ["admin", "manager", "employee", "hr"] },
-    { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin", "manager", "employee", "hr"] },
-    { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin", "manager", "hr"] },
-    { id: "clients", name: "Clients & Payments", icon: Building2, roles: ["admin", "manager"] },
-    { id: "projects", name: "Projects", icon: FolderKanban, roles: ["admin", "manager", "employee"] },
-    { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin", "hr"] },
-    { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin", "manager", "employee"] },
-    { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin", "manager"] },
-    { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin", "manager", "hr"] },
+    { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
+    { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin","manager","employee","hr"] },
+    { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin","manager","employee","hr"] },
+    { id: "status", name: "Daily Status", icon: FileText, roles: ["admin","manager","employee","hr"] },
+    { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin","manager","employee","hr"] },
+
+    { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin","hr"] },
+    { id: "clients", name: "Clients & Payments", icon: Building2, roles: ["admin","manager"] },
+    { id: "projects", name: "Projects", icon: FolderKanban, roles: ["admin","manager","employee"] },
+    { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin","hr"] },
+    { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin","manager","employee"] },
+    { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
+    { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
   ];
 
   const visibleMenuItems = menuItems.filter((item) =>
@@ -97,6 +98,10 @@ function AppContent() {
 
   const renderModule = () => {
     switch (activeModule) {
+      case "dashboard":
+        return currentUser.role === "employee"
+          ? <EmployeeDashboard />
+          : <Dashboard />;
       case "attendance": return <AttendanceModule />;
       case "tasks": return <TaskManagement />;
       case "status": return <DailyStatusModule />;
@@ -115,10 +120,9 @@ function AppContent() {
   };
 
   return (
-    <MainLayout>
+    <MainLayout onNavigate={setActiveModule}>
       <div className="flex h-[calc(100vh-64px)]">
 
-        {/* SIDEBAR */}
         <aside className="w-64 bg-white border-r flex flex-col shadow-sm">
           <nav className="flex-1 p-4 space-y-2">
             {visibleMenuItems.map((item) => {
@@ -141,7 +145,6 @@ function AppContent() {
           </nav>
         </aside>
 
-        {/* MAIN */}
         <main className="flex-1 p-6 overflow-y-auto">
           {renderModule()}
         </main>
@@ -179,7 +182,9 @@ export default function App() {
   return (
     <AuthProvider>
       <WorkforceProvider>
-        <AppWrapper />
+        <NotificationProvider> {/* ✅ added here */}
+          <AppWrapper />
+        </NotificationProvider>
       </WorkforceProvider>
     </AuthProvider>
   );

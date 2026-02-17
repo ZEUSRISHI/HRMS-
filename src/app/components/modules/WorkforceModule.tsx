@@ -1,233 +1,253 @@
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { useWorkforce } from "../../contexts/WorkforceContext";
-import { useAuth } from "../../contexts/AuthContext";
+import Vendor from "../../components/VendorForm";
+import Freelancer from "../../components/FreelancerForm";
+
+
+
+type TabType = "vendors" | "freelancers";
 
 export function WorkforceModule() {
-  const {
-    vendors,
-    freelancers,
-    addVendor,
-    addFreelancer,
-    deleteVendor,
-    deleteFreelancer,
-  } = useWorkforce();
+  const [activeTab, setActiveTab] = useState<TabType>("vendors");
 
-  const { currentUser } = useAuth();
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold">Workforce Management</h1>
+        <p className="text-gray-500 text-sm">
+          Manage vendors and freelancers separately
+        </p>
+      </div>
 
-  if (!currentUser) return null;
+      {/* Tabs */}
+      <div className="flex gap-2">
+        <TabButton
+          active={activeTab === "vendors"}
+          label="Vendors"
+          onClick={() => setActiveTab("vendors")}
+        />
+        <TabButton
+          active={activeTab === "freelancers"}
+          label="Freelancers"
+          onClick={() => setActiveTab("freelancers")}
+        />
+      </div>
 
-  /* ===== ROLE PERMISSION ===== */
-  const canManage =
-    currentUser.role === "admin" || currentUser.role === "manager";
+      {activeTab === "vendors" ? <VendorForm /> : <FreelancerForm />}
+    </div>
+  );
+}
 
-  /* ===== FORM STATE ===== */
+/* ================= TAB BUTTON ================= */
 
-  const [vendorForm, setVendorForm] = useState({
-    name: "",
+type TabProps = {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+};
+
+function TabButton({ active, label, onClick }: TabProps) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-lg text-sm font-medium transition
+        ${active ? "bg-orange-500 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ================= VENDOR FORM ================= */
+
+function VendorForm() {
+  const { addVendor } = useWorkforce();
+
+  const [form, setForm] = useState({
     company: "",
+    contact: "",
     email: "",
     phone: "",
-    service: "",
+    category: "",
+    taxId: "",
+    address: "",
   });
 
-  const [freelancerForm, setFreelancerForm] = useState({
-    name: "",
-    skill: "",
-    email: "",
-    phone: "",
-    rate: "",
-  });
+  const [error, setError] = useState("");
 
-  /* ===== SUBMIT HANDLERS ===== */
+  const handleChange = (key: string, value: string) => {
+    setForm({ ...form, [key]: value });
+    setError("");
+  };
 
-  const handleVendorSubmit = () => {
-    if (!canManage) return;
+  const handleSave = () => {
+    const isEmpty = Object.values(form).some((v) => !v.trim());
 
-    if (!vendorForm.name) return;
+    if (isEmpty) {
+      setError("Please fill all required fields");
+      return;
+    }
 
     addVendor({
       id: Date.now().toString(),
-      ...vendorForm,
+      ...form,
     });
 
-    setVendorForm({
-      name: "",
-      company: "",
-      email: "",
-      phone: "",
-      service: "",
-    });
+    alert("Vendor saved successfully ✅");
+    handleCancel();
   };
 
-  const handleFreelancerSubmit = () => {
-    if (!canManage) return;
+  const handleCancel = () => {
+    setForm({
+      company: "",
+      contact: "",
+      email: "",
+      phone: "",
+      category: "",
+      taxId: "",
+      address: "",
+    });
+    setError("");
+  };
 
-    if (!freelancerForm.name) return;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Vendor Information</CardTitle>
+      </CardHeader>
+
+      <CardContent className="grid md:grid-cols-2 gap-4">
+        <Input label="Company Name" value={form.company} onChange={(v) => handleChange("company", v)} />
+        <Input label="Contact Person" value={form.contact} onChange={(v) => handleChange("contact", v)} />
+        <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
+        <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
+        <Input label="Service Category" value={form.category} onChange={(v) => handleChange("category", v)} />
+        <Input label="GST / Tax ID" value={form.taxId} onChange={(v) => handleChange("taxId", v)} />
+
+        <div className="md:col-span-2">
+          <Input label="Company Address" value={form.address} onChange={(v) => handleChange("address", v)} />
+        </div>
+
+        {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
+
+        <div className="flex justify-end gap-3 md:col-span-2 pt-4">
+          <button onClick={handleCancel} className="px-4 py-2 rounded-lg border">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-orange-500 text-white">
+            Save Vendor
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ================= FREELANCER FORM ================= */
+
+function FreelancerForm() {
+  const { addFreelancer } = useWorkforce();
+
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    skill: "",
+    rate: "",
+    experience: "",
+    portfolio: "",
+  });
+
+  const [error, setError] = useState("");
+
+  const handleChange = (key: string, value: string) => {
+    setForm({ ...form, [key]: value });
+    setError("");
+  };
+
+  const handleSave = () => {
+    const isEmpty = Object.values(form).some((v) => !v.trim());
+
+    if (isEmpty) {
+      setError("Please fill all required fields");
+      return;
+    }
 
     addFreelancer({
       id: Date.now().toString(),
-      ...freelancerForm,
+      ...form,
     });
 
-    setFreelancerForm({
-      name: "",
-      skill: "",
-      email: "",
-      phone: "",
-      rate: "",
-    });
+    alert("Freelancer saved successfully ✅");
+    handleCancel();
   };
 
-  /* ================= UI ================= */
+  const handleCancel = () => {
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      skill: "",
+      rate: "",
+      experience: "",
+      portfolio: "",
+    });
+    setError("");
+  };
 
   return (
-    <div className="space-y-8">
+    <Card>
+      <CardHeader>
+        <CardTitle>Freelancer Information</CardTitle>
+      </CardHeader>
 
-      <h2 className="text-2xl font-semibold text-orange-600">
-        Vendors & Freelancers
-      </h2>
+      <CardContent className="grid md:grid-cols-2 gap-4">
+        <Input label="Full Name" value={form.name} onChange={(v) => handleChange("name", v)} />
+        <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
+        <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
+        <Input label="Primary Skill" value={form.skill} onChange={(v) => handleChange("skill", v)} />
+        <Input label="Hourly Rate" value={form.rate} onChange={(v) => handleChange("rate", v)} />
+        <Input label="Experience (Years)" value={form.experience} onChange={(v) => handleChange("experience", v)} />
 
-      {/* ===== ADD FORMS ===== */}
-      {canManage && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          {/* ===== VENDOR FORM ===== */}
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Add Vendor</h3>
-
-            {Object.keys(vendorForm).map((key) => (
-              <input
-                key={key}
-                placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
-                value={(vendorForm as any)[key]}
-                onChange={(e) =>
-                  setVendorForm({
-                    ...vendorForm,
-                    [key]: e.target.value,
-                  })
-                }
-                className="border p-2 rounded w-full mb-2"
-              />
-            ))}
-
-            <button
-              onClick={handleVendorSubmit}
-              className="bg-orange-500 text-white px-4 py-2 rounded w-full"
-            >
-              Add Vendor
-            </button>
-          </div>
-
-          {/* ===== FREELANCER FORM ===== */}
-          <div className="bg-white p-4 rounded-xl shadow">
-            <h3 className="font-semibold mb-3">Add Freelancer</h3>
-
-            {Object.keys(freelancerForm).map((key) => (
-              <input
-                key={key}
-                placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
-                value={(freelancerForm as any)[key]}
-                onChange={(e) =>
-                  setFreelancerForm({
-                    ...freelancerForm,
-                    [key]: e.target.value,
-                  })
-                }
-                className="border p-2 rounded w-full mb-2"
-              />
-            ))}
-
-            <button
-              onClick={handleFreelancerSubmit}
-              className="bg-orange-500 text-white px-4 py-2 rounded w-full"
-            >
-              Add Freelancer
-            </button>
-          </div>
-
-        </div>
-      )}
-
-      {!canManage && (
-        <p className="text-gray-500 text-sm">
-          Only Admin and Manager can add or manage vendors and freelancers.
-        </p>
-      )}
-
-      {/* ===== LIST SECTION ===== */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        {/* ===== VENDOR LIST ===== */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h3 className="font-semibold mb-3">
-            Vendors ({vendors.length})
-          </h3>
-
-          {vendors.length === 0 && (
-            <p className="text-gray-400 text-sm">No vendors added</p>
-          )}
-
-          {vendors.map((v) => (
-            <div
-              key={v.id}
-              className="flex justify-between items-center border-b py-2"
-            >
-              <div>
-                <p className="font-medium">{v.name}</p>
-                <p className="text-sm text-gray-500">
-                  {v.company} • {v.service}
-                </p>
-              </div>
-
-              {canManage && (
-                <button
-                  onClick={() => deleteVendor(v.id)}
-                  className="text-red-500 text-sm"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="md:col-span-2">
+          <Input label="Portfolio / Website" value={form.portfolio} onChange={(v) => handleChange("portfolio", v)} />
         </div>
 
-        {/* ===== FREELANCER LIST ===== */}
-        <div className="bg-white p-4 rounded-xl shadow">
-          <h3 className="font-semibold mb-3">
-            Freelancers ({freelancers.length})
-          </h3>
+        {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
 
-          {freelancers.length === 0 && (
-            <p className="text-gray-400 text-sm">
-              No freelancers added
-            </p>
-          )}
-
-          {freelancers.map((f) => (
-            <div
-              key={f.id}
-              className="flex justify-between items-center border-b py-2"
-            >
-              <div>
-                <p className="font-medium">{f.name}</p>
-                <p className="text-sm text-gray-500">
-                  {f.skill} • {f.rate}
-                </p>
-              </div>
-
-              {canManage && (
-                <button
-                  onClick={() => deleteFreelancer(f.id)}
-                  className="text-red-500 text-sm"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="flex justify-end gap-3 md:col-span-2 pt-4">
+          <button onClick={handleCancel} className="px-4 py-2 rounded-lg border">
+            Cancel
+          </button>
+          <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-orange-500 text-white">
+            Save Freelancer
+          </button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-      </div>
+/* ================= INPUT ================= */
+
+type InputProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+};
+
+function Input({ label, value, onChange, type = "text" }: InputProps) {
+  return (
+    <div className="space-y-1">
+      <label className="text-sm text-gray-600">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+      />
     </div>
   );
 }

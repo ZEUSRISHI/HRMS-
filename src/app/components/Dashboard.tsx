@@ -1,4 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import UserInfoCard from "../components/common/UserInfoCard";
+
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import {
   Users,
   CheckCircle,
@@ -8,16 +10,16 @@ import {
   TrendingUp,
   Briefcase,
   UserPlus,
-} from 'lucide-react';
+} from "lucide-react";
 
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from "../contexts/AuthContext";
 import {
   mockUsers,
   mockTasks,
   mockProjects,
   mockAttendance,
   mockInvoices,
-} from '../data/mockData';
+} from "../data/mockData";
 
 import {
   BarChart,
@@ -33,25 +35,24 @@ import {
   PieChart,
   Pie,
   Cell,
-} from 'recharts';
+} from "recharts";
 
-import { useWorkforce } from '../contexts/WorkforceContext';
+import { useWorkforce } from "../contexts/WorkforceContext";
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
 export function Dashboard() {
   const { currentUser } = useAuth();
-  const { vendors, freelancers } = useWorkforce();
+  const { vendors, freelancers } = useWorkforce(); // ✅ Workforce data
 
-  /* ✅ Prevent null crash */
   if (!currentUser) return <div className="p-6">Loading user...</div>;
 
   /* ================= STATS ================= */
 
-  const totalEmployees = mockUsers.filter((u) => u.status === 'active').length;
+  const totalEmployees = mockUsers.filter((u) => u.status === "active").length;
   const myTasks = mockTasks.filter((t) => t.assignedTo === currentUser.id);
-  const completedTasks = myTasks.filter((t) => t.status === 'completed').length;
-  const activeProjects = mockProjects.filter((p) => p.status === 'in-progress').length;
+  const completedTasks = myTasks.filter((t) => t.status === "completed").length;
+  const activeProjects = mockProjects.filter((p) => p.status === "in-progress").length;
 
   const totalRevenue = mockInvoices.reduce((sum, inv) => sum + inv.paidAmount, 0);
   const outstandingAmount = mockInvoices.reduce(
@@ -59,15 +60,15 @@ export function Dashboard() {
     0
   );
 
-  const attendanceRecords = mockAttendance.filter((a) => a.status === 'present');
+  const attendanceRecords = mockAttendance.filter((a) => a.status === "present");
   const attendanceRate = (attendanceRecords.length / mockAttendance.length) * 100;
 
   /* ================= CHART DATA ================= */
 
   const taskStatusData = [
-    { name: 'Pending', value: mockTasks.filter((t) => t.status === 'pending').length },
-    { name: 'In Progress', value: mockTasks.filter((t) => t.status === 'in-progress').length },
-    { name: 'Completed', value: mockTasks.filter((t) => t.status === 'completed').length },
+    { name: "Pending", value: mockTasks.filter((t) => t.status === "pending").length },
+    { name: "In Progress", value: mockTasks.filter((t) => t.status === "in-progress").length },
+    { name: "Completed", value: mockTasks.filter((t) => t.status === "completed").length },
   ];
 
   const projectData = mockProjects.map((p) => ({
@@ -78,15 +79,18 @@ export function Dashboard() {
   }));
 
   const weeklyAttendance = [
-    { day: 'Mon', present: 4, total: 5 },
-    { day: 'Tue', present: 5, total: 5 },
-    { day: 'Wed', present: 4, total: 5 },
-    { day: 'Thu', present: 5, total: 5 },
-    { day: 'Fri', present: 3, total: 5 },
+    { day: "Mon", present: 4, total: 5 },
+    { day: "Tue", present: 5, total: 5 },
+    { day: "Wed", present: 4, total: 5 },
+    { day: "Thu", present: 5, total: 5 },
+    { day: "Fri", present: 3, total: 5 },
   ];
 
   return (
     <div className="space-y-6">
+
+      {/* USER INFO */}
+      <UserInfoCard />
 
       {/* HEADER */}
       <div>
@@ -100,20 +104,20 @@ export function Dashboard() {
 
       {/* ================= STATS GRID ================= */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-
         <StatCard title="Total Employees" value={totalEmployees} icon={Users} subtitle="Active employees" />
         <StatCard title="Active Projects" value={activeProjects} icon={FolderKanban} subtitle="In progress" />
         <StatCard title="Attendance Rate" value={`${attendanceRate.toFixed(1)}%`} icon={CheckCircle} subtitle="This week" />
         <StatCard title="Revenue" value={`$${(totalRevenue / 1000).toFixed(0)}K`} icon={DollarSign} subtitle={`${(outstandingAmount / 1000).toFixed(0)}K outstanding`} />
+
+        {/* ✅ NEW WORKFORCE STATS */}
         <StatCard title="Vendors" value={vendors.length} icon={Briefcase} subtitle="Registered vendors" />
         <StatCard title="Freelancers" value={freelancers.length} icon={UserPlus} subtitle="Active freelancers" />
-
       </div>
 
       {/* ================= CHARTS ================= */}
       <div className="grid gap-4 md:grid-cols-2">
 
-        {/* PIE CHART */}
+        {/* PIE */}
         <Card>
           <CardHeader>
             <CardTitle>Task Status Overview</CardTitle>
@@ -121,15 +125,8 @@ export function Dashboard() {
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
-                <Pie
-                  data={taskStatusData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={({ name, value }) => `${name}: ${value}`}
-                  dataKey="value"
-                >
-                  {taskStatusData.map((entry, index) => (
+                <Pie data={taskStatusData} cx="50%" cy="50%" outerRadius={80} dataKey="value">
+                  {taskStatusData.map((_, index) => (
                     <Cell key={index} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -139,7 +136,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* LINE CHART */}
+        {/* LINE */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Attendance Trend</CardTitle>
@@ -159,7 +156,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* BAR CHART */}
+        {/* BAR */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Project Progress & Budget</CardTitle>
@@ -169,35 +166,34 @@ export function Dashboard() {
               <BarChart data={projectData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
+                <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar yAxisId="left" dataKey="progress" fill="#3b82f6" />
-                <Bar yAxisId="right" dataKey="budget" fill="#10b981" />
-                <Bar yAxisId="right" dataKey="spent" fill="#f59e0b" />
+                <Bar dataKey="progress" fill="#3b82f6" />
+                <Bar dataKey="budget" fill="#10b981" />
+                <Bar dataKey="spent" fill="#f59e0b" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
       </div>
 
-      {/* ================= EMPLOYEE TASK SUMMARY ================= */}
-      {currentUser.role === 'employee' && (
+      {/* ================= EMPLOYEE SUMMARY ================= */}
+      {currentUser.role === "employee" && (
         <Card>
           <CardHeader>
             <CardTitle>My Tasks Summary</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
-              <MiniStat icon={Clock} label="Pending" value={myTasks.filter(t => t.status === 'pending').length} />
-              <MiniStat icon={TrendingUp} label="In Progress" value={myTasks.filter(t => t.status === 'in-progress').length} />
+              <MiniStat icon={Clock} label="Pending" value={myTasks.filter(t => t.status === "pending").length} />
+              <MiniStat icon={TrendingUp} label="In Progress" value={myTasks.filter(t => t.status === "in-progress").length} />
               <MiniStat icon={CheckCircle} label="Completed" value={completedTasks} />
             </div>
           </CardContent>
         </Card>
       )}
+
     </div>
   );
 }
@@ -206,25 +202,23 @@ export function Dashboard() {
 
 function StatCard({ title, value, subtitle, icon: Icon }: any) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="font-semibold">{value}</div>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
-      </CardContent>
-    </Card>
+    <div className="bg-white rounded-xl shadow p-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{title}</p>
+        <Icon className="h-4 w-4 text-gray-400" />
+      </div>
+      <p className="text-xl font-semibold mt-2">{value}</p>
+      <p className="text-xs text-gray-400">{subtitle}</p>
+    </div>
   );
 }
 
 function MiniStat({ icon: Icon, label, value }: any) {
   return (
-    <div className="flex items-center gap-4">
-      <Icon className="h-8 w-8 text-orange-500" />
+    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
+      <Icon className="h-6 w-6 text-orange-500" />
       <div>
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="text-xs text-gray-500">{label}</p>
         <p className="font-semibold">{value}</p>
       </div>
     </div>
