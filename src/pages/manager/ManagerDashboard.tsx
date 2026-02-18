@@ -1,5 +1,5 @@
-import TimesheetApproval from "../../components/manager/TimesheetApproval";
-import PerformanceDashboard from "..\..\components\manager\PerformanceDashboard";
+import TimesheetApproval from '@/app/components/manager/TimesheetApproval';
+import PerformanceDashboard from '@/app/components/manager/PerformanceDashboard';
 
 export default function ManagerDashboard() {
   return (

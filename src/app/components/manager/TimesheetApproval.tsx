@@ -1,70 +1,79 @@
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 
+// Type for timesheet
 type Timesheet = {
   id: string;
-  employeeName: string;
+  employee: string;
   date: string;
   hours: number;
   status: "pending" | "approved" | "rejected";
 };
 
-export default function TimesheetApproval() {
-  const [timesheets, setTimesheets] = useState<Timesheet[]>([
-    {
-      id: "1",
-      employeeName: "John",
-      date: "2026-02-17",
-      hours: 8,
-      status: "pending",
-    },
-  ]);
+// Mock data
+const mockTimesheets: Timesheet[] = [
+  { id: "1", employee: "Alice", date: "2026-02-15", hours: 8, status: "pending" },
+  { id: "2", employee: "Bob", date: "2026-02-14", hours: 7, status: "approved" },
+  { id: "3", employee: "Charlie", date: "2026-02-13", hours: 9, status: "pending" },
+];
 
-  const updateStatus = (id: string, status: Timesheet["status"]) => {
-    setTimesheets(prev =>
-      prev.map(t => (t.id === id ? { ...t, status } : t))
+export default function TimesheetApproval() {
+  const [timesheets, setTimesheets] = useState<Timesheet[]>(mockTimesheets);
+
+  const handleApprove = (id: string) => {
+    setTimesheets(ts =>
+      ts.map(t => (t.id === id ? { ...t, status: "approved" } : t))
+    );
+  };
+
+  const handleReject = (id: string) => {
+    setTimesheets(ts =>
+      ts.map(t => (t.id === id ? { ...t, status: "rejected" } : t))
     );
   };
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow">
-      <h2 className="font-semibold mb-4">Timesheet Approval</h2>
-
-      <table className="w-full text-sm">
-        <thead className="border-b text-left">
-          <tr>
-            <th>Employee</th>
-            <th>Date</th>
-            <th>Hours</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {timesheets.map(t => (
-            <tr key={t.id} className="border-b">
-              <td>{t.employeeName}</td>
-              <td>{t.date}</td>
-              <td>{t.hours}</td>
-              <td className="capitalize">{t.status}</td>
-              <td className="space-x-2">
-                <button
-                  onClick={() => updateStatus(t.id, "approved")}
-                  className="px-2 py-1 bg-green-500 text-white rounded"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => updateStatus(t.id, "rejected")}
-                  className="px-2 py-1 bg-red-500 text-white rounded"
-                >
-                  Reject
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Timesheet Approval</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {timesheets.map(ts => (
+          <div key={ts.id} className="flex justify-between items-center border p-3 rounded">
+            <div>
+              <p className="font-medium">{ts.employee}</p>
+              <p className="text-sm text-gray-500">
+                {ts.date} • {ts.hours} hours
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge
+                variant={
+                  ts.status === "approved"
+                    ? "default"
+                    : ts.status === "rejected"
+                    ? "destructive"
+                    : "secondary"
+                }
+              >
+                {ts.status}
+              </Badge>
+              {ts.status === "pending" && (
+                <>
+                  <Button size="sm" onClick={() => handleApprove(ts.id)}>
+                    Approve
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleReject(ts.id)}>
+                    Reject
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
