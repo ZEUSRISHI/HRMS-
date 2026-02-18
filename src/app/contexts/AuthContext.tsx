@@ -1,6 +1,4 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { EmployeeDashboard } from "../components/modules/EmployeeDashboard";
-
 
 /* ================= TYPES ================= */
 
@@ -15,7 +13,7 @@ export interface User {
 }
 
 interface AuthContextType {
-  users: User[];                 // ✅ ADDED
+  users: User[];
   currentUser: User | null;
   isAuthenticated: boolean;
 
@@ -36,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  /* ================= INITIAL LOAD ================= */
+  /* ===== INITIAL LOAD ===== */
 
   useEffect(() => {
     const storedUsers = localStorage.getItem("hrms_users");
@@ -71,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /* ================= SAVE USERS ================= */
+  /* ===== SAVE USERS ===== */
 
   useEffect(() => {
     if (users.length > 0) {
@@ -79,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [users]);
 
-  /* ================= LOGIN ================= */
+  /* ===== LOGIN ===== */
 
   const login = (email: string, password: string, role: Role) => {
     const user = users.find(
@@ -96,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  /* ================= SIGNUP ================= */
+  /* ===== SIGNUP ===== */
 
   const signup = (name: string, email: string, password: string, role: Role) => {
     if (users.find((u) => u.email.toLowerCase() === email.toLowerCase())) {
@@ -111,16 +109,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
     };
 
-    setUsers([...users, newUser]);
+    setUsers((prev) => [...prev, newUser]);
     return true;
   };
 
-  /* ================= CHANGE PASSWORD ================= */
+  /* ===== CHANGE PASSWORD ===== */
 
   const changePassword = (email: string, oldPass: string, newPass: string) => {
-    const user = users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
-    );
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
     if (!user || user.password !== oldPass) return false;
 
@@ -132,12 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  /* ================= RESET PASSWORD ================= */
+  /* ===== RESET PASSWORD ===== */
 
   const resetPassword = (email: string, newPassword: string) => {
-    const user = users.find(
-      (u) => u.email.toLowerCase() === email.toLowerCase()
-    );
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
 
     if (!user) return false;
 
@@ -149,19 +143,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  /* ================= LOGOUT ================= */
+  /* ===== LOGOUT ===== */
 
   const logout = () => {
-  setCurrentUser(null);
-  localStorage.removeItem("hrms_current");
+    setCurrentUser(null);
+    localStorage.removeItem("hrms_current");
   };
 
-  /* ================= PROVIDER VALUE ================= */
+  /* ===== PROVIDER ===== */
 
   return (
     <AuthContext.Provider
       value={{
-        users,                // ✅ IMPORTANT FIX
+        users,
         currentUser,
         isAuthenticated: !!currentUser,
         login,

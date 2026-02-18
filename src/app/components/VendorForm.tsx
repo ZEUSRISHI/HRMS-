@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { v4 as uuid } from "uuid";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { useWorkforce } from "../contexts/WorkforceContext";
 import { useNotification } from "../contexts/NotificationContext";
 
+/* ================= TYPES ================= */
+
 type VendorFormData = {
+  name: string;      // from old form
   company: string;
   contact: string;
   email: string;
@@ -15,9 +19,10 @@ type VendorFormData = {
 
 export default function VendorForm() {
   const { addVendor } = useWorkforce();
-  const { addNotification } = useNotification(); // ✅ hook INSIDE component
+  const { addNotification } = useNotification();
 
   const [form, setForm] = useState<VendorFormData>({
+    name: "",
     company: "",
     contact: "",
     email: "",
@@ -43,19 +48,20 @@ export default function VendorForm() {
     }
 
     addVendor({
-      id: Date.now().toString(),
+      id: uuid(),
       ...form,
     });
 
-    // ✅ ADD NOTIFICATION HERE
     addNotification(`New vendor added: ${form.company}`);
 
     alert("Vendor saved successfully ✅");
+
     handleCancel();
   };
 
   const handleCancel = () => {
     setForm({
+      name: "",
       company: "",
       contact: "",
       email: "",
@@ -74,6 +80,8 @@ export default function VendorForm() {
       </CardHeader>
 
       <CardContent className="grid md:grid-cols-2 gap-4">
+
+        <Input label="Vendor Name" value={form.name} onChange={(v) => handleChange("name", v)} />
         <Input label="Company Name" value={form.company} onChange={(v) => handleChange("company", v)} />
         <Input label="Contact Person" value={form.contact} onChange={(v) => handleChange("contact", v)} />
         <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
@@ -85,16 +93,26 @@ export default function VendorForm() {
           <Input label="Company Address" value={form.address} onChange={(v) => handleChange("address", v)} />
         </div>
 
-        {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
+        {error && (
+          <p className="text-red-500 text-sm md:col-span-2">{error}</p>
+        )}
 
         <div className="flex justify-end gap-3 md:col-span-2 pt-4">
-          <button onClick={handleCancel} className="px-4 py-2 border rounded-lg">
+          <button
+            onClick={handleCancel}
+            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+          >
             Cancel
           </button>
-          <button onClick={handleSave} className="px-4 py-2 bg-orange-500 text-white rounded-lg">
+
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+          >
             Save Vendor
           </button>
         </div>
+
       </CardContent>
     </Card>
   );

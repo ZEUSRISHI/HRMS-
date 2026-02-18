@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { useWorkforce } from "../contexts/WorkforceContext";
 import { useNotification } from "../contexts/NotificationContext";
+import { v4 as uuid } from "uuid";
 
 type FreelancerFormData = {
   name: string;
@@ -15,7 +16,7 @@ type FreelancerFormData = {
 
 export default function FreelancerForm() {
   const { addFreelancer } = useWorkforce();
-  const { addNotification } = useNotification(); // ✅ hook inside component
+  const { addNotification } = useNotification();
 
   const [form, setForm] = useState<FreelancerFormData>({
     name: "",
@@ -34,24 +35,33 @@ export default function FreelancerForm() {
     setError("");
   };
 
-  const handleSave = () => {
-    const isEmpty = Object.values(form).some((v) => !v.trim());
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
 
+    const isEmpty = Object.values(form).some((v) => !v.trim());
     if (isEmpty) {
       setError("Please fill all required fields");
       return;
     }
 
     addFreelancer({
-      id: Date.now().toString(),
+      id: uuid(),
       ...form,
     });
 
-    // ✅ Notification trigger
     addNotification(`New freelancer added: ${form.name}`);
 
     alert("Freelancer saved successfully ✅");
-    handleCancel();
+
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      skill: "",
+      rate: "",
+      experience: "",
+      portfolio: "",
+    });
   };
 
   const handleCancel = () => {
@@ -73,28 +83,30 @@ export default function FreelancerForm() {
         <CardTitle>Freelancer Information</CardTitle>
       </CardHeader>
 
-      <CardContent className="grid md:grid-cols-2 gap-4">
-        <Input label="Full Name" value={form.name} onChange={(v) => handleChange("name", v)} />
-        <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
-        <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
-        <Input label="Primary Skill" value={form.skill} onChange={(v) => handleChange("skill", v)} />
-        <Input label="Hourly Rate" value={form.rate} onChange={(v) => handleChange("rate", v)} />
-        <Input label="Experience (Years)" value={form.experience} onChange={(v) => handleChange("experience", v)} />
+      <CardContent>
+        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
+          <Input label="Full Name" value={form.name} onChange={(v) => handleChange("name", v)} />
+          <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
+          <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
+          <Input label="Primary Skill" value={form.skill} onChange={(v) => handleChange("skill", v)} />
+          <Input label="Hourly Rate" value={form.rate} onChange={(v) => handleChange("rate", v)} />
+          <Input label="Experience (Years)" value={form.experience} onChange={(v) => handleChange("experience", v)} />
 
-        <div className="md:col-span-2">
-          <Input label="Portfolio / Website" value={form.portfolio} onChange={(v) => handleChange("portfolio", v)} />
-        </div>
+          <div className="md:col-span-2">
+            <Input label="Portfolio / Website" value={form.portfolio} onChange={(v) => handleChange("portfolio", v)} />
+          </div>
 
-        {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
+          {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
 
-        <div className="flex justify-end gap-3 md:col-span-2 pt-4">
-          <button onClick={handleCancel} className="px-4 py-2 border rounded-lg">
-            Cancel
-          </button>
-          <button onClick={handleSave} className="px-4 py-2 bg-orange-500 text-white rounded-lg">
-            Save Freelancer
-          </button>
-        </div>
+          <div className="flex justify-end gap-3 md:col-span-2 pt-4">
+            <button type="button" onClick={handleCancel} className="px-4 py-2 border rounded-lg">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-orange-500 text-white rounded-lg">
+              Save Freelancer
+            </button>
+          </div>
+        </form>
       </CardContent>
     </Card>
   );

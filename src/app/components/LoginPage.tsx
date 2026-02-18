@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAuth, Role } from "../contexts/AuthContext";
-import loginImage from "../../assets/hrms-login.png"
+import loginImage from "../assets/hrms-login1.png"
 
 interface Props {
   onSignup: () => void;

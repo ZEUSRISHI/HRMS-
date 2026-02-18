@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
 import { WorkforceProvider } from "./contexts/WorkforceContext";
-import { NotificationProvider } from "./contexts/NotificationContext"; // ✅ added
+import { NotificationProvider } from "./contexts/NotificationContext";
+import { TaskProvider } from "./contexts/TaskContext";
+import { TimesheetProvider } from "./contexts/TimesheetContext";
+import { PerformanceProvider } from "./contexts/PerformanceContext";
+
 import MainLayout from "../layouts/MainLayout";
 
 /* ===== AUTH PAGES ===== */
@@ -82,7 +86,6 @@ function AppContent() {
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin","manager","employee","hr"] },
     { id: "status", name: "Daily Status", icon: FileText, roles: ["admin","manager","employee","hr"] },
     { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin","manager","employee","hr"] },
-
     { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin","hr"] },
     { id: "clients", name: "Clients & Payments", icon: Building2, roles: ["admin","manager"] },
     { id: "projects", name: "Projects", icon: FolderKanban, roles: ["admin","manager","employee"] },
@@ -122,33 +125,25 @@ function AppContent() {
   return (
     <MainLayout onNavigate={setActiveModule}>
       <div className="flex h-[calc(100vh-64px)]">
-
-        <aside className="w-64 bg-white border-r flex flex-col shadow-sm">
-          <nav className="flex-1 p-4 space-y-2">
-            {visibleMenuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveModule(item.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition ${
-                    activeModule === item.id
-                      ? "bg-orange-100 text-orange-600"
-                      : "hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {item.name}
-                </button>
-              );
-            })}
-          </nav>
+        <aside className="w-64 bg-white border-r p-4 space-y-2">
+          {visibleMenuItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveModule(item.id)}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100"
+              >
+                <Icon className="h-4 w-4" />
+                {item.name}
+              </button>
+            );
+          })}
         </aside>
 
         <main className="flex-1 p-6 overflow-y-auto">
           {renderModule()}
         </main>
-
       </div>
     </MainLayout>
   );
@@ -158,12 +153,14 @@ function AppContent() {
 
 function AppWrapper() {
   const { isAuthenticated } = useAuth();
-  const [view, setView] =
-    useState<"login" | "signup" | "forgot">("login");
+  const [view, setView] = useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
-    if (view === "signup") return <SignupPage onBack={() => setView("login")} />;
-    if (view === "forgot") return <ForgotPassword onBack={() => setView("login")} />;
+    if (view === "signup")
+      return <SignupPage onBack={() => setView("login")} />;
+
+    if (view === "forgot")
+      return <ForgotPassword onBack={() => setView("login")} />;
 
     return (
       <LoginPage
@@ -181,11 +178,17 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <WorkforceProvider>
-        <NotificationProvider> {/* ✅ added here */}
-          <AppWrapper />
-        </NotificationProvider>
-      </WorkforceProvider>
+      <TimesheetProvider>
+        <PerformanceProvider>
+          <TaskProvider>
+            <WorkforceProvider>
+              <NotificationProvider>
+                <AppWrapper />
+              </NotificationProvider>
+            </WorkforceProvider>
+          </TaskProvider>
+        </PerformanceProvider>
+      </TimesheetProvider>
     </AuthProvider>
   );
 }
