@@ -5,6 +5,7 @@ import { NotificationProvider } from "./contexts/NotificationContext";
 import { TaskProvider } from "./contexts/TaskContext";
 import { TimesheetProvider } from "./contexts/TimesheetContext";
 import { PerformanceProvider } from "./contexts/PerformanceContext";
+import { ProjectProvider } from "./contexts/ProjectContext";
 
 import MainLayout from "../layouts/MainLayout";
 
@@ -44,6 +45,9 @@ import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { WorkforceModule } from "./components/modules/WorkforceModule";
 
+/* ✅ NEW MODULE */
+import AdminSetupModule from "./components/modules/AdminSetupModule";
+
 /* ===== PROFILE ===== */
 import ProfilePage from "../pages/ProfilePage";
 import AccountPage from "../pages/AccountPage";
@@ -63,6 +67,7 @@ type ModuleType =
   | "time-tracking"
   | "analytics"
   | "workforce"
+  | "admin-setup"   // ✅ ADDED
   | "profile"
   | "account";
 
@@ -70,8 +75,7 @@ type ModuleType =
 
 function AppContent() {
   const { currentUser } = useAuth();
-  const [activeModule, setActiveModule] =
-    useState<ModuleType>("dashboard");
+  const [activeModule, setActiveModule] = useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
 
@@ -93,9 +97,17 @@ function AppContent() {
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin","manager","employee"] },
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
     { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
+
+    /* ✅ NEW MENU ITEM */
+    {
+      id: "admin-setup",
+      name: "Organization & Roles",
+      icon: Building2,
+      roles: ["admin"],
+    },
   ];
 
-  const visibleMenuItems = menuItems.filter((item) =>
+  const visibleMenuItems = menuItems.filter(item =>
     item.roles.includes(currentUser.role)
   );
 
@@ -116,6 +128,10 @@ function AppContent() {
       case "time-tracking": return <TimeTracking />;
       case "analytics": return <AnalyticsReports />;
       case "workforce": return <WorkforceModule />;
+
+      /* ✅ NEW SWITCH CASE */
+      case "admin-setup": return <AdminSetupModule />;
+
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
       default: return <Dashboard />;
@@ -126,7 +142,7 @@ function AppContent() {
     <MainLayout onNavigate={setActiveModule}>
       <div className="flex h-[calc(100vh-64px)]">
         <aside className="w-64 bg-white border-r p-4 space-y-2">
-          {visibleMenuItems.map((item) => {
+          {visibleMenuItems.map(item => {
             const Icon = item.icon;
             return (
               <button
@@ -178,17 +194,19 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <TimesheetProvider>
-        <PerformanceProvider>
-          <TaskProvider>
-            <WorkforceProvider>
-              <NotificationProvider>
-                <AppWrapper />
-              </NotificationProvider>
-            </WorkforceProvider>
-          </TaskProvider>
-        </PerformanceProvider>
-      </TimesheetProvider>
+      <ProjectProvider>
+        <TimesheetProvider>
+          <PerformanceProvider>
+            <TaskProvider>
+              <WorkforceProvider>
+                <NotificationProvider>
+                  <AppWrapper />
+                </NotificationProvider>
+              </WorkforceProvider>
+            </TaskProvider>
+          </PerformanceProvider>
+        </TimesheetProvider>
+      </ProjectProvider>
     </AuthProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 /* ================= TYPES ================= */
 
@@ -19,6 +19,8 @@ interface AuthContextType {
 
   login: (email: string, password: string, role: Role) => boolean;
   signup: (name: string, email: string, password: string, role: Role) => boolean;
+  addUser: (u: User) => void;
+
   changePassword: (email: string, oldPass: string, newPass: string) => boolean;
   resetPassword: (email: string, newPassword: string) => boolean;
   logout: () => void;
@@ -30,7 +32,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /* ================= PROVIDER ================= */
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -48,17 +50,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     ];
 
     if (storedUsers) {
-      const parsedUsers: User[] = JSON.parse(storedUsers);
+      const parsed: User[] = JSON.parse(storedUsers);
 
-      const mergedUsers = [...defaultUsers];
-      parsedUsers.forEach((u) => {
-        if (!mergedUsers.find((d) => d.email === u.email)) {
-          mergedUsers.push(u);
+      // merge defaults + stored without duplicates
+      const merged = [...defaultUsers];
+      parsed.forEach(u => {
+        if (!merged.find(d => d.email === u.email)) {
+          merged.push(u);
         }
       });
 
-      setUsers(mergedUsers);
-      localStorage.setItem("hrms_users", JSON.stringify(mergedUsers));
+      setUsers(merged);
+      localStorage.setItem("hrms_users", JSON.stringify(merged));
     } else {
       setUsers(defaultUsers);
       localStorage.setItem("hrms_users", JSON.stringify(defaultUsers));
@@ -77,11 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [users]);
 
-  /* ===== LOGIN ===== */
+  /* ================= ACTIONS ================= */
 
   const login = (email: string, password: string, role: Role) => {
     const user = users.find(
-      (u) =>
+      u =>
         u.email.toLowerCase() === email.toLowerCase().trim() &&
         u.password === password.trim() &&
         u.role === role
@@ -94,10 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
-  /* ===== SIGNUP ===== */
-
   const signup = (name: string, email: string, password: string, role: Role) => {
-    if (users.find((u) => u.email.toLowerCase() === email.toLowerCase())) {
+    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
       return false;
     }
 
@@ -109,48 +110,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role,
     };
 
-    setUsers((prev) => [...prev, newUser]);
+    setUsers(prev => [...prev, newUser]);
     return true;
   };
 
-  /* ===== CHANGE PASSWORD ===== */
+  // kept from your OLD version for compatibility
+  const addUser = (u: User) => {
+    setUsers(prev => [...prev, u]);
+  };
 
   const changePassword = (email: string, oldPass: string, newPass: string) => {
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!user || user.password !== oldPass) return false;
 
-    const updatedUsers = users.map((u) =>
+    setUsers(users.map(u =>
       u.email === email ? { ...u, password: newPass } : u
-    );
-
-    setUsers(updatedUsers);
+    ));
     return true;
   };
-
-  /* ===== RESET PASSWORD ===== */
 
   const resetPassword = (email: string, newPassword: string) => {
-    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
-
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!user) return false;
 
-    const updatedUsers = users.map((u) =>
+    setUsers(users.map(u =>
       u.email === email ? { ...u, password: newPassword } : u
-    );
-
-    setUsers(updatedUsers);
+    ));
     return true;
   };
-
-  /* ===== LOGOUT ===== */
 
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem("hrms_current");
   };
 
-  /* ===== PROVIDER ===== */
+  /* ================= PROVIDER ================= */
 
   return (
     <AuthContext.Provider
@@ -160,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!currentUser,
         login,
         signup,
+        addUser,
         changePassword,
         resetPassword,
         logout,
@@ -168,12 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
 /* ================= HOOK ================= */
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside AuthProvider");
-  return context;
-}
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
+};
