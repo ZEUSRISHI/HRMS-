@@ -9,7 +9,7 @@ import { ProjectProvider } from "./contexts/ProjectContext";
 
 import MainLayout from "../layouts/MainLayout";
 
-/* ===== AUTH PAGES ===== */
+/* ===== AUTH ===== */
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
 import ForgotPassword from "./components/ForgotPassword";
@@ -28,6 +28,7 @@ import {
   Timer,
   BarChart3,
   Briefcase,
+  Users
 } from "lucide-react";
 
 /* ===== MODULES ===== */
@@ -45,8 +46,9 @@ import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { WorkforceModule } from "./components/modules/WorkforceModule";
 
-/* ✅ NEW MODULE */
-import AdminSetupModule from "./components/modules/AdminSetupModule";
+/* ✅ HR MODULES */
+import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
+import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
 
 /* ===== PROFILE ===== */
 import ProfilePage from "../pages/ProfilePage";
@@ -67,7 +69,8 @@ type ModuleType =
   | "time-tracking"
   | "analytics"
   | "workforce"
-  | "admin-setup"   // ✅ ADDED
+  | "hr-employees"
+  | "hr-attendance-leave"
   | "profile"
   | "account";
 
@@ -98,13 +101,9 @@ function AppContent() {
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
     { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
 
-    /* ✅ NEW MENU ITEM */
-    {
-      id: "admin-setup",
-      name: "Organization & Roles",
-      icon: Building2,
-      roles: ["admin"],
-    },
+    /* ✅ HR ONLY */
+    { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
+    { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
   ];
 
   const visibleMenuItems = menuItems.filter(item =>
@@ -117,6 +116,7 @@ function AppContent() {
         return currentUser.role === "employee"
           ? <EmployeeDashboard />
           : <Dashboard />;
+
       case "attendance": return <AttendanceModule />;
       case "tasks": return <TaskManagement />;
       case "status": return <DailyStatusModule />;
@@ -129,11 +129,13 @@ function AppContent() {
       case "analytics": return <AnalyticsReports />;
       case "workforce": return <WorkforceModule />;
 
-      /* ✅ NEW SWITCH CASE */
-      case "admin-setup": return <AdminSetupModule />;
+      /* ✅ HR */
+      case "hr-employees": return <EmployeeRecordsModule />;
+      case "hr-attendance-leave": return <AttendanceLeaveModule />;
 
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
+
       default: return <Dashboard />;
     }
   };
