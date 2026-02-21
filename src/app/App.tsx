@@ -46,6 +46,9 @@ import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { WorkforceModule } from "./components/modules/WorkforceModule";
 
+/* ✅ NEW — Employee Task Status */
+import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
+
 /* ✅ HR MODULES */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
@@ -69,6 +72,7 @@ type ModuleType =
   | "time-tracking"
   | "analytics"
   | "workforce"
+  | "employee-task-status"   // ✅ NEW
   | "hr-employees"
   | "hr-attendance-leave"
   | "profile"
@@ -91,6 +95,10 @@ function AppContent() {
     { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
     { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin","manager","employee","hr"] },
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin","manager","employee","hr"] },
+
+    /* ✅ NEW MENU — Employee Task Status */
+    { id: "employee-task-status", name: "My Task Status", icon: CheckSquare, roles: ["employee"] },
+
     { id: "status", name: "Daily Status", icon: FileText, roles: ["admin","manager","employee","hr"] },
     { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin","manager","employee","hr"] },
     { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin","hr"] },
@@ -101,7 +109,6 @@ function AppContent() {
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
     { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
 
-    /* ✅ HR ONLY */
     { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
     { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
   ];
@@ -119,6 +126,10 @@ function AppContent() {
 
       case "attendance": return <AttendanceModule />;
       case "tasks": return <TaskManagement />;
+
+      /* ✅ NEW MODULE SWITCH */
+      case "employee-task-status": return <EmployeeTaskStatusModule />;
+
       case "status": return <DailyStatusModule />;
       case "calendar": return <CalendarModule />;
       case "payroll": return <PayrollModule />;
@@ -129,7 +140,6 @@ function AppContent() {
       case "analytics": return <AnalyticsReports />;
       case "workforce": return <WorkforceModule />;
 
-      /* ✅ HR */
       case "hr-employees": return <EmployeeRecordsModule />;
       case "hr-attendance-leave": return <AttendanceLeaveModule />;
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
@@ -12,129 +12,253 @@ import { useAuth } from '../../contexts/AuthContext';
 import { mockAttendance, mockLeaveRequests, mockUsers } from '../../data/mockData';
 import { format } from 'date-fns';
 
+type AttendanceRecord = {
+  id: string;
+  userId: string;
+  date: string;
+  checkIn: string;
+  checkOut?: string;
+  status: string;
+  notes?: string;
+};
+
+type LeaveRecord = {
+  id: string;
+  userId: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  status: "pending" | "approved" | "rejected";
+  reason: string;
+  description?: string;
+};
+
+const ATT_KEY = "startup_attendance_records";
+const LEAVE_KEY = "startup_leave_records";
+
 export function AttendanceModule() {
   const { currentUser } = useAuth();
+
+  if (!currentUser) {
+    return <div className="p-6 text-muted-foreground">Loading attendance...</div>;
+  }
+
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [leaveData, setLeaveData] = useState<LeaveRecord[]>([]);
+
+  const [leaveType, setLeaveType] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [description, setDescription] = useState('');
+
   const isAdmin = currentUser.role === 'admin';
-  const isManager = currentUser.role === 'manager' || isAdmin;
+
+  // ✅ manager only — admin excluded
+  const isManager = currentUser.role === 'manager';
+
+  // ✅ HR + Manager only — admin excluded
+  const canApprove =
+    currentUser.role === 'hr' ||
+    currentUser.role === 'manager';
+
+  // ================= LOAD LOCAL =================
+
+  useEffect(() => {
+    const a = localStorage.getItem(ATT_KEY);
+    const l = localStorage.getItem(LEAVE_KEY);
+
+    setAttendanceData(a ? JSON.parse(a) : mockAttendance);
+    setLeaveData(l ? JSON.parse(l) : mockLeaveRequests);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(ATT_KEY, JSON.stringify(attendanceData));
+  }, [attendanceData]);
+
+  useEffect(() => {
+    localStorage.setItem(LEAVE_KEY, JSON.stringify(leaveData));
+  }, [leaveData]);
 
   const todayDate = format(new Date(), 'yyyy-MM-dd');
-  const todayAttendance = mockAttendance.find(
+
+  const todayAttendance = attendanceData.find(
     a => a.userId === currentUser.id && a.date === todayDate
   );
 
+  // ================= CHECK IN =================
+
   const handleCheckIn = () => {
+    if (todayAttendance) return;
+
     const now = format(new Date(), 'HH:mm');
     setCheckInTime(now);
+
+    const rec: AttendanceRecord = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      date: todayDate,
+      checkIn: now,
+      status: "present",
+      notes: "Startup quick check-in"
+    };
+
+    setAttendanceData(prev => [rec, ...prev]);
   };
+
+  // ================= CHECK OUT =================
 
   const handleCheckOut = () => {
-    // Handle check out logic
+    const now = format(new Date(), 'HH:mm');
+
+    setAttendanceData(prev =>
+      prev.map(r =>
+        r.userId === currentUser.id && r.date === todayDate
+          ? { ...r, checkOut: now }
+          : r
+      )
+    );
   };
 
-  const userAttendance = isAdmin || isManager 
-    ? mockAttendance 
-    : mockAttendance.filter(a => a.userId === currentUser.id);
+  // ================= LEAVE SUBMIT =================
 
-  const userLeaves = isAdmin || isManager
-    ? mockLeaveRequests
-    : mockLeaveRequests.filter(l => l.userId === currentUser.id);
+  const submitLeave = () => {
+    if (!leaveType || !startDate || !endDate || !reason) {
+      alert("Please fill required fields");
+      return;
+    }
+
+    const rec: LeaveRecord = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      type: leaveType,
+      startDate,
+      endDate,
+      reason,
+      description,
+      status: "pending"
+    };
+
+    setLeaveData(prev => [rec, ...prev]);
+
+    setLeaveType('');
+    setStartDate('');
+    setEndDate('');
+    setReason('');
+    setDescription('');
+  };
+
+  // ================= APPROVE / REJECT =================
+
+  const updateLeaveStatus = (id: string, status: "approved" | "rejected") => {
+    if (!canApprove) return;
+
+    setLeaveData(prev =>
+      prev.map(l => l.id === id ? { ...l, status } : l)
+    );
+  };
+
+  // ================= FILTER =================
+
+  const userAttendance = isManager
+    ? attendanceData
+    : attendanceData.filter(a => a.userId === currentUser.id);
+
+  const userLeaves = isManager
+    ? leaveData
+    : leaveData.filter(l => l.userId === currentUser.id);
+
+  // ================= UI =================
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-semibold mb-2">Attendance Management</h1>
-          <p className="text-sm text-muted-foreground">Track daily attendance, check-in/check-out, and leave requests</p>
-        </div>
+
+      <div className="rounded-2xl bg-gradient-to-r from-indigo-50 to-cyan-50 p-4 border">
+        <h1 className="font-semibold mb-1">Attendance Management</h1>
+        <p className="text-sm text-muted-foreground">
+          Startup smart attendance & leave tracking
+        </p>
       </div>
 
-      {/* Check-in/Check-out Card */}
-      <Card>
+      <Card className="shadow-sm rounded-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
             Today's Attendance
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">Date: {format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
-              {(todayAttendance || checkInTime) && (
-                <div className="flex gap-6">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Check In</p>
-                    <p className="font-semibold text-green-600">{todayAttendance?.checkIn || checkInTime}</p>
-                  </div>
-                  {todayAttendance?.checkOut && (
-                    <div>
-                      <p className="text-xs text-muted-foreground">Check Out</p>
-                      <p className="font-semibold text-red-600">{todayAttendance.checkOut}</p>
-                    </div>
-                  )}
+
+        <CardContent className="flex justify-between flex-col md:flex-row gap-4">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {format(new Date(), 'EEEE, MMMM d, yyyy')}
+            </p>
+
+            {(todayAttendance || checkInTime) && (
+              <div className="flex gap-6 mt-2">
+                <div>
+                  <p className="text-xs">Check In</p>
+                  <p className="font-semibold text-green-600">
+                    {todayAttendance?.checkIn || checkInTime}
+                  </p>
                 </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {!todayAttendance && !checkInTime && (
-                <Button onClick={handleCheckIn} className="gap-2">
-                  <LogIn className="h-4 w-4" />
-                  Check In
-                </Button>
-              )}
-              {(todayAttendance || checkInTime) && !todayAttendance?.checkOut && (
-                <Button onClick={handleCheckOut} variant="destructive" className="gap-2">
-                  <LogOut className="h-4 w-4" />
-                  Check Out
-                </Button>
-              )}
-            </div>
+
+                {todayAttendance?.checkOut && (
+                  <div>
+                    <p className="text-xs">Check Out</p>
+                    <p className="font-semibold text-red-600">
+                      {todayAttendance.checkOut}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2">
+            {!todayAttendance && !checkInTime && (
+              <Button onClick={handleCheckIn} className="gap-2 rounded-xl">
+                <LogIn className="h-4 w-4" /> Check In
+              </Button>
+            )}
+
+            {(todayAttendance || checkInTime) && !todayAttendance?.checkOut && (
+              <Button onClick={handleCheckOut} variant="destructive" className="gap-2 rounded-xl">
+                <LogOut className="h-4 w-4" /> Check Out
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Attendance History */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader>
           <CardTitle>Attendance History</CardTitle>
-          <Button variant="outline" size="sm">
-            Export Report
-          </Button>
         </CardHeader>
+
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
                 {isManager && <TableHead>Employee</TableHead>}
                 <TableHead>Date</TableHead>
-                <TableHead>Check In</TableHead>
-                <TableHead>Check Out</TableHead>
+                <TableHead>In</TableHead>
+                <TableHead>Out</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Notes</TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
-              {userAttendance.slice(0, 10).map((record) => {
-                const user = mockUsers.find(u => u.id === record.userId);
+              {userAttendance.slice(0, 10).map(r => {
+                const user = mockUsers.find(u => u.id === r.userId);
                 return (
-                  <TableRow key={record.id}>
+                  <TableRow key={r.id}>
                     {isManager && <TableCell>{user?.name}</TableCell>}
-                    <TableCell>{format(new Date(record.date), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>{record.checkIn}</TableCell>
-                    <TableCell>{record.checkOut || '-'}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          record.status === 'present' ? 'default' :
-                          record.status === 'leave' ? 'secondary' :
-                          record.status === 'holiday' ? 'outline' : 'destructive'
-                        }
-                      >
-                        {record.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{record.notes || '-'}</TableCell>
+                    <TableCell>{r.date}</TableCell>
+                    <TableCell>{r.checkIn}</TableCell>
+                    <TableCell>{r.checkOut || '-'}</TableCell>
+                    <TableCell><Badge>{r.status}</Badge></TableCell>
                   </TableRow>
                 );
               })}
@@ -143,105 +267,98 @@ export function AttendanceModule() {
         </CardContent>
       </Card>
 
-      {/* Leave Requests */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="flex justify-between">
           <CardTitle className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5" />
             Leave Requests
           </CardTitle>
+
           <Dialog>
             <DialogTrigger asChild>
-              <Button size="sm">Request Leave</Button>
+              <Button size="sm" className="rounded-xl">Request Leave</Button>
             </DialogTrigger>
-            <DialogContent>
+
+            <DialogContent className="max-w-lg rounded-2xl">
               <DialogHeader>
                 <DialogTitle>Submit Leave Request</DialogTitle>
               </DialogHeader>
+
               <div className="space-y-4">
+
                 <div>
-                  <Label>Leave Type</Label>
-                  <Select>
+                  <Label>Leave Type *</Label>
+                  <Select value={leaveType} onValueChange={setLeaveType}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue placeholder="Select leave type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sick">Sick Leave</SelectItem>
+                      <SelectItem value="sick">Sick</SelectItem>
                       <SelectItem value="vacation">Vacation</SelectItem>
-                      <SelectItem value="personal">Personal Leave</SelectItem>
-                      <SelectItem value="unpaid">Unpaid Leave</SelectItem>
+                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="unpaid">Unpaid</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Start Date</Label>
-                    <input type="date" className="w-full border rounded-md px-3 py-2" />
-                  </div>
-                  <div>
-                    <Label>End Date</Label>
-                    <input type="date" className="w-full border rounded-md px-3 py-2" />
-                  </div>
+                  <input type="date" value={startDate}
+                    onChange={e=>setStartDate(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2" />
+                  <input type="date" value={endDate}
+                    onChange={e=>setEndDate(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2" />
                 </div>
-                <div>
-                  <Label>Reason</Label>
-                  <Textarea placeholder="Enter reason for leave..." />
-                </div>
-                <Button className="w-full">Submit Request</Button>
+
+                <input value={reason}
+                  onChange={e=>setReason(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2" />
+
+                <Textarea value={description}
+                  onChange={e=>setDescription(e.target.value)}
+                  className="min-h-[100px]" />
+
+                <Button onClick={submitLeave} className="w-full rounded-xl">
+                  Submit Leave Request
+                </Button>
+
               </div>
             </DialogContent>
           </Dialog>
         </CardHeader>
+
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                {isManager && <TableHead>Employee</TableHead>}
-                <TableHead>Type</TableHead>
-                <TableHead>Start Date</TableHead>
-                <TableHead>End Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Reason</TableHead>
-                {isManager && <TableHead>Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
             <TableBody>
-              {userLeaves.map((leave) => {
-                const user = mockUsers.find(u => u.id === leave.userId);
-                return (
-                  <TableRow key={leave.id}>
-                    {isManager && <TableCell>{user?.name}</TableCell>}
-                    <TableCell className="capitalize">{leave.type}</TableCell>
-                    <TableCell>{format(new Date(leave.startDate), 'MMM d, yyyy')}</TableCell>
-                    <TableCell>{format(new Date(leave.endDate), 'MMM d, yyyy')}</TableCell>
+              {userLeaves.map(l => (
+                <TableRow key={l.id}>
+                  <TableCell>{l.type}</TableCell>
+                  <TableCell>{l.startDate} — {l.endDate}</TableCell>
+                  <TableCell><Badge>{l.status}</Badge></TableCell>
+                  <TableCell>{l.reason}</TableCell>
+
+                  {canApprove && l.status === "pending" && (
                     <TableCell>
-                      <Badge
-                        variant={
-                          leave.status === 'approved' ? 'default' :
-                          leave.status === 'rejected' ? 'destructive' : 'secondary'
-                        }
-                      >
-                        {leave.status}
-                      </Badge>
+                      <div className="flex gap-2">
+                        <Button size="sm"
+                          onClick={() => updateLeaveStatus(l.id, "approved")}>
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="destructive"
+                          onClick={() => updateLeaveStatus(l.id, "rejected")}>
+                          Reject
+                        </Button>
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm">{leave.reason}</TableCell>
-                    {isManager && (
-                      <TableCell>
-                        {leave.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline">Approve</Button>
-                            <Button size="sm" variant="outline">Reject</Button>
-                          </div>
-                        )}
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
+                  )}
+
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
     </div>
   );
 }

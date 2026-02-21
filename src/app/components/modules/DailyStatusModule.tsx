@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -9,17 +10,99 @@ import { useAuth } from '../../contexts/AuthContext';
 import { mockDailyStatus, mockUsers } from '../../data/mockData';
 import { format } from 'date-fns';
 
+const STATUS_KEY = "startup_daily_status";
+
 export function DailyStatusModule() {
   const { currentUser } = useAuth();
+  if (!currentUser) return null;
+
   const isManager = currentUser.role === 'manager' || currentUser.role === 'admin';
 
-  const statusUpdates = isManager 
-    ? mockDailyStatus 
-    : mockDailyStatus.filter(s => s.userId === currentUser.id);
+  /* ================= STATE ================= */
 
-  const todayStatus = mockDailyStatus.find(
-    s => s.userId === currentUser.id && s.date === format(new Date(), 'yyyy-MM-dd')
+  const [statusList, setStatusList] = useState(mockDailyStatus);
+
+  const [overallStatus, setOverallStatus] = useState('');
+  const [achievements, setAchievements] = useState('');
+  const [blockers, setBlockers] = useState('');
+  const [nextPlan, setNextPlan] = useState('');
+
+  const [commentText, setCommentText] = useState('');
+
+  /* ================= LOAD LOCAL ================= */
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STATUS_KEY);
+    if (saved) setStatusList(JSON.parse(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STATUS_KEY, JSON.stringify(statusList));
+  }, [statusList]);
+
+  /* ================= FILTER ================= */
+
+  const statusUpdates = isManager
+    ? statusList
+    : statusList.filter(s => s.userId === currentUser.id);
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
+  const todayStatus = statusList.find(
+    s => s.userId === currentUser.id && s.date === todayStr
   );
+
+  /* ================= SUBMIT STATUS ================= */
+
+  const submitStatus = () => {
+    if (!overallStatus || !achievements) {
+      alert("Status and achievements are required");
+      return;
+    }
+
+    const newStatus = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      date: todayStr,
+      status: overallStatus,
+      achievements,
+      blockers: blockers || undefined,
+      nextDayPlan: nextPlan || undefined,
+      managerComments: []
+    };
+
+    setStatusList(prev => [newStatus, ...prev]);
+
+    setOverallStatus('');
+    setAchievements('');
+    setBlockers('');
+    setNextPlan('');
+  };
+
+  /* ================= ADD COMMENT ================= */
+
+  const addComment = (statusId: string) => {
+    if (!commentText) return;
+
+    const newComment = {
+      id: crypto.randomUUID(),
+      managerId: currentUser.id,
+      comment: commentText,
+      timestamp: new Date().toISOString()
+    };
+
+    setStatusList(prev =>
+      prev.map(s =>
+        s.id === statusId
+          ? { ...s, managerComments: [...(s.managerComments || []), newComment] }
+          : s
+      )
+    );
+
+    setCommentText('');
+  };
+
+  /* ================= UI ================= */
 
   return (
     <div className="space-y-6">
@@ -28,6 +111,7 @@ export function DailyStatusModule() {
           <h1 className="font-semibold mb-2">Daily Status Updates</h1>
           <p className="text-sm text-muted-foreground">Submit and review daily work progress</p>
         </div>
+
         {!todayStatus && (
           <Dialog>
             <DialogTrigger asChild>
@@ -36,47 +120,49 @@ export function DailyStatusModule() {
                 Submit Today's Status
               </Button>
             </DialogTrigger>
+
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Daily Status Update - {format(new Date(), 'MMMM d, yyyy')}</DialogTitle>
+                <DialogTitle>
+                  Daily Status Update - {format(new Date(), 'MMMM d, yyyy')}
+                </DialogTitle>
               </DialogHeader>
+
               <div className="space-y-4">
                 <div>
-                  <Label>Overall Status</Label>
-                  <Textarea 
-                    placeholder="How was your day? (e.g., Productive, Challenging, etc.)" 
-                    rows={2}
-                  />
+                  <Label>Overall Status *</Label>
+                  <Textarea rows={2} value={overallStatus}
+                    onChange={e=>setOverallStatus(e.target.value)} />
                 </div>
+
                 <div>
-                  <Label>Today's Achievements</Label>
-                  <Textarea 
-                    placeholder="What did you accomplish today?"
-                    rows={4}
-                  />
+                  <Label>Today's Achievements *</Label>
+                  <Textarea rows={4} value={achievements}
+                    onChange={e=>setAchievements(e.target.value)} />
                 </div>
+
                 <div>
-                  <Label>Blockers / Challenges (Optional)</Label>
-                  <Textarea 
-                    placeholder="Any blockers or challenges you faced?"
-                    rows={3}
-                  />
+                  <Label>Blockers</Label>
+                  <Textarea rows={3} value={blockers}
+                    onChange={e=>setBlockers(e.target.value)} />
                 </div>
+
                 <div>
-                  <Label>Tomorrow's Plan (Optional)</Label>
-                  <Textarea 
-                    placeholder="What do you plan to work on tomorrow?"
-                    rows={3}
-                  />
+                  <Label>Tomorrow's Plan</Label>
+                  <Textarea rows={3} value={nextPlan}
+                    onChange={e=>setNextPlan(e.target.value)} />
                 </div>
-                <Button className="w-full">Submit Status Update</Button>
+
+                <Button className="w-full" onClick={submitStatus}>
+                  Submit Status Update
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
         )}
       </div>
 
-      {/* Today's Status */}
+      {/* TODAY STATUS */}
       {todayStatus && (
         <Card className="border-primary">
           <CardHeader>
@@ -85,138 +171,65 @@ export function DailyStatusModule() {
               Today's Status - {format(new Date(todayStatus.date), 'MMMM d, yyyy')}
             </CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-4">
-            <div>
-              <Label className="text-xs text-muted-foreground">Status</Label>
-              <p className="text-sm">{todayStatus.status}</p>
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Achievements</Label>
-              <p className="text-sm">{todayStatus.achievements}</p>
-            </div>
-            {todayStatus.blockers && (
-              <div>
-                <Label className="text-xs text-muted-foreground">Blockers</Label>
-                <p className="text-sm text-orange-600">{todayStatus.blockers}</p>
-              </div>
-            )}
-            {todayStatus.nextDayPlan && (
-              <div>
-                <Label className="text-xs text-muted-foreground">Tomorrow's Plan</Label>
-                <p className="text-sm">{todayStatus.nextDayPlan}</p>
-              </div>
-            )}
-            {todayStatus.managerComments && todayStatus.managerComments.length > 0 && (
-              <div className="mt-4 pt-4 border-t">
-                <Label className="text-xs text-muted-foreground mb-2 block">Manager Comments</Label>
-                {todayStatus.managerComments.map(comment => {
-                  const manager = mockUsers.find(u => u.id === comment.managerId);
-                  return (
-                    <div key={comment.id} className="bg-muted/50 p-3 rounded-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-medium">{manager?.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(comment.timestamp), 'MMM d, h:mm a')}
-                        </p>
-                      </div>
-                      <p className="text-sm">{comment.comment}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <p>{todayStatus.status}</p>
+            <p>{todayStatus.achievements}</p>
+            {todayStatus.blockers && <p>{todayStatus.blockers}</p>}
+            {todayStatus.nextDayPlan && <p>{todayStatus.nextDayPlan}</p>}
           </CardContent>
         </Card>
       )}
 
-      {/* Status History */}
+      {/* HISTORY */}
       <Card>
         <CardHeader>
           <CardTitle>Status History</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {statusUpdates.map(status => {
-              const user = mockUsers.find(u => u.id === status.userId);
-              return (
-                <Card key={status.id} className="shadow-sm">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div>
-                        {isManager && (
-                          <p className="font-medium text-sm">{user?.name}</p>
-                        )}
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(status.date), 'EEEE, MMMM d, yyyy')}
-                        </p>
-                      </div>
-                      <Badge variant="outline">{status.status}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Achievements</Label>
-                      <p className="text-sm mt-1">{status.achievements}</p>
-                    </div>
-                    {status.blockers && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Blockers</Label>
-                        <p className="text-sm mt-1 text-orange-600">{status.blockers}</p>
-                      </div>
-                    )}
-                    {status.nextDayPlan && (
-                      <div>
-                        <Label className="text-xs text-muted-foreground">Next Day Plan</Label>
-                        <p className="text-sm mt-1">{status.nextDayPlan}</p>
-                      </div>
-                    )}
 
-                    {/* Manager Actions */}
-                    {isManager && (
-                      <div className="pt-3 border-t">
-                        {status.managerComments && status.managerComments.length > 0 && (
-                          <div className="mb-3 space-y-2">
-                            {status.managerComments.map(comment => {
-                              const manager = mockUsers.find(u => u.id === comment.managerId);
-                              return (
-                                <div key={comment.id} className="bg-muted/50 p-2 rounded text-sm">
-                                  <p className="font-medium text-xs">{manager?.name}</p>
-                                  <p className="text-muted-foreground">{comment.comment}</p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="gap-2">
-                              <MessageCircle className="h-4 w-4" />
-                              Add Comment
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Add Manager Comment</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label>Comment</Label>
-                                <Textarea 
-                                  placeholder="Enter your feedback or comments..."
-                                  rows={4}
-                                />
-                              </div>
-                              <Button className="w-full">Submit Comment</Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+        <CardContent className="space-y-4">
+          {statusUpdates.map(status => {
+            const user = mockUsers.find(u => u.id === status.userId);
+
+            return (
+              <Card key={status.id}>
+                <CardHeader>
+                  {isManager && <p className="font-medium">{user?.name}</p>}
+                  <Badge>{status.status}</Badge>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                  <p>{status.achievements}</p>
+
+                  {isManager && (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline">
+                          <MessageCircle className="h-4 w-4" />
+                          Add Comment
+                        </Button>
+                      </DialogTrigger>
+
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Manager Comment</DialogTitle>
+                        </DialogHeader>
+
+                        <Textarea
+                          value={commentText}
+                          onChange={e=>setCommentText(e.target.value)}
+                        />
+
+                        <Button onClick={()=>addComment(status.id)}>
+                          Submit Comment
+                        </Button>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </CardContent>
       </Card>
     </div>
