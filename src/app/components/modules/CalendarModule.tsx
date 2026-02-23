@@ -1,237 +1,387 @@
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Calendar } from '../ui/calendar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { CalendarDays, MapPin, Users, Plus, Clock } from 'lucide-react';
-import { mockCalendarEvents, mockUsers } from '../../data/mockData';
-import { format } from 'date-fns';
-import { useAuth } from '../../contexts/AuthContext';
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Calendar } from "../ui/calendar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../ui/dialog";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import {
+  CalendarDays,
+  MapPin,
+  Users,
+  Plus,
+  Clock,
+} from "lucide-react";
+import { format } from "date-fns";
+import { useAuth } from "../../contexts/AuthContext";
+
+type EventType = "meeting" | "holiday" | "event" | "personal";
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  description: string;
+  type: EventType;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  attendees: string[];
+  createdBy: string;
+  createdAt: string;
+}
 
 export function CalendarModule() {
   const { currentUser } = useAuth();
+
+  // ✅ Null safety fix
+  if (!currentUser) {
+    return <div className="p-6">Loading...</div>;
+  }
+
+  const isAdmin = currentUser.role === "admin";
+
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const isAdmin = currentUser.role === 'admin';
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [open, setOpen] = useState(false);
 
-  const upcomingEvents = mockCalendarEvents
-    .filter(event => new Date(event.date) >= new Date())
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    type: "meeting" as EventType,
+    date: "",
+    startTime: "",
+    endTime: "",
+    location: "",
+    attendees: [] as string[],
+  });
 
-  const holidays = mockCalendarEvents.filter(e => e.type === 'holiday');
+  // ✅ Load from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem("calendarEvents");
+    if (stored) {
+      setEvents(JSON.parse(stored));
+    }
+  }, []);
 
-  const getEventTypeColor = (type: string) => {
+  // ✅ Save to localStorage
+  const saveToLocal = (data: CalendarEvent[]) => {
+    localStorage.setItem("calendarEvents", JSON.stringify(data));
+    setEvents(data);
+  };
+
+  // ✅ Create Event Function
+  const handleCreateEvent = () => {
+    if (
+      !form.title ||
+      !form.date ||
+      !form.startTime ||
+      !form.endTime
+    ) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    const newEvent: CalendarEvent = {
+      id: crypto.randomUUID(),
+      title: form.title,
+      description: form.description,
+      type: form.type,
+      date: form.date,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      location: form.location,
+      attendees: form.attendees,
+      createdBy: currentUser.id,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...events, newEvent];
+    saveToLocal(updated);
+
+    // Reset form
+    setForm({
+      title: "",
+      description: "",
+      type: "meeting",
+      date: "",
+      startTime: "",
+      endTime: "",
+      location: "",
+      attendees: [],
+    });
+
+    setOpen(false);
+  };
+
+  const upcomingEvents = events
+    .filter((event) => new Date(event.date) >= new Date())
+    .sort(
+      (a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+  const holidays = events.filter((e) => e.type === "holiday");
+
+  const getEventTypeColor = (type: EventType) => {
     switch (type) {
-      case 'meeting': return 'bg-blue-500';
-      case 'holiday': return 'bg-red-500';
-      case 'event': return 'bg-green-500';
-      case 'personal': return 'bg-purple-500';
-      default: return 'bg-gray-500';
+      case "meeting":
+        return "bg-blue-500";
+      case "holiday":
+        return "bg-red-500";
+      case "event":
+        return "bg-green-500";
+      case "personal":
+        return "bg-purple-500";
+      default:
+        return "bg-gray-500";
     }
   };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-semibold mb-2">Calendar Management</h1>
-          <p className="text-sm text-muted-foreground">Manage company events, meetings, and holidays</p>
+          <h1 className="font-semibold mb-2">
+            Calendar Management
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Manage company events, meetings, and holidays
+          </p>
         </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Event
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Create Calendar Event</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>Event Title</Label>
-                <Input placeholder="Enter event title..." />
-              </div>
-              <div>
-                <Label>Description</Label>
-                <Textarea placeholder="Enter event description..." rows={3} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Event Type</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="event">Company Event</SelectItem>
-                      {isAdmin && <SelectItem value="holiday">Holiday</SelectItem>}
-                      <SelectItem value="personal">Personal</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Date</Label>
-                  <Input type="date" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Start Time</Label>
-                  <Input type="time" />
-                </div>
-                <div>
-                  <Label>End Time</Label>
-                  <Input type="time" />
-                </div>
-              </div>
-              <div>
-                <Label>Location</Label>
-                <Input placeholder="Enter location..." />
-              </div>
-              <div>
-                <Label>Attendees</Label>
-                <Select>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select attendees" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mockUsers.map(user => (
-                      <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button className="w-full">Create Event</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Calendar View */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Calendar</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={setDate}
-              className="rounded-md border"
-            />
-          </CardContent>
-        </Card>
+        {/* ✅ Only Admin can create */}
+        {isAdmin && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Event
+              </Button>
+            </DialogTrigger>
 
-        {/* Event Legend */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Event Types</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-sm">Meetings</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-sm">Company Events</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-sm">Holidays</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-purple-500" />
-              <span className="text-sm">Personal</span>
-            </div>
-          </CardContent>
-        </Card>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create Calendar Event</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div>
+                  <Label>Event Title *</Label>
+                  <Input
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm({ ...form, title: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div>
+                  <Label>Description</Label>
+                  <Textarea
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        description: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Event Type *</Label>
+                    <Select
+                      value={form.type}
+                      onValueChange={(value: EventType) =>
+                        setForm({ ...form, type: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="meeting">
+                          Meeting
+                        </SelectItem>
+                        <SelectItem value="event">
+                          Company Event
+                        </SelectItem>
+                        {isAdmin && (
+                          <SelectItem value="holiday">
+                            Holiday
+                          </SelectItem>
+                        )}
+                        <SelectItem value="personal">
+                          Personal
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Date *</Label>
+                    <Input
+                      type="date"
+                      value={form.date}
+                      onChange={(e) =>
+                        setForm({ ...form, date: e.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Time *</Label>
+                    <Input
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          startTime: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label>End Time *</Label>
+                    <Input
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          endTime: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Location</Label>
+                  <Input
+                    value={form.location}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        location: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={handleCreateEvent}
+                >
+                  Create Event
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {/* Upcoming Events */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" />
-            Upcoming Events
-          </CardTitle>
+          <CardTitle>Upcoming Events</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {upcomingEvents.map(event => (
-              <Card key={event.id} className="shadow-sm">
-                <CardContent className="py-4">
-                  <div className="flex items-start gap-4">
-                    <div className={`w-1 h-full ${getEventTypeColor(event.type)} rounded-full`} />
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h4 className="font-medium">{event.title}</h4>
-                          {event.description && (
-                            <p className="text-sm text-muted-foreground">{event.description}</p>
-                          )}
-                        </div>
-                        <Badge variant="outline" className="capitalize">{event.type}</Badge>
-                      </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <CalendarDays className="h-4 w-4" />
-                          {format(new Date(event.date), 'MMMM d, yyyy')}
-                        </div>
-                        {event.startTime && event.endTime && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="h-4 w-4" />
-                            {event.startTime} - {event.endTime}
-                          </div>
-                        )}
-                        {event.location && (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" />
-                            {event.location}
-                          </div>
-                        )}
-                        {event.attendees && event.attendees.length > 0 && (
-                          <div className="flex items-center gap-1">
-                            <Users className="h-4 w-4" />
-                            {event.attendees.length} attendees
-                          </div>
-                        )}
-                      </div>
-                    </div>
+        <CardContent className="space-y-3">
+          {upcomingEvents.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No upcoming events
+            </p>
+          )}
+
+          {upcomingEvents.map((event) => (
+            <Card key={event.id}>
+              <CardContent className="py-4 flex gap-4">
+                <div
+                  className={`w-1 ${getEventTypeColor(
+                    event.type
+                  )} rounded`}
+                />
+                <div className="flex-1">
+                  <div className="flex justify-between">
+                    <h4 className="font-medium">
+                      {event.title}
+                    </h4>
+                    <Badge variant="outline">
+                      {event.type}
+                    </Badge>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+
+                  <p className="text-sm text-muted-foreground">
+                    {event.description}
+                  </p>
+
+                  <div className="flex gap-4 text-sm mt-2 text-muted-foreground">
+                    <span>
+                      {format(
+                        new Date(event.date),
+                        "MMMM d, yyyy"
+                      )}
+                    </span>
+                    <span>
+                      {event.startTime} - {event.endTime}
+                    </span>
+                    {event.location && (
+                      <span>{event.location}</span>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </CardContent>
       </Card>
 
-      {/* Holidays List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Company Holidays</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {holidays.map(holiday => (
-              <div key={holiday.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                <span className="font-medium">{holiday.title}</span>
+      {/* Holidays */}
+      {holidays.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Company Holidays</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {holidays.map((holiday) => (
+              <div
+                key={holiday.id}
+                className="flex justify-between py-2 border-b"
+              >
+                <span>{holiday.title}</span>
                 <span className="text-sm text-muted-foreground">
-                  {format(new Date(holiday.date), 'MMMM d, yyyy')}
+                  {format(
+                    new Date(holiday.date),
+                    "MMMM d, yyyy"
+                  )}
                 </span>
               </div>
             ))}
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
