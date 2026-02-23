@@ -1,27 +1,17 @@
 import { useState } from "react";
 import { v4 as uuid } from "uuid";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { useWorkforce } from "../contexts/WorkforceContext";
-import { useNotification } from "../contexts/NotificationContext";
+import { useAuth } from "../contexts/AuthContext";
 
-/* ================= TYPES ================= */
+export default function VendorModule() {
+  const { vendors, addVendor, updateVendor, deleteVendor } = useWorkforce();
+  const { currentUser } = useAuth();
 
-type VendorFormData = {
-  name: string;      // from old form
-  company: string;
-  contact: string;
-  email: string;
-  phone: string;
-  category: string;
-  taxId: string;
-  address: string;
-};
+  const isAdmin = currentUser?.role === "admin";
 
-export default function VendorForm() {
-  const { addVendor } = useWorkforce();
-  const { addNotification } = useNotification();
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const [form, setForm] = useState<VendorFormData>({
+  const [form, setForm] = useState({
     name: "",
     company: "",
     contact: "",
@@ -32,34 +22,29 @@ export default function VendorForm() {
     address: "",
   });
 
-  const [error, setError] = useState("");
-
-  const handleChange = (key: keyof VendorFormData, value: string) => {
-    setForm({ ...form, [key]: value });
-    setError("");
-  };
-
   const handleSave = () => {
-    const isEmpty = Object.values(form).some((v) => !v.trim());
+    if (!isAdmin) return;
 
-    if (isEmpty) {
-      setError("Please fill all required fields");
+    if (Object.values(form).some((v) => !v.trim())) {
+      alert("All fields required");
       return;
     }
 
-    addVendor({
-      id: uuid(),
-      ...form,
-    });
+    if (editingId) {
+      updateVendor({
+        id: editingId,
+        ...form,
+        createdAt: new Date().toISOString(),
+      });
+      setEditingId(null);
+    } else {
+      addVendor({
+        id: uuid(),
+        ...form,
+        createdAt: new Date().toISOString(),
+      });
+    }
 
-    addNotification(`New vendor added: ${form.company}`);
-
-    alert("Vendor saved successfully ✅");
-
-    handleCancel();
-  };
-
-  const handleCancel = () => {
     setForm({
       name: "",
       company: "",
@@ -70,73 +55,79 @@ export default function VendorForm() {
       taxId: "",
       address: "",
     });
-    setError("");
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Vendor Information</CardTitle>
-      </CardHeader>
+    <div className="p-6 space-y-6">
+      <h2 className="text-2xl font-bold">Vendor Management</h2>
 
-      <CardContent className="grid md:grid-cols-2 gap-4">
-
-        <Input label="Vendor Name" value={form.name} onChange={(v) => handleChange("name", v)} />
-        <Input label="Company Name" value={form.company} onChange={(v) => handleChange("company", v)} />
-        <Input label="Contact Person" value={form.contact} onChange={(v) => handleChange("contact", v)} />
-        <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
-        <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
-        <Input label="Service Category" value={form.category} onChange={(v) => handleChange("category", v)} />
-        <Input label="GST / Tax ID" value={form.taxId} onChange={(v) => handleChange("taxId", v)} />
-
-        <div className="md:col-span-2">
-          <Input label="Company Address" value={form.address} onChange={(v) => handleChange("address", v)} />
-        </div>
-
-        {error && (
-          <p className="text-red-500 text-sm md:col-span-2">{error}</p>
-        )}
-
-        <div className="flex justify-end gap-3 md:col-span-2 pt-4">
-          <button
-            onClick={handleCancel}
-            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-          >
-            Cancel
-          </button>
+      {/* Admin Form */}
+      {isAdmin && (
+        <div className="grid md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow">
+          {Object.keys(form).map((key) => (
+            <input
+              key={key}
+              placeholder={key}
+              value={form[key as keyof typeof form]}
+              onChange={(e) =>
+                setForm({ ...form, [key]: e.target.value })
+              }
+              className="border rounded-lg px-3 py-2"
+            />
+          ))}
 
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+            className="md:col-span-2 bg-orange-500 text-white py-2 rounded-lg"
           >
-            Save Vendor
+            {editingId ? "Update Vendor" : "Save Vendor"}
           </button>
         </div>
+      )}
 
-      </CardContent>
-    </Card>
-  );
-}
+      {/* Visible to ALL Roles */}
+      <div className="bg-white rounded-xl p-6 shadow">
+        <h3 className="font-semibold mb-4">Saved Vendors</h3>
 
-/* ================= INPUT ================= */
+        {vendors.length === 0 && (
+          <p className="text-gray-500">No vendors available.</p>
+        )}
 
-type InputProps = {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-};
+        {vendors.map((v) => (
+          <div
+            key={v.id}
+            className="flex justify-between items-center border-b py-3"
+          >
+            <div>
+              <p className="font-semibold">{v.company}</p>
+              <p className="text-sm text-gray-500">
+                {v.category} • {v.email}
+              </p>
+            </div>
 
-function Input({ label, value, onChange, type = "text" }: InputProps) {
-  return (
-    <div className="space-y-1">
-      <label className="text-sm text-gray-600">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500"
-      />
+            {isAdmin && (
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setForm(v);
+                    setEditingId(v.id);
+                  }}
+                  className="text-blue-500"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => deleteVendor(v.id)}
+                  className="text-red-500"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

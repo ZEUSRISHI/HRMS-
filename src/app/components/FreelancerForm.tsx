@@ -1,24 +1,23 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
-import { useWorkforce } from "../contexts/WorkforceContext";
-import { useNotification } from "../contexts/NotificationContext";
 import { v4 as uuid } from "uuid";
+import { useWorkforce } from "../contexts/WorkforceContext";
+import { useAuth } from "../contexts/AuthContext";
 
-type FreelancerFormData = {
-  name: string;
-  email: string;
-  phone: string;
-  skill: string;
-  rate: string;
-  experience: string;
-  portfolio: string;
-};
+export default function FreelancerModule() {
+  const {
+    freelancers,
+    addFreelancer,
+    updateFreelancer,
+    deleteFreelancer,
+  } = useWorkforce();
 
-export default function FreelancerForm() {
-  const { addFreelancer } = useWorkforce();
-  const { addNotification } = useNotification();
+  const { currentUser } = useAuth();
 
-  const [form, setForm] = useState<FreelancerFormData>({
+  const isAdmin = currentUser?.role === "admin";
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
@@ -28,30 +27,28 @@ export default function FreelancerForm() {
     portfolio: "",
   });
 
-  const [error, setError] = useState("");
+  const handleSave = () => {
+    if (!isAdmin) return;
 
-  const handleChange = (key: keyof FreelancerFormData, value: string) => {
-    setForm({ ...form, [key]: value });
-    setError("");
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const isEmpty = Object.values(form).some((v) => !v.trim());
-    if (isEmpty) {
-      setError("Please fill all required fields");
+    if (Object.values(form).some((v) => !v.trim())) {
+      alert("All fields are required");
       return;
     }
 
-    addFreelancer({
-      id: uuid(),
-      ...form,
-    });
-
-    addNotification(`New freelancer added: ${form.name}`);
-
-    alert("Freelancer saved successfully ✅");
+    if (editingId) {
+      updateFreelancer({
+        id: editingId,
+        ...form,
+        createdAt: new Date().toISOString(),
+      });
+      setEditingId(null);
+    } else {
+      addFreelancer({
+        id: uuid(),
+        ...form,
+        createdAt: new Date().toISOString(),
+      });
+    }
 
     setForm({
       name: "",
@@ -64,73 +61,78 @@ export default function FreelancerForm() {
     });
   };
 
-  const handleCancel = () => {
-    setForm({
-      name: "",
-      email: "",
-      phone: "",
-      skill: "",
-      rate: "",
-      experience: "",
-      portfolio: "",
-    });
-    setError("");
-  };
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Freelancer Information</CardTitle>
-      </CardHeader>
+    <div className="p-6 space-y-6">
+      <h2 className="text-2xl font-bold">Freelancer Management</h2>
 
-      <CardContent>
-        <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">
-          <Input label="Full Name" value={form.name} onChange={(v) => handleChange("name", v)} />
-          <Input label="Email Address" type="email" value={form.email} onChange={(v) => handleChange("email", v)} />
-          <Input label="Phone Number" value={form.phone} onChange={(v) => handleChange("phone", v)} />
-          <Input label="Primary Skill" value={form.skill} onChange={(v) => handleChange("skill", v)} />
-          <Input label="Hourly Rate" value={form.rate} onChange={(v) => handleChange("rate", v)} />
-          <Input label="Experience (Years)" value={form.experience} onChange={(v) => handleChange("experience", v)} />
+      {/* 🟢 ADMIN FORM ONLY */}
+      {isAdmin && (
+        <div className="grid md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow">
+          {Object.keys(form).map((key) => (
+            <input
+              key={key}
+              placeholder={key}
+              value={form[key as keyof typeof form]}
+              onChange={(e) =>
+                setForm({ ...form, [key]: e.target.value })
+              }
+              className="border rounded-lg px-3 py-2"
+            />
+          ))}
 
-          <div className="md:col-span-2">
-            <Input label="Portfolio / Website" value={form.portfolio} onChange={(v) => handleChange("portfolio", v)} />
+          <button
+            onClick={handleSave}
+            className="md:col-span-2 bg-orange-500 text-white py-2 rounded-lg hover:bg-orange-600"
+          >
+            {editingId ? "Update Freelancer" : "Save Freelancer"}
+          </button>
+        </div>
+      )}
+
+      {/* 🔵 VISIBLE TO ALL ROLES */}
+      <div className="bg-white rounded-xl p-6 shadow">
+        <h3 className="font-semibold mb-4">Saved Freelancers</h3>
+
+        {freelancers.length === 0 && (
+          <p className="text-gray-500">No freelancers available.</p>
+        )}
+
+        {freelancers.map((f) => (
+          <div
+            key={f.id}
+            className="flex justify-between items-center border-b py-3"
+          >
+            <div>
+              <p className="font-semibold">{f.name}</p>
+              <p className="text-sm text-gray-500">
+                {f.skill} • {f.email}
+              </p>
+            </div>
+
+            {/* 🔒 ADMIN ACTIONS ONLY */}
+            {isAdmin && (
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setForm(f);
+                    setEditingId(f.id);
+                  }}
+                  className="text-blue-500"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() => deleteFreelancer(f.id)}
+                  className="text-red-500"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
-
-          {error && <p className="text-red-500 text-sm md:col-span-2">{error}</p>}
-
-          <div className="flex justify-end gap-3 md:col-span-2 pt-4">
-            <button type="button" onClick={handleCancel} className="px-4 py-2 border rounded-lg">
-              Cancel
-            </button>
-            <button type="submit" className="px-4 py-2 bg-orange-500 text-white rounded-lg">
-              Save Freelancer
-            </button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ================= INPUT ================= */
-
-type InputProps = {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-};
-
-function Input({ label, value, onChange, type = "text" }: InputProps) {
-  return (
-    <div className="space-y-1">
-      <label className="text-sm text-gray-600">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500"
-      />
+        ))}
+      </div>
     </div>
   );
 }
