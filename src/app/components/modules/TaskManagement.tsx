@@ -27,17 +27,39 @@ import {
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
-import { Plus, Calendar, User } from "lucide-react";
+import { Plus, Calendar, User, Trash, Pencil } from "lucide-react";
 import { format } from "date-fns";
 
 import { mockUsers } from "../../data/mockData";
 import { Task } from "../../types";
 
+/* ✅ FORM TYPE (allows empty priority while editing) */
+type FormTask = {
+  title: string;
+  description: string;
+  assignedTo: string;
+  priority: "" | "low" | "medium" | "high";
+  dueDate: string;
+  frequency: "daily" | "weekly" | "monthly" | "one-time";
+};
+
 export function TaskManagement() {
   const { currentUser } = useAuth();
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  if (!currentUser) return null;
 
-  /* ================= LOAD TASKS ================= */
+  const isManager = currentUser.role === "manager";
+  const isAdmin = currentUser.role === "admin";
+  const isHR = currentUser.role === "hr";
+
+  /* ================= POPUP ================= */
+  const [popup, setPopup] = useState<string>("");
+
+  const showPopup = (msg: string) => {
+    setPopup(msg);
+    setTimeout(() => setPopup(""), 2500);
+  };
+
+  /* ================= TASK STORAGE ================= */
 
   const [tasks, setTasks] = useState<Task[]>(() => {
     const stored = localStorage.getItem("tasks");
@@ -48,37 +70,17 @@ export function TaskManagement() {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
-  if (!currentUser) return null;
+  /* ================= FILTERS ================= */
 
-  const isManager = currentUser.role === "manager";
-  const isAdmin = currentUser.role === "admin";
-  const isHR = currentUser.role === "hr";
+  const myTasks = tasks.filter((t) => t.assignedTo === currentUser.id);
+  const assignedByMe = tasks.filter((t) => t.assignedBy === currentUser.id);
+  const allTasks = isManager || isAdmin || isHR ? tasks : myTasks;
 
-  /* ================= ROLE BASED FILTER ================= */
+  /* ================= FORM ================= */
 
-  const myTasks = tasks.filter(
-    (task) => task.assignedTo === currentUser.id
-  );
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
-  const assignedByMe = tasks.filter(
-    (task) => task.assignedBy === currentUser.id
-  );
-
-  const allTasks =
-    isManager || isAdmin || isHR
-      ? tasks
-      : myTasks;
-
-  /* ================= NEW TASK STATE ================= */
-
-  const [newTask, setNewTask] = useState<{
-    title: string;
-    description: string;
-    assignedTo: string;
-    priority: "low" | "medium" | "high" | "";
-    dueDate: string;
-    frequency: "daily" | "weekly" | "monthly" | "one-time";
-  }>({
+  const [form, setForm] = useState<FormTask>({
     title: "",
     description: "",
     assignedTo: "",
@@ -87,42 +89,55 @@ export function TaskManagement() {
     frequency: "one-time",
   });
 
-  /* ================= CREATE TASK ================= */
+  /* ================= CREATE / UPDATE ================= */
 
-  const handleCreateTask = () => {
-    if (!isManager) {
-      alert("Only Manager can create tasks");
-      return;
-    }
+  const handleSave = () => {
+    if (!isManager) return showPopup("Only Manager can manage tasks");
 
     if (
-      !newTask.title ||
-      !newTask.description ||
-      !newTask.assignedTo ||
-      !newTask.priority ||
-      !newTask.dueDate
+      !form.title ||
+      !form.description ||
+      !form.assignedTo ||
+      !form.priority ||
+      !form.dueDate
     ) {
-      alert("All fields are required");
-      return;
+      return showPopup("Please fill all fields");
     }
 
-    const task: Task = {
-      id: crypto.randomUUID(),
-      title: newTask.title,
-      description: newTask.description,
-      assignedTo: newTask.assignedTo,
+    /* ✅ Safe conversion to Task type */
+    const baseTask: Omit<Task, "id" | "createdAt"> = {
+      title: form.title,
+      description: form.description,
+      assignedTo: form.assignedTo,
       assignedBy: currentUser.id,
-      priority: newTask.priority,
+      priority: form.priority as "low" | "medium" | "high",
       status: "pending",
-      dueDate: newTask.dueDate,
-      createdAt: new Date().toISOString(),
-      frequency: newTask.frequency,
+      dueDate: form.dueDate,
+      frequency: form.frequency,
       comments: [],
     };
 
-    setTasks((prev) => [...prev, task]);
+    if (editingTaskId) {
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === editingTaskId
+            ? { ...t, ...baseTask }
+            : t
+        )
+      );
+      showPopup("Task updated ✅");
+      setEditingTaskId(null);
+    } else {
+      const newTask: Task = {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        ...baseTask,
+      };
+      setTasks((prev) => [...prev, newTask]);
+      showPopup("Task created 🎉");
+    }
 
-    setNewTask({
+    setForm({
       title: "",
       description: "",
       assignedTo: "",
@@ -132,55 +147,71 @@ export function TaskManagement() {
     });
   };
 
-  /* ================= TASK CARD ================= */
+  /* ================= DELETE ================= */
+
+  const handleDelete = (id: string) => {
+    if (!isManager) return;
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    showPopup("Task deleted 🗑️");
+  };
+
+  /* ================= CARD ================= */
 
   const TaskCard = ({ task }: { task: Task }) => {
-    const assignedUser = mockUsers.find((u) => u.id === task.assignedTo);
+    const user = mockUsers.find((u) => u.id === task.assignedTo);
 
     return (
-      <Card
-        className="cursor-pointer hover:shadow-lg transition-all"
-        onClick={() => setSelectedTask(task)}
-      >
+      <Card className="hover:shadow-lg transition-all">
         <CardHeader>
           <div className="flex justify-between">
             <CardTitle className="text-base">{task.title}</CardTitle>
-
-            <Badge
-              variant={
-                task.priority === "high"
-                  ? "destructive"
-                  : task.priority === "medium"
-                  ? "default"
-                  : "secondary"
-              }
-            >
-              {task.priority}
-            </Badge>
+            <Badge>{task.priority}</Badge>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-2">
-          <p className="text-sm text-gray-500 line-clamp-2">
-            {task.description}
-          </p>
+          <p className="text-sm text-gray-500">{task.description}</p>
 
-          <div className="flex items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
+          <div className="flex justify-between items-center">
+            <span className="flex items-center gap-1 text-xs text-gray-500">
               <User className="h-3 w-3" />
-              {assignedUser?.name}
+              {user?.name}
             </span>
 
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {format(new Date(task.dueDate), "MMM d, yyyy")}
+            <span className="text-xs text-gray-500">
+              {format(new Date(task.dueDate), "MMM d")}
             </span>
           </div>
 
-          <div className="flex justify-between">
-            <Badge variant="outline">{task.status}</Badge>
-            <Badge variant="secondary">{task.frequency}</Badge>
-          </div>
+          {isManager && (
+            <div className="flex gap-2 justify-end">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => {
+                  setForm({
+                    title: task.title,
+                    description: task.description,
+                    assignedTo: task.assignedTo,
+                    priority: task.priority,
+                    dueDate: task.dueDate,
+                    frequency: task.frequency,
+                  });
+                  setEditingTaskId(task.id);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => handleDelete(task.id)}
+              >
+                <Trash className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -189,139 +220,59 @@ export function TaskManagement() {
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="font-semibold text-lg">Task Management</h1>
-          <p className="text-sm text-gray-500">
-            Track assigned tasks and deadlines
-          </p>
+    <div className="space-y-6 relative">
+      {popup && (
+        <div className="fixed top-6 right-6 bg-green-500 text-white px-4 py-2 rounded">
+          {popup}
         </div>
+      )}
+
+      <div className="flex justify-between">
+        <h1 className="font-semibold text-lg">Task Management</h1>
 
         {isManager && (
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                Create Task
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                {editingTaskId ? "Update Task" : "Create Task"}
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
+                <DialogTitle>
+                  {editingTaskId ? "Update Task" : "Create Task"}
+                </DialogTitle>
               </DialogHeader>
 
               <div className="space-y-4">
-                <div>
-                  <Label>Title</Label>
-                  <Input
-                    value={newTask.title}
-                    onChange={(e) =>
-                      setNewTask({ ...newTask, title: e.target.value })
-                    }
-                  />
-                </div>
+                <Input
+                  placeholder="Title"
+                  value={form.title}
+                  onChange={(e) =>
+                    setForm({ ...form, title: e.target.value })
+                  }
+                />
 
-                <div>
-                  <Label>Description</Label>
-                  <Textarea
-                    value={newTask.description}
-                    onChange={(e) =>
-                      setNewTask({
-                        ...newTask,
-                        description: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                <Textarea
+                  placeholder="Description"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
+                />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Assign To</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        setNewTask({ ...newTask, assignedTo: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select user" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mockUsers.map((user) => (
-                          <SelectItem key={user.id} value={user.id}>
-                            {user.name} ({user.role})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <Input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) =>
+                    setForm({ ...form, dueDate: e.target.value })
+                  }
+                />
 
-                  <div>
-                    <Label>Priority</Label>
-                    <Select
-                      onValueChange={(value) =>
-                        setNewTask({
-                          ...newTask,
-                          priority: value as "low" | "medium" | "high",
-                        })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Priority" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Low</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">High</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div>
-                  <Label>Frequency</Label>
-                  <Select
-                    value={newTask.frequency}
-                    onValueChange={(value) =>
-                      setNewTask({
-                        ...newTask,
-                        frequency: value as
-                          | "daily"
-                          | "weekly"
-                          | "monthly"
-                          | "one-time",
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="one-time">One Time</SelectItem>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Due Date</Label>
-                  <Input
-                    type="date"
-                    value={newTask.dueDate}
-                    onChange={(e) =>
-                      setNewTask({
-                        ...newTask,
-                        dueDate: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <Button className="w-full" onClick={handleCreateTask}>
-                  Create Task
+                <Button className="w-full" onClick={handleSave}>
+                  Save Task
                 </Button>
               </div>
             </DialogContent>

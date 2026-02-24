@@ -10,6 +10,7 @@ export default function VendorModule() {
   const isAdmin = currentUser?.role === "admin";
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [popup, setPopup] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -22,6 +23,13 @@ export default function VendorModule() {
     address: "",
   });
 
+  /* ================= POPUP ================= */
+  function showPopup(message: string) {
+    setPopup(message);
+    setTimeout(() => setPopup(""), 2500);
+  }
+
+  /* ================= SAVE / UPDATE ================= */
   const handleSave = () => {
     if (!isAdmin) return;
 
@@ -36,6 +44,8 @@ export default function VendorModule() {
         ...form,
         createdAt: new Date().toISOString(),
       });
+
+      showPopup("Vendor updated successfully ✅");
       setEditingId(null);
     } else {
       addVendor({
@@ -43,6 +53,8 @@ export default function VendorModule() {
         ...form,
         createdAt: new Date().toISOString(),
       });
+
+      showPopup("Vendor added successfully 🎉");
     }
 
     setForm({
@@ -57,11 +69,28 @@ export default function VendorModule() {
     });
   };
 
+  /* ================= DELETE ================= */
+  const handleDelete = (id: string) => {
+    if (!isAdmin) return;
+    if (!confirm("Delete this vendor?")) return;
+
+    deleteVendor(id);
+    showPopup("Vendor deleted 🗑️");
+  };
+
+  /* ================= UI ================= */
   return (
     <div className="p-6 space-y-6">
+
+      {popup && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded shadow z-50">
+          {popup}
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold">Vendor Management</h2>
 
-      {/* Admin Form */}
+      {/* ADMIN FORM */}
       {isAdmin && (
         <div className="grid md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow">
           {Object.keys(form).map((key) => (
@@ -78,14 +107,14 @@ export default function VendorModule() {
 
           <button
             onClick={handleSave}
-            className="md:col-span-2 bg-orange-500 text-white py-2 rounded-lg"
+            className="md:col-span-2 bg-orange-500 text-white py-2 rounded-lg hover:opacity-90"
           >
             {editingId ? "Update Vendor" : "Save Vendor"}
           </button>
         </div>
       )}
 
-      {/* Visible to ALL Roles */}
+      {/* VENDOR LIST */}
       <div className="bg-white rounded-xl p-6 shadow">
         <h3 className="font-semibold mb-4">Saved Vendors</h3>
 
@@ -109,17 +138,26 @@ export default function VendorModule() {
               <div className="flex gap-4">
                 <button
                   onClick={() => {
-                    setForm(v);
+                    setForm({
+                      name: v.name,
+                      company: v.company,
+                      contact: v.contact,
+                      email: v.email,
+                      phone: v.phone,
+                      category: v.category,
+                      taxId: v.taxId,
+                      address: v.address,
+                    });
                     setEditingId(v.id);
                   }}
-                  className="text-blue-500"
+                  className="text-blue-500 hover:underline"
                 >
                   Edit
                 </button>
 
                 <button
-                  onClick={() => deleteVendor(v.id)}
-                  className="text-red-500"
+                  onClick={() => handleDelete(v.id)}
+                  className="text-red-500 hover:underline"
                 >
                   Delete
                 </button>

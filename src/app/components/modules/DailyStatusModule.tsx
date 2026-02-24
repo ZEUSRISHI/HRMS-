@@ -18,6 +18,13 @@ export function DailyStatusModule() {
 
   const isManager = currentUser.role === 'manager' || currentUser.role === 'admin';
 
+  /* ================= TOAST ================= */
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
   /* ================= STATE ================= */
 
   const [statusList, setStatusList] = useState(mockDailyStatus);
@@ -77,6 +84,8 @@ export function DailyStatusModule() {
     setAchievements('');
     setBlockers('');
     setNextPlan('');
+
+    showToast("✅ Daily status submitted successfully");
   };
 
   /* ================= ADD COMMENT ================= */
@@ -100,16 +109,26 @@ export function DailyStatusModule() {
     );
 
     setCommentText('');
+    showToast("💬 Comment added");
   };
 
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-semibold mb-2">Daily Status Updates</h1>
-          <p className="text-sm text-muted-foreground">Submit and review daily work progress</p>
+          <p className="text-sm text-muted-foreground">
+            Submit and review daily work progress
+          </p>
         </div>
 
         {!todayStatus && (
@@ -132,25 +151,25 @@ export function DailyStatusModule() {
                 <div>
                   <Label>Overall Status *</Label>
                   <Textarea rows={2} value={overallStatus}
-                    onChange={e=>setOverallStatus(e.target.value)} />
+                    onChange={e => setOverallStatus(e.target.value)} />
                 </div>
 
                 <div>
                   <Label>Today's Achievements *</Label>
                   <Textarea rows={4} value={achievements}
-                    onChange={e=>setAchievements(e.target.value)} />
+                    onChange={e => setAchievements(e.target.value)} />
                 </div>
 
                 <div>
                   <Label>Blockers</Label>
                   <Textarea rows={3} value={blockers}
-                    onChange={e=>setBlockers(e.target.value)} />
+                    onChange={e => setBlockers(e.target.value)} />
                 </div>
 
                 <div>
                   <Label>Tomorrow's Plan</Label>
                   <Textarea rows={3} value={nextPlan}
-                    onChange={e=>setNextPlan(e.target.value)} />
+                    onChange={e => setNextPlan(e.target.value)} />
                 </div>
 
                 <Button className="w-full" onClick={submitStatus}>
@@ -162,7 +181,6 @@ export function DailyStatusModule() {
         )}
       </div>
 
-      {/* TODAY STATUS */}
       {todayStatus && (
         <Card className="border-primary">
           <CardHeader>
@@ -181,7 +199,6 @@ export function DailyStatusModule() {
         </Card>
       )}
 
-      {/* HISTORY */}
       <Card>
         <CardHeader>
           <CardTitle>Status History</CardTitle>
@@ -217,10 +234,10 @@ export function DailyStatusModule() {
 
                         <Textarea
                           value={commentText}
-                          onChange={e=>setCommentText(e.target.value)}
+                          onChange={e => setCommentText(e.target.value)}
                         />
 
-                        <Button onClick={()=>addComment(status.id)}>
+                        <Button onClick={() => addComment(status.id)}>
                           Submit Comment
                         </Button>
                       </DialogContent>

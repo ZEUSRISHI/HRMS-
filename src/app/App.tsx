@@ -6,6 +6,7 @@ import { TaskProvider } from "./contexts/TaskContext";
 import { TimesheetProvider } from "./contexts/TimesheetContext";
 import { PerformanceProvider } from "./contexts/PerformanceContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
+import { AdminUsersProvider } from "./contexts/AdminUsersContext";
 
 import MainLayout from "../layouts/MainLayout";
 
@@ -28,7 +29,8 @@ import {
   Timer,
   BarChart3,
   Briefcase,
-  Users
+  Users,
+  Shield
 } from "lucide-react";
 
 /* ===== MODULES ===== */
@@ -45,13 +47,14 @@ import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { WorkforceModule } from "./components/modules/WorkforceModule";
-
-/* ✅ NEW — Employee Task Status */
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
 
 /* ✅ HR MODULES */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
+
+/* ✅ ADMIN MODULE */
+import AdminUserManagement from "./components/admin/AdminUserManagement";
 
 /* ===== PROFILE ===== */
 import ProfilePage from "../pages/ProfilePage";
@@ -72,9 +75,10 @@ type ModuleType =
   | "time-tracking"
   | "analytics"
   | "workforce"
-  | "employee-task-status"   // ✅ NEW
+  | "employee-task-status"
   | "hr-employees"
   | "hr-attendance-leave"
+  | "admin-users"        // ✅ NEW
   | "profile"
   | "account";
 
@@ -95,10 +99,7 @@ function AppContent() {
     { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
     { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin","manager","employee","hr"] },
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin","manager","employee","hr"] },
-
-    /* ✅ NEW MENU — Employee Task Status */
     { id: "employee-task-status", name: "My Task Status", icon: CheckSquare, roles: ["employee"] },
-
     { id: "status", name: "Daily Status", icon: FileText, roles: ["admin","manager","employee","hr"] },
     { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin","manager","employee","hr"] },
     { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin","hr"] },
@@ -108,9 +109,11 @@ function AppContent() {
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin","manager","employee"] },
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
     { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
-
     { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
     { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
+
+    /* ✅ ADMIN ONLY */
+    { id: "admin-users", name: "User Management", icon: Shield, roles: ["admin"] },
   ];
 
   const visibleMenuItems = menuItems.filter(item =>
@@ -126,10 +129,7 @@ function AppContent() {
 
       case "attendance": return <AttendanceModule />;
       case "tasks": return <TaskManagement />;
-
-      /* ✅ NEW MODULE SWITCH */
       case "employee-task-status": return <EmployeeTaskStatusModule />;
-
       case "status": return <DailyStatusModule />;
       case "calendar": return <CalendarModule />;
       case "payroll": return <PayrollModule />;
@@ -139,9 +139,11 @@ function AppContent() {
       case "time-tracking": return <TimeTracking />;
       case "analytics": return <AnalyticsReports />;
       case "workforce": return <WorkforceModule />;
-
       case "hr-employees": return <EmployeeRecordsModule />;
       case "hr-attendance-leave": return <AttendanceLeaveModule />;
+
+      /* ✅ ADMIN MODULE RENDER */
+      case "admin-users": return <AdminUserManagement />;
 
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
@@ -206,19 +208,21 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <ProjectProvider>
-        <TimesheetProvider>
-          <PerformanceProvider>
-            <TaskProvider>
-              <WorkforceProvider>
-                <NotificationProvider>
-                  <AppWrapper />
-                </NotificationProvider>
-              </WorkforceProvider>
-            </TaskProvider>
-          </PerformanceProvider>
-        </TimesheetProvider>
-      </ProjectProvider>
+      <AdminUsersProvider> {/* ✅ NEW */}
+        <ProjectProvider>
+          <TimesheetProvider>
+            <PerformanceProvider>
+              <TaskProvider>
+                <WorkforceProvider>
+                  <NotificationProvider>
+                    <AppWrapper />
+                  </NotificationProvider>
+                </WorkforceProvider>
+              </TaskProvider>
+            </PerformanceProvider>
+          </TimesheetProvider>
+        </ProjectProvider>
+      </AdminUsersProvider>
     </AuthProvider>
   );
 }

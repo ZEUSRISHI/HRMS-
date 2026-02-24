@@ -23,7 +23,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { UserPlus, UserMinus, CheckCircle2, Plus } from "lucide-react";
 
-// ================= TYPES =================
+/* ================= TYPES ================= */
 
 type Task = {
   id: string;
@@ -60,7 +60,7 @@ type OffboardingItem = {
   clearanceStatus: ClearanceStatus;
 };
 
-// ================= MOCK USERS =================
+/* ================= MOCK USERS ================= */
 
 const users = [
   { id: "u1", name: "Asha", role: "Frontend Dev" },
@@ -68,7 +68,7 @@ const users = [
   { id: "u3", name: "Meera", role: "HR" },
 ];
 
-// ================= STARTUP TASK TEMPLATE =================
+/* ================= STARTUP TASK TEMPLATE ================= */
 
 const startupTasks = [
   "Offer letter signed",
@@ -78,7 +78,7 @@ const startupTasks = [
   "First sprint assigned",
 ];
 
-// ================= COMPONENT =================
+/* ================= COMPONENT ================= */
 
 export function OnboardingModule() {
   const [onboardingList, setOnboardingList] = useState<OnboardingItem[]>([]);
@@ -91,7 +91,16 @@ export function OnboardingModule() {
   const [lastDay, setLastDay] = useState<string>("");
   const [reason, setReason] = useState<string>("");
 
-  // ================= HELPERS =================
+  /* ===== POPUP STATE ===== */
+
+  const [popup, setPopup] = useState("");
+
+  function showPopup(message: string) {
+    setPopup(message);
+    setTimeout(() => setPopup(""), 2500);
+  }
+
+  /* ================= HELPERS ================= */
 
   function makeId() {
     return crypto.randomUUID();
@@ -122,6 +131,7 @@ export function OnboardingModule() {
     };
 
     setOnboardingList((prev) => [...prev, item]);
+    showPopup("Onboarding created successfully 🎉");
   }
 
   function toggleTask(onboardingId: string, taskId: string) {
@@ -166,6 +176,7 @@ export function OnboardingModule() {
     };
 
     setOffboardingList((prev) => [...prev, item]);
+    showPopup("Offboarding initiated 🚀");
   }
 
   function toggleClearance(offId: string, key: keyof ClearanceStatus) {
@@ -189,10 +200,17 @@ export function OnboardingModule() {
     );
   }
 
-  // ================= UI =================
+  /* ================= UI ================= */
 
   return (
     <div className="space-y-6">
+
+      {popup && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded shadow-lg z-50">
+          {popup}
+        </div>
+      )}
+
       <div>
         <h1 className="text-xl font-semibold">Startup Employee Lifecycle</h1>
         <p className="text-sm text-muted-foreground">
@@ -210,8 +228,7 @@ export function OnboardingModule() {
           </TabsTrigger>
         </TabsList>
 
-        {/* ================= ONBOARDING ================= */}
-
+        {/* ONBOARDING */}
         <TabsContent value="onboarding" className="space-y-4">
           <Dialog>
             <DialogTrigger asChild>
@@ -267,9 +284,7 @@ export function OnboardingModule() {
                   <div className="flex justify-between">
                     <div>
                       <CardTitle>{o.userName}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        {o.role}
-                      </p>
+                      <p className="text-sm text-muted-foreground">{o.role}</p>
                     </div>
                     <Badge>{o.status}</Badge>
                   </div>
@@ -291,7 +306,9 @@ export function OnboardingModule() {
                       />
                       <span
                         className={
-                          t.completed ? "line-through text-muted-foreground" : ""
+                          t.completed
+                            ? "line-through text-muted-foreground"
+                            : ""
                         }
                       >
                         {t.task}
@@ -304,8 +321,7 @@ export function OnboardingModule() {
           })}
         </TabsContent>
 
-        {/* ================= OFFBOARDING ================= */}
-
+        {/* OFFBOARDING */}
         <TabsContent value="offboarding" className="space-y-4">
           <Dialog>
             <DialogTrigger asChild>
@@ -363,9 +379,7 @@ export function OnboardingModule() {
                   (k) => (
                     <Button
                       key={k}
-                      variant={
-                        o.clearanceStatus[k] ? "default" : "outline"
-                      }
+                      variant={o.clearanceStatus[k] ? "default" : "outline"}
                       onClick={() => toggleClearance(o.id, k)}
                     >
                       {k}

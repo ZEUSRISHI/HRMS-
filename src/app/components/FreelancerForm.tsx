@@ -3,6 +3,8 @@ import { v4 as uuid } from "uuid";
 import { useWorkforce } from "../contexts/WorkforceContext";
 import { useAuth } from "../contexts/AuthContext";
 
+type PopupType = "success" | "error" | null;
+
 export default function FreelancerModule() {
   const {
     freelancers,
@@ -12,10 +14,14 @@ export default function FreelancerModule() {
   } = useWorkforce();
 
   const { currentUser } = useAuth();
-
   const isAdmin = currentUser?.role === "admin";
 
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const [popup, setPopup] = useState<{
+    message: string;
+    type: PopupType;
+  }>({ message: "", type: null });
 
   const [form, setForm] = useState({
     name: "",
@@ -27,11 +33,16 @@ export default function FreelancerModule() {
     portfolio: "",
   });
 
+  const showPopup = (message: string, type: PopupType = "success") => {
+    setPopup({ message, type });
+    setTimeout(() => setPopup({ message: "", type: null }), 2500);
+  };
+
   const handleSave = () => {
     if (!isAdmin) return;
 
     if (Object.values(form).some((v) => !v.trim())) {
-      alert("All fields are required");
+      showPopup("All fields are required", "error");
       return;
     }
 
@@ -42,12 +53,14 @@ export default function FreelancerModule() {
         createdAt: new Date().toISOString(),
       });
       setEditingId(null);
+      showPopup("Freelancer updated successfully ✅");
     } else {
       addFreelancer({
         id: uuid(),
         ...form,
         createdAt: new Date().toISOString(),
       });
+      showPopup("Freelancer added successfully 🎉");
     }
 
     setForm({
@@ -61,11 +74,26 @@ export default function FreelancerModule() {
     });
   };
 
+  const handleDelete = (id: string) => {
+    deleteFreelancer(id);
+    showPopup("Freelancer deleted 🗑️");
+  };
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 relative">
       <h2 className="text-2xl font-bold">Freelancer Management</h2>
 
-      {/* 🟢 ADMIN FORM ONLY */}
+      {/* 🔔 POPUP */}
+      {popup.type && (
+        <div
+          className={`fixed top-6 right-6 px-4 py-3 rounded-lg shadow-lg text-white
+          ${popup.type === "success" ? "bg-green-500" : "bg-red-500"}`}
+        >
+          {popup.message}
+        </div>
+      )}
+
+      {/* 🟢 ADMIN FORM */}
       {isAdmin && (
         <div className="grid md:grid-cols-2 gap-4 bg-white p-6 rounded-xl shadow">
           {Object.keys(form).map((key) => (
@@ -89,7 +117,7 @@ export default function FreelancerModule() {
         </div>
       )}
 
-      {/* 🔵 VISIBLE TO ALL ROLES */}
+      {/* 🔵 LIST */}
       <div className="bg-white rounded-xl p-6 shadow">
         <h3 className="font-semibold mb-4">Saved Freelancers</h3>
 
@@ -109,7 +137,6 @@ export default function FreelancerModule() {
               </p>
             </div>
 
-            {/* 🔒 ADMIN ACTIONS ONLY */}
             {isAdmin && (
               <div className="flex gap-4">
                 <button
@@ -123,7 +150,7 @@ export default function FreelancerModule() {
                 </button>
 
                 <button
-                  onClick={() => deleteFreelancer(f.id)}
+                  onClick={() => handleDelete(f.id)}
                   className="text-red-500"
                 >
                   Delete

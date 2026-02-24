@@ -27,9 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Clock, Plus } from "lucide-react";
+import { Clock, Plus, Trash } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { mockProjects, mockUsers } from "../../data/mockData";
+import { mockProjects } from "../../data/mockData";
 import { format, subDays } from "date-fns";
 import {
   ResponsiveContainer,
@@ -72,6 +72,8 @@ export function TimeTracking() {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [open, setOpen] = useState(false);
 
+  const [popup, setPopup] = useState("");
+
   const [form, setForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     projectId: "none",
@@ -80,13 +82,18 @@ export function TimeTracking() {
     description: "",
   });
 
+  /* ================= POPUP ================= */
+
+  function showPopup(message: string) {
+    setPopup(message);
+    setTimeout(() => setPopup(""), 2500);
+  }
+
   /* ================= LOAD ================= */
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      setEntries(JSON.parse(stored));
-    }
+    if (stored) setEntries(JSON.parse(stored));
   }, []);
 
   /* ================= SAVE ================= */
@@ -96,7 +103,7 @@ export function TimeTracking() {
     setEntries(data);
   };
 
-  /* ================= LOG TIME ================= */
+  /* ================= CREATE ================= */
 
   const handleLogTime = () => {
     if (!form.hours || !form.category) {
@@ -107,8 +114,7 @@ export function TimeTracking() {
     const newEntry: TimeEntry = {
       id: crypto.randomUUID(),
       userId: currentUser.id,
-      projectId:
-        form.projectId !== "none" ? form.projectId : undefined,
+      projectId: form.projectId !== "none" ? form.projectId : undefined,
       date: form.date,
       hours: parseFloat(form.hours),
       category: form.category as Category,
@@ -128,6 +134,16 @@ export function TimeTracking() {
     });
 
     setOpen(false);
+    showPopup("Time entry saved successfully ⏱️");
+  };
+
+  /* ================= DELETE ================= */
+
+  const handleDelete = (id: string) => {
+    if (!confirm("Delete this entry?")) return;
+    const updated = entries.filter((e) => e.id !== id);
+    saveEntries(updated);
+    showPopup("Entry deleted 🗑️");
   };
 
   /* ================= FILTER ================= */
@@ -156,7 +172,7 @@ export function TimeTracking() {
     }));
   }, [timeEntries]);
 
-  /* ================= DAILY TREND (LAST 7 DAYS) ================= */
+  /* ================= DAILY TREND ================= */
 
   const dailyTrend = useMemo(() => {
     const data = [];
@@ -181,6 +197,12 @@ export function TimeTracking() {
   return (
     <div className="space-y-6">
 
+      {popup && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded shadow z-50">
+          {popup}
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
@@ -204,80 +226,38 @@ export function TimeTracking() {
             </DialogHeader>
 
             <div className="space-y-4">
-              <div>
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) =>
-                    setForm({ ...form, date: e.target.value })
-                  }
-                />
-              </div>
+              <Input type="date" value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })} />
 
-              <div>
-                <Label>Project</Label>
-                <Select
-                  value={form.projectId}
-                  onValueChange={(value) =>
-                    setForm({ ...form, projectId: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Project</SelectItem>
-                    {mockProjects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={form.projectId}
+                onValueChange={(v) => setForm({ ...form, projectId: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Project</SelectItem>
+                  {mockProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-              <div>
-                <Label>Hours *</Label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  value={form.hours}
-                  onChange={(e) =>
-                    setForm({ ...form, hours: e.target.value })
-                  }
-                />
-              </div>
+              <Input type="number" step="0.5" placeholder="Hours"
+                value={form.hours}
+                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
 
-              <div>
-                <Label>Category *</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={(value: Category) =>
-                    setForm({ ...form, category: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="project">Project</SelectItem>
-                    <SelectItem value="meeting">Meeting</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={form.category}
+                onValueChange={(v: Category) => setForm({ ...form, category: v })}>
+                <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="project">Project</SelectItem>
+                  <SelectItem value="meeting">Meeting</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
 
-              <div>
-                <Label>Description</Label>
-                <Textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                />
-              </div>
+              <Textarea placeholder="Description"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
               <Button className="w-full" onClick={handleLogTime}>
                 Save Entry
@@ -287,11 +267,46 @@ export function TimeTracking() {
         </Dialog>
       </div>
 
-      {/* CATEGORY BAR CHART */}
+      {/* TABLE */}
       <Card>
         <CardHeader>
-          <CardTitle>Category Breakdown</CardTitle>
+          <CardTitle>Logged Entries</CardTitle>
         </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody>
+              {timeEntries.map((e) => (
+                <TableRow key={e.id}>
+                  <TableCell>{e.date}</TableCell>
+                  <TableCell>{e.hours}</TableCell>
+                  <TableCell><Badge>{e.category}</Badge></TableCell>
+                  <TableCell>{e.description}</TableCell>
+                  <TableCell>
+                    <Button size="icon" variant="destructive"
+                      onClick={() => handleDelete(e.id)}>
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {/* CHARTS */}
+      <Card>
+        <CardHeader><CardTitle>Category Breakdown</CardTitle></CardHeader>
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={categoryData}>
@@ -305,11 +320,8 @@ export function TimeTracking() {
         </CardContent>
       </Card>
 
-      {/* DAILY TREND LINE GRAPH */}
       <Card>
-        <CardHeader>
-          <CardTitle>Last 7 Days Trend</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Last 7 Days Trend</CardTitle></CardHeader>
         <CardContent className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dailyTrend}>

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Calendar } from "../ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -20,13 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import {
-  CalendarDays,
-  MapPin,
-  Users,
-  Plus,
-  Clock,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -49,16 +42,15 @@ interface CalendarEvent {
 export function CalendarModule() {
   const { currentUser } = useAuth();
 
-  // ✅ Null safety fix
   if (!currentUser) {
     return <div className="p-6">Loading...</div>;
   }
 
   const isAdmin = currentUser.role === "admin";
 
-  const [date, setDate] = useState<Date | undefined>(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [open, setOpen] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [form, setForm] = useState({
     title: "",
@@ -71,7 +63,7 @@ export function CalendarModule() {
     attendees: [] as string[],
   });
 
-  // ✅ Load from localStorage
+  /* ================= LOAD FROM LOCAL ================= */
   useEffect(() => {
     const stored = localStorage.getItem("calendarEvents");
     if (stored) {
@@ -79,20 +71,14 @@ export function CalendarModule() {
     }
   }, []);
 
-  // ✅ Save to localStorage
   const saveToLocal = (data: CalendarEvent[]) => {
     localStorage.setItem("calendarEvents", JSON.stringify(data));
     setEvents(data);
   };
 
-  // ✅ Create Event Function
+  /* ================= CREATE EVENT ================= */
   const handleCreateEvent = () => {
-    if (
-      !form.title ||
-      !form.date ||
-      !form.startTime ||
-      !form.endTime
-    ) {
+    if (!form.title || !form.date || !form.startTime || !form.endTime) {
       alert("Please fill all required fields");
       return;
     }
@@ -114,7 +100,13 @@ export function CalendarModule() {
     const updated = [...events, newEvent];
     saveToLocal(updated);
 
-    // Reset form
+    /* ✅ Success popup message */
+    setSuccessMsg("✅ Event created successfully!");
+
+    /* Auto hide message */
+    setTimeout(() => setSuccessMsg(""), 3000);
+
+    /* Reset form */
     setForm({
       title: "",
       description: "",
@@ -155,18 +147,22 @@ export function CalendarModule() {
 
   return (
     <div className="space-y-6">
+      {/* ✅ Success Message */}
+      {successMsg && (
+        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-md">
+          {successMsg}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-semibold mb-2">
-            Calendar Management
-          </h1>
+          <h1 className="font-semibold mb-2">Calendar Management</h1>
           <p className="text-sm text-muted-foreground">
             Manage company events, meetings, and holidays
           </p>
         </div>
 
-        {/* ✅ Only Admin can create */}
         {isAdmin && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -198,10 +194,7 @@ export function CalendarModule() {
                     rows={3}
                     value={form.description}
                     onChange={(e) =>
-                      setForm({
-                        ...form,
-                        description: e.target.value,
-                      })
+                      setForm({ ...form, description: e.target.value })
                     }
                   />
                 </div>
@@ -219,20 +212,12 @@ export function CalendarModule() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="meeting">
-                          Meeting
-                        </SelectItem>
-                        <SelectItem value="event">
-                          Company Event
-                        </SelectItem>
+                        <SelectItem value="meeting">Meeting</SelectItem>
+                        <SelectItem value="event">Company Event</SelectItem>
                         {isAdmin && (
-                          <SelectItem value="holiday">
-                            Holiday
-                          </SelectItem>
+                          <SelectItem value="holiday">Holiday</SelectItem>
                         )}
-                        <SelectItem value="personal">
-                          Personal
-                        </SelectItem>
+                        <SelectItem value="personal">Personal</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -283,18 +268,12 @@ export function CalendarModule() {
                   <Input
                     value={form.location}
                     onChange={(e) =>
-                      setForm({
-                        ...form,
-                        location: e.target.value,
-                      })
+                      setForm({ ...form, location: e.target.value })
                     }
                   />
                 </div>
 
-                <Button
-                  className="w-full"
-                  onClick={handleCreateEvent}
-                >
+                <Button className="w-full" onClick={handleCreateEvent}>
                   Create Event
                 </Button>
               </div>
@@ -319,18 +298,12 @@ export function CalendarModule() {
             <Card key={event.id}>
               <CardContent className="py-4 flex gap-4">
                 <div
-                  className={`w-1 ${getEventTypeColor(
-                    event.type
-                  )} rounded`}
+                  className={`w-1 ${getEventTypeColor(event.type)} rounded`}
                 />
                 <div className="flex-1">
                   <div className="flex justify-between">
-                    <h4 className="font-medium">
-                      {event.title}
-                    </h4>
-                    <Badge variant="outline">
-                      {event.type}
-                    </Badge>
+                    <h4 className="font-medium">{event.title}</h4>
+                    <Badge variant="outline">{event.type}</Badge>
                   </div>
 
                   <p className="text-sm text-muted-foreground">
@@ -339,17 +312,12 @@ export function CalendarModule() {
 
                   <div className="flex gap-4 text-sm mt-2 text-muted-foreground">
                     <span>
-                      {format(
-                        new Date(event.date),
-                        "MMMM d, yyyy"
-                      )}
+                      {format(new Date(event.date), "MMMM d, yyyy")}
                     </span>
                     <span>
                       {event.startTime} - {event.endTime}
                     </span>
-                    {event.location && (
-                      <span>{event.location}</span>
-                    )}
+                    {event.location && <span>{event.location}</span>}
                   </div>
                 </div>
               </CardContent>
@@ -372,10 +340,7 @@ export function CalendarModule() {
               >
                 <span>{holiday.title}</span>
                 <span className="text-sm text-muted-foreground">
-                  {format(
-                    new Date(holiday.date),
-                    "MMMM d, yyyy"
-                  )}
+                  {format(new Date(holiday.date), "MMMM d, yyyy")}
                 </span>
               </div>
             ))}

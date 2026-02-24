@@ -1,37 +1,69 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Progress } from '../ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Label } from '../ui/label';
-import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { FolderKanban, DollarSign, CheckCircle2, Plus } from 'lucide-react';
-import { mockProjects, mockClients, mockUsers } from '../../data/mockData';
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Progress } from "../ui/progress";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Textarea } from "../ui/textarea";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "../ui/select";
+import { Plus, Pencil, Trash } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { mockProjects, mockUsers } from "../../data/mockData";
 
-type StatusVariant = "default" | "secondary" | "outline" | "destructive";
-type Project = typeof mockProjects[number];
+/* ================= TYPES ================= */
+
+type ProjectStatus = "planning" | "in-progress" | "completed" | "on-hold";
+
+type Project = {
+  id: string;
+  name: string;
+  description: string;
+  clientId: string;
+  status: ProjectStatus;
+  startDate: string;
+  budget: number;
+  spent: number;
+  progress: number;
+  teamMembers: string[];
+  milestones: any[];
+};
+
+type FormState = {
+  id: string;
+  name: string;
+  description: string;
+  clientId: string;
+  status: ProjectStatus;
+  budget: string;
+  memberId: string;
+};
 
 export function ProjectManagement() {
 
   const { currentUser } = useAuth();
-  const userId = currentUser?.id ?? ""; // ✅ SAFE STRING
-
-  /* ================= STATE ================= */
+  const isAdmin = currentUser?.role === "admin";
+  const userId = currentUser?.id ?? "";
 
   const [projects, setProjects] = useState<Project[]>([]);
+  const [popup, setPopup] = useState("");
+  const [isEdit, setIsEdit] = useState(false);
 
-  const [name, setName] = useState("");
-  const [desc, setDesc] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [status, setStatus] = useState("planning");
-  const [budget, setBudget] = useState("");
-  const [memberId, setMemberId] = useState("");
+  const [form, setForm] = useState<FormState>({
+    id: "",
+    name: "",
+    description: "",
+    clientId: "",
+    status: "planning",
+    budget: "",
+    memberId: ""
+  });
 
-  /* ================= LOAD / SAVE ================= */
+  /* ================= LOAD ================= */
 
   useEffect(() => {
     const saved = localStorage.getItem("projects");
@@ -43,119 +75,148 @@ export function ProjectManagement() {
     localStorage.setItem("projects", JSON.stringify(projects));
   }, [projects]);
 
-  /* ================= ADMIN CREATE ================= */
+  /* ================= POPUP ================= */
 
-  const handleCreate = () => {
-
-    if (currentUser?.role !== "admin") {
-      alert("Only ADMIN can create projects");
-      return;
-    }
-
-    if (!name) {
-      alert("Project name required");
-      return;
-    }
-
-    const newProject: Project = {
-      id: Date.now().toString(),
-      name,
-      description: desc,
-      clientId,
-      status: status as any,
-      startDate: new Date().toISOString(),
-      endDate: undefined, // ✅ fix null error
-      budget: Number(budget) || 0,
-      spent: 0,
-      progress: 0,
-      teamMembers: memberId ? [memberId] : [],
-      milestones: []
-    };
-
-    setProjects(prev => [newProject, ...prev]);
-
-    setName("");
-    setDesc("");
-    setBudget("");
-    setClientId("");
-    setMemberId("");
+  const showPopup = (msg: string) => {
+    setPopup(msg);
+    setTimeout(() => setPopup(""), 2500);
   };
 
-  /* ================= FILTER BY ASSIGNMENT ================= */
+  /* ================= VALIDATION ================= */
 
-  const visibleProjects =
-    currentUser?.role === "admin"
-      ? projects
-      : projects.filter(p =>
-          Array.isArray(p.teamMembers) &&
-          userId !== "" &&
-          p.teamMembers.includes(userId)
-        );
-
-  /* ================= SUMMARY ================= */
-
-  const activeProjects = visibleProjects.filter(p => p.status === 'in-progress').length;
-  const completedProjects = visibleProjects.filter(p => p.status === 'completed').length;
-
-  const totalBudget = visibleProjects.reduce((s, p) => s + (p.budget || 0), 0);
-  const totalSpent = visibleProjects.reduce((s, p) => s + (p.spent || 0), 0);
-
-  const totalUtilization =
-    totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(0) : "0";
-
-  const getStatusColor = (status: string): StatusVariant => {
-    switch (status) {
-      case 'completed': return 'default';
-      case 'in-progress': return 'secondary';
-      case 'planning': return 'outline';
-      case 'on-hold': return 'destructive';
-      default: return 'outline';
-    }
+  const validate = () => {
+    if (!form.name.trim()) return "Project name is required";
+    if (!form.description.trim()) return "Description is required";
+    if (!form.budget) return "Budget is required";
+    return "";
   };
+
+  /* ================= CREATE / UPDATE ================= */
+
+  const handleSubmit = () => {
+    const error = validate();
+    if (error) return alert(error);
+
+    if (isEdit) {
+      setProjects(prev =>
+        prev.map(p =>
+          p.id === form.id
+            ? {
+                ...p,
+                name: form.name,
+                description: form.description,
+                clientId: form.clientId,
+                status: form.status,
+                budget: Number(form.budget),
+                teamMembers: form.memberId ? [form.memberId] : []
+              }
+            : p
+        )
+      );
+      showPopup("Project updated successfully ✅");
+    } else {
+      const newProject: Project = {
+        id: Date.now().toString(),
+        name: form.name,
+        description: form.description,
+        clientId: form.clientId,
+        status: form.status,
+        startDate: new Date().toISOString(),
+        budget: Number(form.budget),
+        spent: 0,
+        progress: 0,
+        teamMembers: form.memberId ? [form.memberId] : [],
+        milestones: []
+      };
+
+      setProjects(prev => [newProject, ...prev]);
+      showPopup("New project created 🎉");
+    }
+
+    resetForm();
+  };
+
+  /* ================= DELETE ================= */
+
+  const handleDelete = (id: string) => {
+    if (!confirm("Delete project?")) return;
+    setProjects(prev => prev.filter(p => p.id !== id));
+    showPopup("Project deleted 🗑️");
+  };
+
+  /* ================= EDIT ================= */
+
+  const handleEdit = (p: Project) => {
+    setIsEdit(true);
+    setForm({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      clientId: p.clientId,
+      status: p.status,
+      budget: String(p.budget),
+      memberId: p.teamMembers[0] ?? ""
+    });
+  };
+
+  const resetForm = () => {
+    setForm({
+      id: "",
+      name: "",
+      description: "",
+      clientId: "",
+      status: "planning",
+      budget: "",
+      memberId: ""
+    });
+    setIsEdit(false);
+  };
+
+  /* ================= ROLE FILTER ================= */
+
+  const visibleProjects = isAdmin
+    ? projects
+    : projects.filter(p => p.teamMembers.includes(userId));
 
   /* ================= UI ================= */
 
   return (
     <div className="space-y-6">
 
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-semibold mb-2">Project Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Track projects, milestones, and team progress
-          </p>
+      {popup && (
+        <div className="fixed top-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow">
+          {popup}
         </div>
+      )}
 
-        {currentUser?.role === "admin" && (
+      <div className="flex justify-between items-center">
+        <h1 className="text-lg font-semibold">Project Management</h1>
+
+        {isAdmin && (
           <Dialog>
             <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                New Project
-              </Button>
+              <Button><Plus className="h-4 w-4 mr-2" /> New Project</Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Project</DialogTitle>
+                <DialogTitle>{isEdit ? "Edit Project" : "Create Project"}</DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4">
+              <div className="space-y-3">
+                <Input
+                  placeholder="Project Name *"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                />
 
-                <Input placeholder="Project Name" value={name} onChange={e => setName(e.target.value)} />
-                <Textarea placeholder="Description" value={desc} onChange={e => setDesc(e.target.value)} />
+                <Textarea
+                  placeholder="Description *"
+                  value={form.description}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                />
 
-                <Select onValueChange={setClientId}>
-                  <SelectTrigger><SelectValue placeholder="Client" /></SelectTrigger>
-                  <SelectContent>
-                    {mockClients.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select onValueChange={setStatus}>
+                <Select onValueChange={(v: ProjectStatus) => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="planning">Planning</SelectItem>
@@ -165,9 +226,14 @@ export function ProjectManagement() {
                   </SelectContent>
                 </Select>
 
-                <Input type="number" placeholder="Budget" value={budget} onChange={e => setBudget(e.target.value)} />
+                <Input
+                  type="number"
+                  placeholder="Budget *"
+                  value={form.budget}
+                  onChange={e => setForm({ ...form, budget: e.target.value })}
+                />
 
-                <Select onValueChange={setMemberId}>
+                <Select onValueChange={v => setForm({ ...form, memberId: v })}>
                   <SelectTrigger><SelectValue placeholder="Assign User" /></SelectTrigger>
                   <SelectContent>
                     {mockUsers.map(u => (
@@ -176,46 +242,42 @@ export function ProjectManagement() {
                   </SelectContent>
                 </Select>
 
-                <Button className="w-full" onClick={handleCreate}>
-                  Create Project
+                <Button className="w-full" onClick={handleSubmit}>
+                  {isEdit ? "Update Project" : "Create Project"}
                 </Button>
-
               </div>
             </DialogContent>
           </Dialog>
         )}
       </div>
 
-      {/* SUMMARY */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card><CardHeader><CardTitle>Active Projects</CardTitle></CardHeader><CardContent>{activeProjects}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Completed</CardTitle></CardHeader><CardContent>{completedProjects}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Total Budget</CardTitle></CardHeader><CardContent>${(totalBudget/1000).toFixed(0)}K</CardContent></Card>
-        <Card><CardHeader><CardTitle>Total Spent</CardTitle></CardHeader><CardContent>{totalUtilization}%</CardContent></Card>
-      </div>
+      {visibleProjects.map(project => (
+        <Card key={project.id}>
+          <CardHeader className="flex justify-between">
+            <CardTitle>{project.name}</CardTitle>
+            <div className="flex gap-2">
+              <Badge>{project.status}</Badge>
 
-      {/* PROJECT LIST */}
-      <div className="space-y-4">
-        {visibleProjects.map(project => {
-          const safeProgress = Math.min(project.progress ?? 0, 100);
+              {isAdmin && (
+                <>
+                  <Button size="icon" variant="outline" onClick={() => handleEdit(project)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
 
-          return (
-            <Card key={project.id}>
-              <CardHeader className="flex justify-between">
-                <CardTitle>{project.name}</CardTitle>
-                <Badge variant={getStatusColor(project.status)}>
-                  {project.status}
-                </Badge>
-              </CardHeader>
+                  <Button size="icon" variant="destructive" onClick={() => handleDelete(project.id)}>
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardHeader>
 
-              <CardContent>
-                <p>{project.description}</p>
-                <Progress value={safeProgress} />
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+          <CardContent>
+            <p className="text-sm mb-2">{project.description}</p>
+            <Progress value={project.progress} />
+          </CardContent>
+        </Card>
+      ))}
 
     </div>
   );

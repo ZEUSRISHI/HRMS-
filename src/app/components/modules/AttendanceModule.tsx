@@ -39,6 +39,12 @@ const LEAVE_KEY = "startup_leave_records";
 export function AttendanceModule() {
   const { currentUser } = useAuth();
 
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2500);
+  };
+
   if (!currentUser) {
     return <div className="p-6 text-muted-foreground">Loading attendance...</div>;
   }
@@ -53,22 +59,14 @@ export function AttendanceModule() {
   const [reason, setReason] = useState('');
   const [description, setDescription] = useState('');
 
-  const isAdmin = currentUser.role === 'admin';
-
-  // ✅ manager only — admin excluded
   const isManager = currentUser.role === 'manager';
+  const canApprove = currentUser.role === 'hr' || currentUser.role === 'manager';
 
-  // ✅ HR + Manager only — admin excluded
-  const canApprove =
-    currentUser.role === 'hr' ||
-    currentUser.role === 'manager';
-
-  // ================= LOAD LOCAL =================
+  /* ================= LOAD LOCAL ================= */
 
   useEffect(() => {
     const a = localStorage.getItem(ATT_KEY);
     const l = localStorage.getItem(LEAVE_KEY);
-
     setAttendanceData(a ? JSON.parse(a) : mockAttendance);
     setLeaveData(l ? JSON.parse(l) : mockLeaveRequests);
   }, []);
@@ -87,7 +85,7 @@ export function AttendanceModule() {
     a => a.userId === currentUser.id && a.date === todayDate
   );
 
-  // ================= CHECK IN =================
+  /* ================= CHECK IN ================= */
 
   const handleCheckIn = () => {
     if (todayAttendance) return;
@@ -105,9 +103,10 @@ export function AttendanceModule() {
     };
 
     setAttendanceData(prev => [rec, ...prev]);
+    showToast("✅ Checked in successfully");
   };
 
-  // ================= CHECK OUT =================
+  /* ================= CHECK OUT ================= */
 
   const handleCheckOut = () => {
     const now = format(new Date(), 'HH:mm');
@@ -119,9 +118,11 @@ export function AttendanceModule() {
           : r
       )
     );
+
+    showToast("✅ Checked out successfully");
   };
 
-  // ================= LEAVE SUBMIT =================
+  /* ================= LEAVE SUBMIT ================= */
 
   const submitLeave = () => {
     if (!leaveType || !startDate || !endDate || !reason) {
@@ -147,9 +148,11 @@ export function AttendanceModule() {
     setEndDate('');
     setReason('');
     setDescription('');
+
+    showToast("📩 Leave request submitted");
   };
 
-  // ================= APPROVE / REJECT =================
+  /* ================= APPROVE / REJECT ================= */
 
   const updateLeaveStatus = (id: string, status: "approved" | "rejected") => {
     if (!canApprove) return;
@@ -157,9 +160,11 @@ export function AttendanceModule() {
     setLeaveData(prev =>
       prev.map(l => l.id === id ? { ...l, status } : l)
     );
+
+    showToast(status === "approved" ? "✅ Leave approved" : "❌ Leave rejected");
   };
 
-  // ================= FILTER =================
+  /* ================= FILTER ================= */
 
   const userAttendance = isManager
     ? attendanceData
@@ -169,11 +174,18 @@ export function AttendanceModule() {
     ? leaveData
     : leaveData.filter(l => l.userId === currentUser.id);
 
-  // ================= UI =================
+  /* ================= UI ================= */
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
 
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
+
+      {/* Header */}
       <div className="rounded-2xl bg-gradient-to-r from-indigo-50 to-cyan-50 p-4 border">
         <h1 className="font-semibold mb-1">Attendance Management</h1>
         <p className="text-sm text-muted-foreground">
@@ -181,6 +193,7 @@ export function AttendanceModule() {
         </p>
       </div>
 
+      {/* Today Card */}
       <Card className="shadow-sm rounded-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -232,6 +245,7 @@ export function AttendanceModule() {
         </CardContent>
       </Card>
 
+      {/* Attendance Table */}
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
           <CardTitle>Attendance History</CardTitle>
@@ -267,6 +281,7 @@ export function AttendanceModule() {
         </CardContent>
       </Card>
 
+      {/* Leave Requests */}
       <Card className="rounded-2xl shadow-sm">
         <CardHeader className="flex justify-between">
           <CardTitle className="flex items-center gap-2">
@@ -285,7 +300,6 @@ export function AttendanceModule() {
               </DialogHeader>
 
               <div className="space-y-4">
-
                 <div>
                   <Label>Leave Type *</Label>
                   <Select value={leaveType} onValueChange={setLeaveType}>
@@ -303,25 +317,27 @@ export function AttendanceModule() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <input type="date" value={startDate}
-                    onChange={e=>setStartDate(e.target.value)}
+                    onChange={e => setStartDate(e.target.value)}
                     className="w-full border rounded-lg px-3 py-2" />
+
                   <input type="date" value={endDate}
-                    onChange={e=>setEndDate(e.target.value)}
+                    onChange={e => setEndDate(e.target.value)}
                     className="w-full border rounded-lg px-3 py-2" />
                 </div>
 
                 <input value={reason}
-                  onChange={e=>setReason(e.target.value)}
+                  onChange={e => setReason(e.target.value)}
+                  placeholder="Reason"
                   className="w-full border rounded-lg px-3 py-2" />
 
                 <Textarea value={description}
-                  onChange={e=>setDescription(e.target.value)}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Description"
                   className="min-h-[100px]" />
 
                 <Button onClick={submitLeave} className="w-full rounded-xl">
                   Submit Leave Request
                 </Button>
-
               </div>
             </DialogContent>
           </Dialog>
@@ -351,7 +367,6 @@ export function AttendanceModule() {
                       </div>
                     </TableCell>
                   )}
-
                 </TableRow>
               ))}
             </TableBody>
