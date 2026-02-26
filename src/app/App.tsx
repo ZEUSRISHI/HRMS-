@@ -30,11 +30,11 @@ import {
   BarChart3,
   Briefcase,
   Users,
-  Shield
+  Shield,
 } from "lucide-react";
 
 /* ===== MODULES ===== */
-import { Dashboard } from "./components/Dashboard";
+import { Dashboard, DashboardStats } from "./components/Dashboard";
 import { EmployeeDashboard } from "./components/modules/EmployeeDashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
@@ -46,19 +46,22 @@ import { ProjectManagement } from "./components/modules/ProjectManagement";
 import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
-import { WorkforceModule } from "./components/modules/WorkforceModule";
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
 
-/* ✅ HR MODULES */
+/* HR */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
 
-/* ✅ ADMIN MODULE */
+/* ADMIN */
 import AdminUserManagement from "./components/admin/AdminUserManagement";
 
-/* ===== PROFILE ===== */
+/* PROFILE */
 import ProfilePage from "../pages/ProfilePage";
 import AccountPage from "../pages/AccountPage";
+
+/* WORKFORCE QUICK VIEW */
+import VendorModule from "./components/modules/VendorModule";
+import FreelancerModule from "./components/modules/FreelancerModule";
 
 /* ================= TYPES ================= */
 
@@ -66,6 +69,7 @@ type ModuleType =
   | "dashboard"
   | "attendance"
   | "tasks"
+  | "employee-task-status"
   | "status"
   | "calendar"
   | "payroll"
@@ -74,11 +78,10 @@ type ModuleType =
   | "onboarding"
   | "time-tracking"
   | "analytics"
-  | "workforce"
-  | "employee-task-status"
+  | "workforce-overview"
   | "hr-employees"
   | "hr-attendance-leave"
-  | "admin-users"        // ✅ NEW
+  | "admin-users"
   | "profile"
   | "account";
 
@@ -86,7 +89,8 @@ type ModuleType =
 
 function AppContent() {
   const { currentUser } = useAuth();
-  const [activeModule, setActiveModule] = useState<ModuleType>("dashboard");
+  const [activeModule, setActiveModule] =
+    useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
 
@@ -108,11 +112,9 @@ function AppContent() {
     { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin","hr"] },
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin","manager","employee"] },
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
-    { id: "workforce", name: "Vendors & Freelancers", icon: Briefcase, roles: ["admin","manager","hr"] },
+    { id: "workforce-overview", name: "Workforce Overview", icon: Briefcase, roles: ["admin","manager","hr"] },
     { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
     { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
-
-    /* ✅ ADMIN ONLY */
     { id: "admin-users", name: "User Management", icon: Shield, roles: ["admin"] },
   ];
 
@@ -138,13 +140,19 @@ function AppContent() {
       case "onboarding": return <OnboardingModule />;
       case "time-tracking": return <TimeTracking />;
       case "analytics": return <AnalyticsReports />;
-      case "workforce": return <WorkforceModule />;
+
+      case "workforce-overview":
+        return (
+          <div className="space-y-6">
+            <DashboardStats />
+            <VendorModule />
+            <FreelancerModule />
+          </div>
+        );
+
       case "hr-employees": return <EmployeeRecordsModule />;
       case "hr-attendance-leave": return <AttendanceLeaveModule />;
-
-      /* ✅ ADMIN MODULE RENDER */
       case "admin-users": return <AdminUserManagement />;
-
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
 
@@ -162,7 +170,8 @@ function AppContent() {
               <button
                 key={item.id}
                 onClick={() => setActiveModule(item.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100"
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition 
+                ${activeModule === item.id ? "bg-gray-200" : "hover:bg-gray-100"}`}
               >
                 <Icon className="h-4 w-4" />
                 {item.name}
@@ -183,7 +192,8 @@ function AppContent() {
 
 function AppWrapper() {
   const { isAuthenticated } = useAuth();
-  const [view, setView] = useState<"login" | "signup" | "forgot">("login");
+  const [view, setView] =
+    useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
     if (view === "signup")
@@ -208,7 +218,7 @@ function AppWrapper() {
 export default function App() {
   return (
     <AuthProvider>
-      <AdminUsersProvider> {/* ✅ NEW */}
+      <AdminUsersProvider>
         <ProjectProvider>
           <TimesheetProvider>
             <PerformanceProvider>

@@ -1,6 +1,6 @@
 import UserInfoCard from "../components/common/UserInfoCard";
-
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+
 import {
   Users,
   CheckCircle,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
+import { useWorkforce } from "../contexts/WorkforceContext";
+
 import {
   mockUsers,
   mockTasks,
@@ -37,17 +39,32 @@ import {
   Cell,
 } from "recharts";
 
-import { useWorkforce } from "../contexts/WorkforceContext";
+/* ================= TYPES ================= */
+
+type StatCardProps = {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: any;
+};
+
+type MiniStatProps = {
+  icon: any;
+  label: string;
+  value: number;
+};
 
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
 
+/* ================= MAIN DASHBOARD ================= */
+
 export function Dashboard() {
   const { currentUser } = useAuth();
-  const { vendors, freelancers } = useWorkforce(); // ✅ Workforce data
+  const { vendors, freelancers } = useWorkforce();
 
   if (!currentUser) return <div className="p-6">Loading user...</div>;
 
-  /* ================= STATS ================= */
+  /* ===== STATS ===== */
 
   const totalEmployees = mockUsers.filter((u) => u.status === "active").length;
   const myTasks = mockTasks.filter((t) => t.assignedTo === currentUser.id);
@@ -63,7 +80,7 @@ export function Dashboard() {
   const attendanceRecords = mockAttendance.filter((a) => a.status === "present");
   const attendanceRate = (attendanceRecords.length / mockAttendance.length) * 100;
 
-  /* ================= CHART DATA ================= */
+  /* ===== CHART DATA ===== */
 
   const taskStatusData = [
     { name: "Pending", value: mockTasks.filter((t) => t.status === "pending").length },
@@ -102,19 +119,20 @@ export function Dashboard() {
         </p>
       </div>
 
-      {/* ================= STATS GRID ================= */}
+      {/* ===== MAIN STATS GRID ===== */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <StatCard title="Total Employees" value={totalEmployees} icon={Users} subtitle="Active employees" />
         <StatCard title="Active Projects" value={activeProjects} icon={FolderKanban} subtitle="In progress" />
         <StatCard title="Attendance Rate" value={`${attendanceRate.toFixed(1)}%`} icon={CheckCircle} subtitle="This week" />
         <StatCard title="Revenue" value={`$${(totalRevenue / 1000).toFixed(0)}K`} icon={DollarSign} subtitle={`${(outstandingAmount / 1000).toFixed(0)}K outstanding`} />
-
-        {/* ✅ NEW WORKFORCE STATS */}
         <StatCard title="Vendors" value={vendors.length} icon={Briefcase} subtitle="Registered vendors" />
         <StatCard title="Freelancers" value={freelancers.length} icon={UserPlus} subtitle="Active freelancers" />
       </div>
 
-      {/* ================= CHARTS ================= */}
+      {/* ===== WORKFORCE SUMMARY SECTION ===== */}
+      <DashboardStats />
+
+      {/* ===== CHARTS ===== */}
       <div className="grid gap-4 md:grid-cols-2">
 
         {/* PIE */}
@@ -178,7 +196,7 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* ================= EMPLOYEE SUMMARY ================= */}
+      {/* ===== EMPLOYEE SUMMARY ===== */}
       {currentUser.role === "employee" && (
         <Card>
           <CardHeader>
@@ -198,9 +216,29 @@ export function Dashboard() {
   );
 }
 
+/* ================= WORKFORCE STATS ================= */
+
+export function DashboardStats() {
+  const { vendors, freelancers } = useWorkforce();
+
+  return (
+    <div className="grid md:grid-cols-2 gap-4">
+      <div className="bg-white shadow rounded p-4">
+        <h3 className="text-sm text-gray-500">Total Vendors</h3>
+        <p className="text-2xl font-semibold">{vendors.length}</p>
+      </div>
+
+      <div className="bg-white shadow rounded p-4">
+        <h3 className="text-sm text-gray-500">Total Freelancers</h3>
+        <p className="text-2xl font-semibold">{freelancers.length}</p>
+      </div>
+    </div>
+  );
+}
+
 /* ================= REUSABLE COMPONENTS ================= */
 
-function StatCard({ title, value, subtitle, icon: Icon }: any) {
+function StatCard({ title, value, subtitle, icon: Icon }: StatCardProps) {
   return (
     <div className="bg-white rounded-xl shadow p-4">
       <div className="flex items-center justify-between">
@@ -213,7 +251,7 @@ function StatCard({ title, value, subtitle, icon: Icon }: any) {
   );
 }
 
-function MiniStat({ icon: Icon, label, value }: any) {
+function MiniStat({ icon: Icon, label, value }: MiniStatProps) {
   return (
     <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg">
       <Icon className="h-6 w-6 text-orange-500" />

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import {
+  Card, CardContent, CardHeader, CardTitle
+} from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
@@ -8,12 +10,11 @@ import {
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+
 import { Plus, Pencil, Trash } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { mockProjects, mockUsers } from "../../data/mockData";
+import { mockProjects } from "../../data/mockData";
 
 /* ================= TYPES ================= */
 
@@ -23,114 +24,122 @@ type Project = {
   id: string;
   name: string;
   description: string;
-  clientId: string;
+  clientName: string;
+  deadline: string;
   status: ProjectStatus;
-  startDate: string;
   budget: number;
   spent: number;
   progress: number;
+  managerId: string;
   teamMembers: string[];
-  milestones: any[];
 };
 
 type FormState = {
   id: string;
   name: string;
   description: string;
-  clientId: string;
+  clientName: string;
+  deadline: string;
   status: ProjectStatus;
   budget: string;
-  memberId: string;
+  managerId: string;
+  teamMembers: string;
 };
+
+/* ================= COMPONENT ================= */
 
 export function ProjectManagement() {
 
-  const { currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin";
+  const { currentUser, users } = useAuth();
+
+  const role = currentUser?.role;
   const userId = currentUser?.id ?? "";
 
+  const isAdmin = role === "admin";
+  const isManager = role === "manager";
+
   const [projects, setProjects] = useState<Project[]>([]);
-  const [popup, setPopup] = useState("");
   const [isEdit, setIsEdit] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     id: "",
     name: "",
     description: "",
-    clientId: "",
+    clientName: "",
+    deadline: "",
     status: "planning",
     budget: "",
-    memberId: ""
+    managerId: "",
+    teamMembers: ""
   });
 
   /* ================= LOAD ================= */
 
   useEffect(() => {
     const saved = localStorage.getItem("projects");
-    if (saved) setProjects(JSON.parse(saved));
-    else setProjects(mockProjects);
+    setProjects(saved ? JSON.parse(saved) : mockProjects);
   }, []);
 
   useEffect(() => {
     localStorage.setItem("projects", JSON.stringify(projects));
   }, [projects]);
 
-  /* ================= POPUP ================= */
+  /* ================= KPI ================= */
 
-  const showPopup = (msg: string) => {
-    setPopup(msg);
-    setTimeout(() => setPopup(""), 2500);
-  };
+  const totalBudget = projects.reduce((s, p) => s + p.budget, 0);
+  const totalSpent = projects.reduce((s, p) => s + p.spent, 0);
+
+  const burnRate =
+    totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(1) : "0";
+
+  const velocity =
+    projects.length > 0
+      ? (
+          projects.reduce((s, p) => s + p.progress, 0) / projects.length
+        ).toFixed(0)
+      : "0";
 
   /* ================= VALIDATION ================= */
 
   const validate = () => {
-    if (!form.name.trim()) return "Project name is required";
-    if (!form.description.trim()) return "Description is required";
-    if (!form.budget) return "Budget is required";
+    if (!form.name) return "Project name required";
+    if (!form.clientName) return "Client required";
+    if (!form.deadline) return "Deadline required";
+    if (!form.budget) return "Budget required";
     return "";
   };
 
   /* ================= CREATE / UPDATE ================= */
 
   const handleSubmit = () => {
-    const error = validate();
-    if (error) return alert(error);
+    const err = validate();
+    if (err) {
+      window.alert(err);
+      return;
+    }
+
+    const projectData: Project = {
+      id: form.id || Date.now().toString(),
+      name: form.name,
+      description: form.description,
+      clientName: form.clientName,
+      deadline: form.deadline,
+      status: form.status,
+      budget: Number(form.budget),
+      spent: 0,
+      progress: 0,
+      managerId: form.managerId,
+      teamMembers: form.teamMembers
+        ? form.teamMembers.split(",").map(id => id.trim())
+        : []
+    };
 
     if (isEdit) {
       setProjects(prev =>
-        prev.map(p =>
-          p.id === form.id
-            ? {
-                ...p,
-                name: form.name,
-                description: form.description,
-                clientId: form.clientId,
-                status: form.status,
-                budget: Number(form.budget),
-                teamMembers: form.memberId ? [form.memberId] : []
-              }
-            : p
-        )
+        prev.map(p => (p.id === form.id ? { ...p, ...projectData } : p))
       );
-      showPopup("Project updated successfully ✅");
     } else {
-      const newProject: Project = {
-        id: Date.now().toString(),
-        name: form.name,
-        description: form.description,
-        clientId: form.clientId,
-        status: form.status,
-        startDate: new Date().toISOString(),
-        budget: Number(form.budget),
-        spent: 0,
-        progress: 0,
-        teamMembers: form.memberId ? [form.memberId] : [],
-        milestones: []
-      };
-
-      setProjects(prev => [newProject, ...prev]);
-      showPopup("New project created 🎉");
+      setProjects(prev => [projectData, ...prev]);
     }
 
     resetForm();
@@ -139,9 +148,8 @@ export function ProjectManagement() {
   /* ================= DELETE ================= */
 
   const handleDelete = (id: string) => {
-    if (!confirm("Delete project?")) return;
+    if (!window.confirm("Delete project?")) return;
     setProjects(prev => prev.filter(p => p.id !== id));
-    showPopup("Project deleted 🗑️");
   };
 
   /* ================= EDIT ================= */
@@ -152,30 +160,36 @@ export function ProjectManagement() {
       id: p.id,
       name: p.name,
       description: p.description,
-      clientId: p.clientId,
+      clientName: p.clientName,
+      deadline: p.deadline,
       status: p.status,
       budget: String(p.budget),
-      memberId: p.teamMembers[0] ?? ""
+      managerId: p.managerId,
+      teamMembers: p.teamMembers.join(", ")
     });
   };
 
   const resetForm = () => {
+    setIsEdit(false);
     setForm({
       id: "",
       name: "",
       description: "",
-      clientId: "",
+      clientName: "",
+      deadline: "",
       status: "planning",
       budget: "",
-      memberId: ""
+      managerId: "",
+      teamMembers: ""
     });
-    setIsEdit(false);
   };
 
   /* ================= ROLE FILTER ================= */
 
   const visibleProjects = isAdmin
     ? projects
+    : isManager
+    ? projects.filter(p => p.managerId === userId)
     : projects.filter(p => p.teamMembers.includes(userId));
 
   /* ================= UI ================= */
@@ -183,19 +197,13 @@ export function ProjectManagement() {
   return (
     <div className="space-y-6">
 
-      {popup && (
-        <div className="fixed top-6 right-6 bg-green-600 text-white px-4 py-2 rounded shadow">
-          {popup}
-        </div>
-      )}
-
-      <div className="flex justify-between items-center">
-        <h1 className="text-lg font-semibold">Project Management</h1>
+      <div className="flex justify-between">
+        <h1 className="text-xl font-semibold">Project Management</h1>
 
         {isAdmin && (
           <Dialog>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" /> New Project</Button>
+              <Button><Plus className="h-4 w-4 mr-2"/> New Project</Button>
             </DialogTrigger>
 
             <DialogContent>
@@ -204,77 +212,123 @@ export function ProjectManagement() {
               </DialogHeader>
 
               <div className="space-y-3">
-                <Input
-                  placeholder="Project Name *"
+
+                <Input placeholder="Project Name"
                   value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                />
+                  onChange={e => setForm({ ...form, name: e.target.value })}/>
 
-                <Textarea
-                  placeholder="Description *"
+                <Input placeholder="Client Name"
+                  value={form.clientName}
+                  onChange={e => setForm({ ...form, clientName: e.target.value })}/>
+
+                <Textarea placeholder="Description"
                   value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                />
+                  onChange={e => setForm({ ...form, description: e.target.value })}/>
 
-                <Select onValueChange={(v: ProjectStatus) => setForm({ ...form, status: v })}>
-                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="planning">Planning</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                    <SelectItem value="on-hold">On Hold</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input type="date"
+                  value={form.deadline}
+                  onChange={e => setForm({ ...form, deadline: e.target.value })}/>
 
-                <Input
-                  type="number"
-                  placeholder="Budget *"
+                <Input type="number" placeholder="Budget"
                   value={form.budget}
-                  onChange={e => setForm({ ...form, budget: e.target.value })}
-                />
+                  onChange={e => setForm({ ...form, budget: e.target.value })}/>
 
-                <Select onValueChange={v => setForm({ ...form, memberId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Assign User" /></SelectTrigger>
+                {/* ASSIGN MANAGER */}
+                <Select
+                  value={form.managerId}
+                  onValueChange={v => setForm({ ...form, managerId: v })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Assign Manager"/></SelectTrigger>
                   <SelectContent>
-                    {mockUsers.map(u => (
-                      <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                    ))}
+                    {users
+                      ?.filter(u => u.role === "manager")
+                      .map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
+
+                {/* TEAM MEMBERS (comma separated ids) */}
+                <Input
+                  placeholder="Team Member IDs (comma separated)"
+                  value={form.teamMembers}
+                  onChange={e => setForm({ ...form, teamMembers: e.target.value })}
+                />
 
                 <Button className="w-full" onClick={handleSubmit}>
                   {isEdit ? "Update Project" : "Create Project"}
                 </Button>
+
               </div>
             </DialogContent>
           </Dialog>
         )}
       </div>
 
+      {/* KPI */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card><CardContent className="p-4">
+          <p className="text-sm text-gray-500">Velocity</p>
+          <p className="text-2xl font-semibold">{velocity}%</p>
+        </CardContent></Card>
+
+        <Card><CardContent className="p-4">
+          <p className="text-sm text-gray-500">Burn Rate</p>
+          <p className="text-2xl font-semibold">{burnRate}%</p>
+        </CardContent></Card>
+      </div>
+
+      {/* LIST */}
       {visibleProjects.map(project => (
         <Card key={project.id}>
           <CardHeader className="flex justify-between">
             <CardTitle>{project.name}</CardTitle>
-            <div className="flex gap-2">
-              <Badge>{project.status}</Badge>
-
-              {isAdmin && (
-                <>
-                  <Button size="icon" variant="outline" onClick={() => handleEdit(project)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-
-                  <Button size="icon" variant="destructive" onClick={() => handleDelete(project.id)}>
-                    <Trash className="h-4 w-4" />
-                  </Button>
-                </>
-              )}
-            </div>
+            <Badge>{project.status}</Badge>
           </CardHeader>
 
-          <CardContent>
-            <p className="text-sm mb-2">{project.description}</p>
-            <Progress value={project.progress} />
+          <CardContent className="space-y-2">
+            <p className="text-sm">{project.description}</p>
+            <p className="text-xs">Deadline: {project.deadline}</p>
+
+            <Progress value={project.progress}/>
+
+            {isManager && (
+              <>
+                <Input type="number" placeholder="Update Progress %"
+                  onBlur={e =>
+                    setProjects(prev =>
+                      prev.map(p =>
+                        p.id === project.id
+                          ? { ...p, progress: Number(e.target.value) }
+                          : p
+                      )
+                    )
+                  }/>
+
+                <Input type="number" placeholder="Update Spent"
+                  onBlur={e =>
+                    setProjects(prev =>
+                      prev.map(p =>
+                        p.id === project.id
+                          ? { ...p, spent: Number(e.target.value) }
+                          : p
+                      )
+                    )
+                  }/>
+              </>
+            )}
+
+            {isAdmin && (
+              <div className="flex gap-2">
+                <Button size="icon" variant="outline" onClick={()=> handleEdit(project)}>
+                  <Pencil className="h-4 w-4"/>
+                </Button>
+                <Button size="icon" variant="destructive" onClick={()=> handleDelete(project.id)}>
+                  <Trash className="h-4 w-4"/>
+                </Button>
+              </div>
+            )}
+
           </CardContent>
         </Card>
       ))}

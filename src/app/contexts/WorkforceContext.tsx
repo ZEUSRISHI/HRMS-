@@ -1,22 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
-export type Freelancer = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  skill: string;
-  rate: string;
-  experience: string;
-  portfolio: string;
-  createdAt: string;
-};
+/* ================= TYPES ================= */
 
 export type Vendor = {
   id: string;
-  name: string;
   company: string;
-  contact: string;
+  contactPerson: string;
   email: string;
   phone: string;
   category: string;
@@ -25,63 +14,108 @@ export type Vendor = {
   createdAt: string;
 };
 
-type WorkforceContextType = {
-  freelancers: Freelancer[];
-  vendors: Vendor[];
-  addFreelancer: (f: Freelancer) => void;
-  updateFreelancer: (f: Freelancer) => void;
-  deleteFreelancer: (id: string) => void;
-  addVendor: (v: Vendor) => void;
-  updateVendor: (v: Vendor) => void;
-  deleteVendor: (id: string) => void;
+export type Freelancer = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  skill: string;
+  rate: string;
+  contractStart: string;
+  contractEnd: string;
+  status: "active" | "expired";
+  createdAt: string;
 };
 
-const WorkforceContext = createContext<WorkforceContextType | null>(null);
+type WorkforceContextType = {
+  vendors: Vendor[];
+  freelancers: Freelancer[];
+  addVendor: (vendor: Vendor) => void;
+  updateVendor: (vendor: Vendor) => void;
+  deleteVendor: (id: string) => void;
+  addFreelancer: (freelancer: Freelancer) => void;
+  updateFreelancer: (freelancer: Freelancer) => void;
+  deleteFreelancer: (id: string) => void;
+};
 
-export const WorkforceProvider = ({ children }: { children: ReactNode }) => {
-  const [freelancers, setFreelancers] = useState<Freelancer[]>(() => {
-    const data = localStorage.getItem("freelancers");
-    return data ? JSON.parse(data) : [];
-  });
+/* ================= CONTEXT ================= */
 
-  const [vendors, setVendors] = useState<Vendor[]>(() => {
-    const data = localStorage.getItem("vendors");
-    return data ? JSON.parse(data) : [];
-  });
+const WorkforceContext = createContext<WorkforceContextType | undefined>(
+  undefined
+);
+
+/* ================= PROVIDER ================= */
+
+export function WorkforceProvider({ children }: { children: ReactNode }) {
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
+
+  /* LOAD FROM STORAGE */
+  useEffect(() => {
+    try {
+      const storedVendors = localStorage.getItem("vendors");
+      const storedFreelancers = localStorage.getItem("freelancers");
+
+      if (storedVendors) setVendors(JSON.parse(storedVendors));
+      if (storedFreelancers) setFreelancers(JSON.parse(storedFreelancers));
+    } catch {
+      console.warn("Failed to parse workforce data");
+    }
+  }, []);
+
+  /* SAVE TO STORAGE */
+  useEffect(() => {
+    localStorage.setItem("vendors", JSON.stringify(vendors));
+  }, [vendors]);
 
   useEffect(() => {
     localStorage.setItem("freelancers", JSON.stringify(freelancers));
   }, [freelancers]);
 
-  useEffect(() => {
-    localStorage.setItem("vendors", JSON.stringify(vendors));
-  }, [vendors]);
+  /* CRUD METHODS */
 
-  const value: WorkforceContextType = {
-    freelancers,
-    vendors,
-    addFreelancer: (f) => setFreelancers((prev) => [...prev, f]),
-    updateFreelancer: (f) =>
-      setFreelancers((prev) => prev.map((x) => (x.id === f.id ? f : x))),
-    deleteFreelancer: (id) =>
-      setFreelancers((prev) => prev.filter((x) => x.id !== id)),
+  const addVendor = (vendor: Vendor) =>
+    setVendors((prev) => [...prev, vendor]);
 
-    addVendor: (v) => setVendors((prev) => [...prev, v]),
-    updateVendor: (v) =>
-      setVendors((prev) => prev.map((x) => (x.id === v.id ? v : x))),
-    deleteVendor: (id) =>
-      setVendors((prev) => prev.filter((x) => x.id !== id)),
-  };
+  const updateVendor = (vendor: Vendor) =>
+    setVendors((prev) => prev.map((v) => (v.id === vendor.id ? vendor : v)));
+
+  const deleteVendor = (id: string) =>
+    setVendors((prev) => prev.filter((v) => v.id !== id));
+
+  const addFreelancer = (freelancer: Freelancer) =>
+    setFreelancers((prev) => [...prev, freelancer]);
+
+  const updateFreelancer = (freelancer: Freelancer) =>
+    setFreelancers((prev) =>
+      prev.map((f) => (f.id === freelancer.id ? freelancer : f))
+    );
+
+  const deleteFreelancer = (id: string) =>
+    setFreelancers((prev) => prev.filter((f) => f.id !== id));
 
   return (
-    <WorkforceContext.Provider value={value}>
+    <WorkforceContext.Provider
+      value={{
+        vendors,
+        freelancers,
+        addVendor,
+        updateVendor,
+        deleteVendor,
+        addFreelancer,
+        updateFreelancer,
+        deleteFreelancer,
+      }}
+    >
       {children}
     </WorkforceContext.Provider>
   );
-};
+}
 
-export const useWorkforce = () => {
-  const ctx = useContext(WorkforceContext);
-  if (!ctx) throw new Error("useWorkforce must be used inside WorkforceProvider");
-  return ctx;
-};
+/* ================= HOOK ================= */
+
+export function useWorkforce() {
+  const context = useContext(WorkforceContext);
+  if (!context) throw new Error("useWorkforce must be used inside WorkforceProvider");
+  return context;
+}
