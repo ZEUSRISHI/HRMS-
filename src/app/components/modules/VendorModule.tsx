@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Vendor, useWorkforce } from "../../contexts/WorkforceContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { canManageVendors } from "../../../utils/permissions";
 
 type VendorForm = Omit<Vendor, "id" | "createdAt"> & {
   status: "active" | "inactive";
@@ -12,12 +13,14 @@ export default function VendorModule() {
   const { vendors, addVendor, updateVendor, deleteVendor } = useWorkforce();
   const { currentUser } = useAuth();
 
-  if (currentUser?.role !== "admin") return null;
+  // ✅ permission check
+  const canEdit = canManageVendors(currentUser?.role);
+  if (!canEdit) return null;
 
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState<VendorForm>({
+  const emptyForm: VendorForm = {
     company: "",
     contactPerson: "",
     email: "",
@@ -28,7 +31,9 @@ export default function VendorModule() {
     status: "active",
     contractType: "",
     notes: "",
-  });
+  };
+
+  const [form, setForm] = useState<VendorForm>(emptyForm);
 
   const handleChange = (key: keyof VendorForm, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -64,31 +69,14 @@ export default function VendorModule() {
     setTimeout(() => {
       setLoading(false);
       setEditId(null);
-      setForm({
-        company: "",
-        contactPerson: "",
-        email: "",
-        phone: "",
-        category: "",
-        taxId: "",
-        address: "",
-        status: "active",
-        contractType: "",
-        notes: "",
-      });
+      setForm(emptyForm);
     }, 300);
   };
 
   const handleEdit = (v: Vendor) => {
     setEditId(v.id);
     setForm({
-      company: v.company,
-      contactPerson: v.contactPerson,
-      email: v.email,
-      phone: v.phone,
-      category: v.category,
-      taxId: v.taxId,
-      address: v.address,
+      ...v,
       status: "active",
       contractType: "",
       notes: "",
@@ -104,7 +92,7 @@ export default function VendorModule() {
         </p>
       </div>
 
-      {/* FORM CARD */}
+      {/* FORM */}
       <div className="bg-white p-5 rounded-xl shadow space-y-4">
         <h2 className="font-semibold text-lg">
           {editId ? "Edit Vendor" : "Add New Vendor"}
@@ -143,7 +131,7 @@ export default function VendorModule() {
         </button>
       </div>
 
-      {/* LIST CARD */}
+      {/* LIST */}
       <div className="bg-white p-5 rounded-xl shadow space-y-3">
         <h2 className="font-semibold text-lg">Vendor List</h2>
 
@@ -164,16 +152,10 @@ export default function VendorModule() {
             </div>
 
             <div className="space-x-4">
-              <button
-                onClick={() => handleEdit(v)}
-                className="text-blue-600 hover:underline"
-              >
+              <button onClick={() => handleEdit(v)} className="text-blue-600 hover:underline">
                 Edit
               </button>
-              <button
-                onClick={() => deleteVendor(v.id)}
-                className="text-red-600 hover:underline"
-              >
+              <button onClick={() => deleteVendor(v.id)} className="text-red-600 hover:underline">
                 Delete
               </button>
             </div>

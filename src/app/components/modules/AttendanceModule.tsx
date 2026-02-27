@@ -4,13 +4,54 @@ import { Button } from '../ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog';
-import { Label } from '../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Textarea } from '../ui/textarea';
-import { CalendarDays, Clock, LogIn, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { mockAttendance, mockLeaveRequests, mockUsers } from '../../data/mockData';
 import { format } from 'date-fns';
+import { LogIn, LogOut } from 'lucide-react';
+
+/* ================= TYPES ================= */
+
+type LeaveStatus =
+  | "pending_manager"
+  | "pending_hr"
+  | "pending_admin"
+  | "approved"
+  | "rejected";
+
+type LeaveRecord = {
+  id: string;
+  userId: string;
+
+  type: string;
+  priority: "low" | "medium" | "high";
+
+  startDate: string;
+  endDate: string;
+  days: number;
+
+  reason: string;
+  description?: string;
+
+  emergencyContact?: string;
+  attachmentUrl?: string;
+
+  status: LeaveStatus;
+  appliedAt: string;
+
+  managerApprovedBy?: string;
+  managerApprovedAt?: string;
+
+  hrApprovedBy?: string;
+  hrApprovedAt?: string;
+
+  adminApprovedBy?: string;
+  adminApprovedAt?: string;
+
+  rejectedBy?: string;
+  rejectedAt?: string;
+};
 
 type AttendanceRecord = {
   id: string;
@@ -19,25 +60,37 @@ type AttendanceRecord = {
   checkIn: string;
   checkOut?: string;
   status: string;
-  notes?: string;
 };
 
-type LeaveRecord = {
-  id: string;
-  userId: string;
-  type: string;
-  startDate: string;
-  endDate: string;
-  status: "pending" | "approved" | "rejected";
-  reason: string;
-  description?: string;
-};
+/* ================= STORAGE ================= */
 
 const ATT_KEY = "startup_attendance_records";
 const LEAVE_KEY = "startup_leave_records";
 
+/* ================= COMPONENT ================= */
+
 export function AttendanceModule() {
   const { currentUser } = useAuth();
+  const role = currentUser?.role;
+
+  const isManager = role === "manager";
+  const isHR = role === "hr";
+  const isAdmin = role === "admin";
+
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [leaveData, setLeaveData] = useState<LeaveRecord[]>([]);
+  const [checkInTime, setCheckInTime] = useState<string | null>(null);
+
+  /* ===== FORM STATE ===== */
+
+  const [leaveType, setLeaveType] = useState('');
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [description, setDescription] = useState('');
+  const [emergencyContact, setEmergencyContact] = useState('');
+  const [attachmentUrl, setAttachmentUrl] = useState('');
 
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => {
@@ -45,24 +98,7 @@ export function AttendanceModule() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  if (!currentUser) {
-    return <div className="p-6 text-muted-foreground">Loading attendance...</div>;
-  }
-
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
-  const [leaveData, setLeaveData] = useState<LeaveRecord[]>([]);
-
-  const [leaveType, setLeaveType] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [reason, setReason] = useState('');
-  const [description, setDescription] = useState('');
-
-  const isManager = currentUser.role === 'manager';
-  const canApprove = currentUser.role === 'hr' || currentUser.role === 'manager';
-
-  /* ================= LOAD LOCAL ================= */
+  /* ================= LOAD ================= */
 
   useEffect(() => {
     const a = localStorage.getItem(ATT_KEY);
@@ -79,38 +115,35 @@ export function AttendanceModule() {
     localStorage.setItem(LEAVE_KEY, JSON.stringify(leaveData));
   }, [leaveData]);
 
+  if (!currentUser) return null;
+
   const todayDate = format(new Date(), 'yyyy-MM-dd');
 
   const todayAttendance = attendanceData.find(
     a => a.userId === currentUser.id && a.date === todayDate
   );
 
-  /* ================= CHECK IN ================= */
+  /* ================= CHECK IN/OUT ================= */
 
   const handleCheckIn = () => {
     if (todayAttendance) return;
-
     const now = format(new Date(), 'HH:mm');
-    setCheckInTime(now);
 
     const rec: AttendanceRecord = {
       id: crypto.randomUUID(),
       userId: currentUser.id,
       date: todayDate,
       checkIn: now,
-      status: "present",
-      notes: "Startup quick check-in"
+      status: "present"
     };
 
     setAttendanceData(prev => [rec, ...prev]);
-    showToast("✅ Checked in successfully");
+    setCheckInTime(now);
+    showToast("Checked in");
   };
-
-  /* ================= CHECK OUT ================= */
 
   const handleCheckOut = () => {
     const now = format(new Date(), 'HH:mm');
-
     setAttendanceData(prev =>
       prev.map(r =>
         r.userId === currentUser.id && r.date === todayDate
@@ -118,257 +151,195 @@ export function AttendanceModule() {
           : r
       )
     );
-
-    showToast("✅ Checked out successfully");
+    showToast("Checked out");
   };
 
-  /* ================= LEAVE SUBMIT ================= */
+  /* ================= CREATE LEAVE ================= */
 
   const submitLeave = () => {
-    if (!leaveType || !startDate || !endDate || !reason) {
-      alert("Please fill required fields");
-      return;
-    }
+    if (isAdmin) return;
+
+    const days =
+      Math.ceil(
+        (new Date(endDate).getTime() - new Date(startDate).getTime()) /
+        (1000 * 60 * 60 * 24)
+      ) + 1;
 
     const rec: LeaveRecord = {
       id: crypto.randomUUID(),
       userId: currentUser.id,
       type: leaveType,
+      priority,
       startDate,
       endDate,
+      days,
       reason,
       description,
-      status: "pending"
+      emergencyContact,
+      attachmentUrl,
+      status: "pending_manager",
+      appliedAt: new Date().toISOString()
     };
 
     setLeaveData(prev => [rec, ...prev]);
+    showToast("Leave submitted");
 
+    /* reset form */
     setLeaveType('');
+    setPriority("medium");
     setStartDate('');
     setEndDate('');
     setReason('');
     setDescription('');
-
-    showToast("📩 Leave request submitted");
+    setEmergencyContact('');
+    setAttachmentUrl('');
   };
 
-  /* ================= APPROVE / REJECT ================= */
+  /* ================= APPROVAL ================= */
 
-  const updateLeaveStatus = (id: string, status: "approved" | "rejected") => {
-    if (!canApprove) return;
-
+  const approveLeave = (id: string) => {
     setLeaveData(prev =>
-      prev.map(l => l.id === id ? { ...l, status } : l)
+      prev.map(l => {
+        if (l.id !== id) return l;
+
+        if (isManager) {
+          if (l.type === "emergency")
+            return { ...l, status: "approved", managerApprovedBy: currentUser.id, managerApprovedAt: new Date().toISOString() };
+
+          return { ...l, status: "pending_hr", managerApprovedBy: currentUser.id, managerApprovedAt: new Date().toISOString() };
+        }
+
+        if (isHR)
+          return { ...l, status: "pending_admin", hrApprovedBy: currentUser.id, hrApprovedAt: new Date().toISOString() };
+
+        if (isAdmin)
+          return { ...l, status: "approved", adminApprovedBy: currentUser.id, adminApprovedAt: new Date().toISOString() };
+
+        return l;
+      })
     );
 
-    showToast(status === "approved" ? "✅ Leave approved" : "❌ Leave rejected");
+    showToast("Leave approved");
+  };
+
+  const rejectLeave = (id: string) => {
+    setLeaveData(prev =>
+      prev.map(l =>
+        l.id === id
+          ? { ...l, status: "rejected", rejectedBy: currentUser.id, rejectedAt: new Date().toISOString() }
+          : l
+      )
+    );
+    showToast("Leave rejected");
   };
 
   /* ================= FILTER ================= */
 
-  const userAttendance = isManager
-    ? attendanceData
-    : attendanceData.filter(a => a.userId === currentUser.id);
+  const userAttendance =
+    isManager || isHR || isAdmin
+      ? attendanceData
+      : attendanceData.filter(a => a.userId === currentUser.id);
 
-  const userLeaves = isManager
-    ? leaveData
-    : leaveData.filter(l => l.userId === currentUser.id);
+  const visibleLeaves = leaveData.filter(l => {
+    if (isAdmin) return true;
+    if (isManager) return l.status === "pending_manager";
+    if (isHR) return l.status === "pending_hr";
+    return l.userId === currentUser.id;
+  });
 
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6">
 
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50">
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg">
           {toast}
         </div>
       )}
 
-      {/* Header */}
-      <div className="rounded-2xl bg-gradient-to-r from-indigo-50 to-cyan-50 p-4 border">
-        <h1 className="font-semibold mb-1">Attendance Management</h1>
-        <p className="text-sm text-muted-foreground">
-          Startup smart attendance & leave tracking
-        </p>
-      </div>
-
-      {/* Today Card */}
-      <Card className="shadow-sm rounded-2xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Today's Attendance
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent className="flex justify-between flex-col md:flex-row gap-4">
+      {/* Attendance */}
+      <Card>
+        <CardHeader><CardTitle>Today's Attendance</CardTitle></CardHeader>
+        <CardContent className="flex justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">
-              {format(new Date(), 'EEEE, MMMM d, yyyy')}
-            </p>
-
-            {(todayAttendance || checkInTime) && (
-              <div className="flex gap-6 mt-2">
-                <div>
-                  <p className="text-xs">Check In</p>
-                  <p className="font-semibold text-green-600">
-                    {todayAttendance?.checkIn || checkInTime}
-                  </p>
-                </div>
-
-                {todayAttendance?.checkOut && (
-                  <div>
-                    <p className="text-xs">Check Out</p>
-                    <p className="font-semibold text-red-600">
-                      {todayAttendance.checkOut}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
+            <p>In: {todayAttendance?.checkIn || checkInTime || '-'}</p>
+            <p>Out: {todayAttendance?.checkOut || '-'}</p>
           </div>
-
           <div className="flex gap-2">
-            {!todayAttendance && !checkInTime && (
-              <Button onClick={handleCheckIn} className="gap-2 rounded-xl">
-                <LogIn className="h-4 w-4" /> Check In
-              </Button>
-            )}
-
-            {(todayAttendance || checkInTime) && !todayAttendance?.checkOut && (
-              <Button onClick={handleCheckOut} variant="destructive" className="gap-2 rounded-xl">
-                <LogOut className="h-4 w-4" /> Check Out
-              </Button>
-            )}
+            {!todayAttendance && <Button onClick={handleCheckIn}><LogIn size={16}/>Check In</Button>}
+            {(todayAttendance || checkInTime) && !todayAttendance?.checkOut &&
+              <Button onClick={handleCheckOut} variant="destructive"><LogOut size={16}/>Check Out</Button>}
           </div>
         </CardContent>
       </Card>
 
-      {/* Attendance Table */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>Attendance History</CardTitle>
-        </CardHeader>
+      {/* Request Leave Dialog */}
+      {!isAdmin && (
+        <Dialog>
+          <DialogTrigger asChild><Button>Request Leave</Button></DialogTrigger>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Submit Leave</DialogTitle></DialogHeader>
 
+            <div className="space-y-3">
+              <Select value={leaveType} onValueChange={setLeaveType}>
+                <SelectTrigger><SelectValue placeholder="Leave Type"/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vacation">Vacation</SelectItem>
+                  <SelectItem value="sick">Sick</SelectItem>
+                  <SelectItem value="emergency">Emergency</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={priority} onValueChange={(v:any)=>setPriority(v)}>
+                <SelectTrigger><SelectValue placeholder="Priority"/></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} />
+              <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} />
+              <input placeholder="Reason" value={reason} onChange={e=>setReason(e.target.value)} />
+              <Textarea placeholder="Description" value={description} onChange={e=>setDescription(e.target.value)} />
+              <input placeholder="Emergency Contact" value={emergencyContact} onChange={e=>setEmergencyContact(e.target.value)} />
+              <input placeholder="Attachment URL" value={attachmentUrl} onChange={e=>setAttachmentUrl(e.target.value)} />
+
+              <Button onClick={submitLeave}>Submit Leave</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Leave Table */}
+      <Card>
+        <CardHeader><CardTitle>Leave Requests</CardTitle></CardHeader>
         <CardContent>
           <Table>
-            <TableHeader>
-              <TableRow>
-                {isManager && <TableHead>Employee</TableHead>}
-                <TableHead>Date</TableHead>
-                <TableHead>In</TableHead>
-                <TableHead>Out</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-
             <TableBody>
-              {userAttendance.slice(0, 10).map(r => {
-                const user = mockUsers.find(u => u.id === r.userId);
+              {visibleLeaves.map(l => {
+                const user = mockUsers.find(u => u.id === l.userId);
                 return (
-                  <TableRow key={r.id}>
-                    {isManager && <TableCell>{user?.name}</TableCell>}
-                    <TableCell>{r.date}</TableCell>
-                    <TableCell>{r.checkIn}</TableCell>
-                    <TableCell>{r.checkOut || '-'}</TableCell>
-                    <TableCell><Badge>{r.status}</Badge></TableCell>
+                  <TableRow key={l.id}>
+                    {(isManager || isHR || isAdmin) && <TableCell>{user?.name}</TableCell>}
+                    <TableCell>{l.type}</TableCell>
+                    <TableCell>{l.startDate} — {l.endDate}</TableCell>
+                    <TableCell><Badge>{l.status}</Badge></TableCell>
+                    <TableCell>{l.reason}</TableCell>
+
+                    {(isManager || isHR || isAdmin) && l.status !== "approved" && l.status !== "rejected" && (
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={()=>approveLeave(l.id)}>Approve</Button>
+                          <Button size="sm" variant="destructive" onClick={()=>rejectLeave(l.id)}>Reject</Button>
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Leave Requests */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader className="flex justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarDays className="h-5 w-5" />
-            Leave Requests
-          </CardTitle>
-
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button size="sm" className="rounded-xl">Request Leave</Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-w-lg rounded-2xl">
-              <DialogHeader>
-                <DialogTitle>Submit Leave Request</DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div>
-                  <Label>Leave Type *</Label>
-                  <Select value={leaveType} onValueChange={setLeaveType}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select leave type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sick">Sick</SelectItem>
-                      <SelectItem value="vacation">Vacation</SelectItem>
-                      <SelectItem value="personal">Personal</SelectItem>
-                      <SelectItem value="unpaid">Unpaid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="date" value={startDate}
-                    onChange={e => setStartDate(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2" />
-
-                  <input type="date" value={endDate}
-                    onChange={e => setEndDate(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2" />
-                </div>
-
-                <input value={reason}
-                  onChange={e => setReason(e.target.value)}
-                  placeholder="Reason"
-                  className="w-full border rounded-lg px-3 py-2" />
-
-                <Textarea value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Description"
-                  className="min-h-[100px]" />
-
-                <Button onClick={submitLeave} className="w-full rounded-xl">
-                  Submit Leave Request
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-
-        <CardContent>
-          <Table>
-            <TableBody>
-              {userLeaves.map(l => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.type}</TableCell>
-                  <TableCell>{l.startDate} — {l.endDate}</TableCell>
-                  <TableCell><Badge>{l.status}</Badge></TableCell>
-                  <TableCell>{l.reason}</TableCell>
-
-                  {canApprove && l.status === "pending" && (
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button size="sm"
-                          onClick={() => updateLeaveStatus(l.id, "approved")}>
-                          Approve
-                        </Button>
-                        <Button size="sm" variant="destructive"
-                          onClick={() => updateLeaveStatus(l.id, "rejected")}>
-                          Reject
-                        </Button>
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
             </TableBody>
           </Table>
         </CardContent>

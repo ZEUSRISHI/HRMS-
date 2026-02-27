@@ -10,6 +10,9 @@ import { AdminUsersProvider } from "./contexts/AdminUsersContext";
 
 import MainLayout from "../layouts/MainLayout";
 
+/* ✅ PERMISSIONS */
+import { canManageVendors } from "../utils/permissions";
+
 /* ===== AUTH ===== */
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
@@ -93,6 +96,11 @@ function AppContent() {
     useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
+
+  /* ✅ Permission example */
+  if (canManageVendors(currentUser.role)) {
+    console.log("User can manage vendors");
+  }
 
   const menuItems: {
     id: ModuleType;
