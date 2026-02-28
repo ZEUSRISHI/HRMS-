@@ -1,8 +1,15 @@
 import { useState } from "react";
 import { Vendor, useWorkforce } from "../../contexts/WorkforceContext";
 import { useAuth } from "../../contexts/AuthContext";
-import { canManageVendors } from "../../../utils/permissions";
+import {
+  canManageVendors,
+  canViewWorkforce,
+} from "../../../utils/permissions";
 
+/**
+ * 👉 Extend Vendor ONLY for UI form
+ * (not saved to database)
+ */
 type VendorForm = Omit<Vendor, "id" | "createdAt"> & {
   status: "active" | "inactive";
   contractType: string;
@@ -13,9 +20,10 @@ export default function VendorModule() {
   const { vendors, addVendor, updateVendor, deleteVendor } = useWorkforce();
   const { currentUser } = useAuth();
 
-  // ✅ permission check
+  const canView = canViewWorkforce(currentUser?.role);
   const canEdit = canManageVendors(currentUser?.role);
-  if (!canEdit) return null;
+
+  if (!canView) return null;
 
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,6 +55,9 @@ export default function VendorModule() {
     return true;
   };
 
+  /**
+   * ✅ Save ONLY Vendor fields
+   */
   const saveVendor = () => {
     if (!validate()) return;
 
@@ -88,50 +99,82 @@ export default function VendorModule() {
       <div>
         <h1 className="text-2xl font-semibold">Vendor Management</h1>
         <p className="text-gray-500 text-sm">
-          Create and manage vendor partnerships
+          {canEdit
+            ? "Create and manage vendor partnerships"
+            : "View vendor information"}
         </p>
       </div>
 
-      {/* FORM */}
-      <div className="bg-white p-5 rounded-xl shadow space-y-4">
-        <h2 className="font-semibold text-lg">
-          {editId ? "Edit Vendor" : "Add New Vendor"}
-        </h2>
+      {/* ✅ FORM — ONLY visible for users who can edit */}
+      {canEdit && (
+        <div className="bg-white p-5 rounded-xl shadow space-y-4">
+          <h2 className="font-semibold text-lg">
+            {editId ? "Edit Vendor" : "Add New Vendor"}
+          </h2>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          <Input label="Company Name *" value={form.company} onChange={(v) => handleChange("company", v)} />
-          <Input label="Contact Person *" value={form.contactPerson} onChange={(v) => handleChange("contactPerson", v)} />
-          <Input label="Email *" value={form.email} onChange={(v) => handleChange("email", v)} />
-          <Input label="Phone *" value={form.phone} onChange={(v) => handleChange("phone", v)} />
-          <Input label="Category" value={form.category} onChange={(v) => handleChange("category", v)} />
-          <Input label="Tax ID / GST" value={form.taxId} onChange={(v) => handleChange("taxId", v)} />
-          <Input label="Contract Type" value={form.contractType} onChange={(v) => handleChange("contractType", v)} />
+          <div className="grid md:grid-cols-2 gap-4">
+            <Input
+              label="Company Name *"
+              value={form.company}
+              onChange={(v) => handleChange("company", v)}
+            />
+            <Input
+              label="Contact Person *"
+              value={form.contactPerson}
+              onChange={(v) => handleChange("contactPerson", v)}
+            />
+            <Input
+              label="Email *"
+              value={form.email}
+              onChange={(v) => handleChange("email", v)}
+            />
+            <Input
+              label="Phone *"
+              value={form.phone}
+              onChange={(v) => handleChange("phone", v)}
+            />
+            <Input
+              label="Category"
+              value={form.category}
+              onChange={(v) => handleChange("category", v)}
+            />
+            <Input
+              label="Tax ID / GST"
+              value={form.taxId}
+              onChange={(v) => handleChange("taxId", v)}
+            />
+            <Input
+              label="Contract Type"
+              value={form.contractType}
+              onChange={(v) => handleChange("contractType", v)}
+            />
+          </div>
+
+          <textarea
+            placeholder="Address"
+            className="border p-2 rounded w-full"
+            value={form.address}
+            onChange={(e) => handleChange("address", e.target.value)}
+          />
+
+          <textarea
+            placeholder="Notes"
+            className="border p-2 rounded w-full"
+            value={form.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+          />
+
+          <button
+            onClick={saveVendor}
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded w-full"
+          >
+            {loading ? "Saving..." : editId ? "Update Vendor" : "Add Vendor"}
+          </button>
         </div>
+      )}
 
-        <textarea
-          placeholder="Address"
-          className="border p-2 rounded w-full"
-          value={form.address}
-          onChange={(e) => handleChange("address", e.target.value)}
-        />
-
-        <textarea
-          placeholder="Notes"
-          className="border p-2 rounded w-full"
-          value={form.notes}
-          onChange={(e) => handleChange("notes", e.target.value)}
-        />
-
-        <button
-          onClick={saveVendor}
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded w-full"
-        >
-          {loading ? "Saving..." : editId ? "Update Vendor" : "Add Vendor"}
-        </button>
-      </div>
-
-      {/* LIST */}
+      {/* LIST — visible to all who can view */}
       <div className="bg-white p-5 rounded-xl shadow space-y-3">
         <h2 className="font-semibold text-lg">Vendor List</h2>
 
@@ -151,20 +194,31 @@ export default function VendorModule() {
               </p>
             </div>
 
-            <div className="space-x-4">
-              <button onClick={() => handleEdit(v)} className="text-blue-600 hover:underline">
-                Edit
-              </button>
-              <button onClick={() => deleteVendor(v.id)} className="text-red-600 hover:underline">
-                Delete
-              </button>
-            </div>
+            {/* Only editable roles see actions */}
+            {canEdit && (
+              <div className="space-x-4">
+                <button
+                  onClick={() => handleEdit(v)}
+                  className="text-blue-600 hover:underline"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => deleteVendor(v.id)}
+                  className="text-red-600 hover:underline"
+                >
+                  Delete
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
+
+/* 🔹 Reusable Input */
 
 function Input({
   label,

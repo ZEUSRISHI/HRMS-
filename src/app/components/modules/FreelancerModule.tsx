@@ -4,8 +4,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import {
   canManageFreelancers,
   canManageFreelancerContracts,
+  canViewWorkforce,
 } from "../../../utils/permissions";
 
+/**
+ * 👉 UI-only fields (not stored in DB)
+ */
 type FreelancerForm = Omit<Freelancer, "id" | "createdAt"> & {
   experience: string;
   location: string;
@@ -18,10 +22,11 @@ export default function FreelancerModule() {
     useWorkforce();
   const { currentUser } = useAuth();
 
+  const canView = canViewWorkforce(currentUser?.role);
   const canFullEdit = canManageFreelancers(currentUser?.role);
   const canContractEdit = canManageFreelancerContracts(currentUser?.role);
 
-  if (!canFullEdit && !canContractEdit) return null;
+  if (!canView) return null;
 
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,19 +51,7 @@ export default function FreelancerModule() {
   const updateField = (key: keyof FreelancerForm, value: string) =>
     setForm((p) => ({ ...p, [key]: value }));
 
-  const validate = () => {
-    if (!form.name || !form.email || !form.skill) {
-      alert("Please fill required fields");
-      return false;
-    }
-    return true;
-  };
-
   const saveFreelancer = () => {
-    if (!validate()) return;
-
-    setLoading(true);
-
     const payload: Freelancer = {
       id: editId ?? crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -74,11 +67,9 @@ export default function FreelancerModule() {
 
     editId ? updateFreelancer(payload) : addFreelancer(payload);
 
-    setTimeout(() => {
-      setLoading(false);
-      setEditId(null);
-      setForm(emptyForm);
-    }, 300);
+    setLoading(false);
+    setEditId(null);
+    setForm(emptyForm);
   };
 
   const startEdit = (f: Freelancer) => {
@@ -100,55 +91,57 @@ export default function FreelancerModule() {
       <div>
         <h1 className="text-2xl font-semibold">Freelancer Management</h1>
         <p className="text-gray-500 text-sm">
-          Manage freelancer profiles and contracts
+          {canFullEdit
+            ? "Manage freelancer profiles and contracts"
+            : "View freelancer information"}
         </p>
       </div>
 
-      {/* FORM */}
-      <div className="bg-white rounded-xl shadow p-5 space-y-4">
-        <h2 className="font-semibold text-lg">
-          {editId ? "Edit Freelancer" : "Add Freelancer"}
-        </h2>
+      {/* 🔹 FORM — hidden for admin */}
+      {(canFullEdit || canContractEdit) && (
+        <div className="bg-white rounded-xl shadow p-5 space-y-4">
+          <h2 className="font-semibold text-lg">
+            {editId ? "Edit Freelancer" : "Add Freelancer"}
+          </h2>
 
-        {/* PROFILE */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <Input label="Name *" value={form.name} onChange={(v) => updateField("name", v)} disabled={profileDisabled} />
-          <Input label="Email *" value={form.email} onChange={(v) => updateField("email", v)} disabled={profileDisabled} />
-          <Input label="Phone" value={form.phone} onChange={(v) => updateField("phone", v)} disabled={profileDisabled} />
-          <Input label="Primary Skill *" value={form.skill} onChange={(v) => updateField("skill", v)} disabled={profileDisabled} />
-          <Input label="Experience" value={form.experience} onChange={(v) => updateField("experience", v)} disabled={profileDisabled} />
-          <Input label="Location" value={form.location} onChange={(v) => updateField("location", v)} disabled={profileDisabled} />
-          <Input label="Rate" value={form.rate} onChange={(v) => updateField("rate", v)} disabled={profileDisabled} />
-          <Input label="Payment Type" value={form.paymentType} onChange={(v) => updateField("paymentType", v)} disabled={profileDisabled} />
-        </div>
+          {/* PROFILE */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <Input label="Name *" value={form.name} onChange={(v) => updateField("name", v)} disabled={profileDisabled} />
+            <Input label="Email *" value={form.email} onChange={(v) => updateField("email", v)} disabled={profileDisabled} />
+            <Input label="Phone" value={form.phone} onChange={(v) => updateField("phone", v)} disabled={profileDisabled} />
+            <Input label="Primary Skill *" value={form.skill} onChange={(v) => updateField("skill", v)} disabled={profileDisabled} />
+            <Input label="Experience" value={form.experience} onChange={(v) => updateField("experience", v)} disabled={profileDisabled} />
+            <Input label="Location" value={form.location} onChange={(v) => updateField("location", v)} disabled={profileDisabled} />
+            <Input label="Rate" value={form.rate} onChange={(v) => updateField("rate", v)} disabled={profileDisabled} />
+            <Input label="Payment Type" value={form.paymentType} onChange={(v) => updateField("paymentType", v)} disabled={profileDisabled} />
+          </div>
 
-        {/* CONTRACT */}
-        <div className="grid md:grid-cols-2 gap-4">
-          <DateInput label="Contract Start" value={form.contractStart} onChange={(v) => updateField("contractStart", v)} disabled={contractDisabled} />
-          <DateInput label="Contract End" value={form.contractEnd} onChange={(v) => updateField("contractEnd", v)} disabled={contractDisabled} />
+          {/* CONTRACT */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <DateInput label="Contract Start" value={form.contractStart} onChange={(v) => updateField("contractStart", v)} disabled={contractDisabled} />
+            <DateInput label="Contract End" value={form.contractEnd} onChange={(v) => updateField("contractEnd", v)} disabled={contractDisabled} />
 
-          <select
-            className="border p-2 rounded"
-            value={form.status}
-            disabled={contractDisabled}
-            onChange={(e) =>
-              updateField("status", e.target.value as "active" | "expired")
-            }
-          >
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-          </select>
-        </div>
+            <select
+              className="border p-2 rounded"
+              value={form.status}
+              disabled={contractDisabled}
+              onChange={(e) =>
+                updateField("status", e.target.value as "active" | "expired")
+              }
+            >
+              <option value="active">Active</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
 
-        <textarea
-          placeholder="Notes"
-          className="border p-2 rounded w-full"
-          value={form.notes}
-          disabled={profileDisabled}
-          onChange={(e) => updateField("notes", e.target.value)}
-        />
+          <textarea
+            placeholder="Notes"
+            className="border p-2 rounded w-full"
+            value={form.notes}
+            disabled={profileDisabled}
+            onChange={(e) => updateField("notes", e.target.value)}
+          />
 
-        {(canFullEdit || canContractEdit) && (
           <button
             onClick={saveFreelancer}
             disabled={loading}
@@ -156,10 +149,10 @@ export default function FreelancerModule() {
           >
             {loading ? "Saving..." : editId ? "Update Freelancer" : "Add Freelancer"}
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* LIST */}
+      {/* 🔹 LIST — visible to admin */}
       <div className="bg-white rounded-xl shadow p-5 space-y-3">
         <h2 className="font-semibold text-lg">Freelancer List</h2>
 
@@ -196,7 +189,7 @@ export default function FreelancerModule() {
   );
 }
 
-/* REUSABLE INPUTS */
+/* 🔹 INPUTS */
 
 function Input({
   label,
@@ -213,7 +206,7 @@ function Input({
     <div className="flex flex-col space-y-1">
       <label className="text-sm text-gray-600">{label}</label>
       <input
-        className="border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none"
+        className="border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none disabled:bg-gray-100"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
@@ -238,7 +231,7 @@ function DateInput({
       <label className="text-sm text-gray-600">{label}</label>
       <input
         type="date"
-        className="border p-2 rounded"
+        className="border p-2 rounded disabled:bg-gray-100"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
