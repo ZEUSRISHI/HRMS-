@@ -10,6 +10,8 @@ import {
   TrendingUp,
   Briefcase,
   UserPlus,
+  Mail,
+  Shield,
 } from "lucide-react";
 
 import { useAuth } from "../contexts/AuthContext";
@@ -19,7 +21,6 @@ import {
   mockUsers,
   mockTasks,
   mockProjects,
-  mockAttendance,
   mockInvoices,
 } from "../data/mockData";
 
@@ -38,6 +39,52 @@ import {
   Pie,
   Cell,
 } from "recharts";
+
+/* ================= ATTENDANCE HELPERS ================= */
+
+const ATT_RECORDS_KEY = "startup_attendance_records";
+const ATT_STATS_KEY = "startup_attendance_stats";
+
+function safeJSONParse<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "") || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function getUserAttendancePercentage(userId: string): number {
+  const stats = safeJSONParse<Record<string, any>>(ATT_STATS_KEY, {});
+  return stats[userId]?.percentage || 0;
+}
+
+function getWeeklyAttendance(userId: string) {
+  const records = safeJSONParse<any[]>(ATT_RECORDS_KEY, []);
+
+  const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+  const map: Record<string, number> = {
+    Mon: 0,
+    Tue: 0,
+    Wed: 0,
+    Thu: 0,
+    Fri: 0,
+  };
+
+  records.forEach((rec) => {
+    if (rec.userId !== userId || !rec.checkIn) return;
+
+    const date = new Date(rec.date);
+    const day = date.toLocaleDateString("en-US", { weekday: "short" });
+
+    if (map[day] !== undefined) map[day] += 1;
+  });
+
+  return weekDays.map((d) => ({
+    day: d,
+    present: map[d],
+    total: 1,
+  }));
+}
 
 /* ================= TYPES ================= */
 
@@ -77,10 +124,8 @@ export function Dashboard() {
     0
   );
 
-  const attendanceRecords = mockAttendance.filter((a) => a.status === "present");
-  const attendanceRate = (attendanceRecords.length / mockAttendance.length) * 100;
-
-  /* ===== CHART DATA ===== */
+  const attendanceRate = getUserAttendancePercentage(currentUser.id);
+  const weeklyAttendance = getWeeklyAttendance(currentUser.id);
 
   const taskStatusData = [
     { name: "Pending", value: mockTasks.filter((t) => t.status === "pending").length },
@@ -95,47 +140,55 @@ export function Dashboard() {
     spent: p.spent / 1000,
   }));
 
-  const weeklyAttendance = [
-    { day: "Mon", present: 4, total: 5 },
-    { day: "Tue", present: 5, total: 5 },
-    { day: "Wed", present: 4, total: 5 },
-    { day: "Thu", present: 5, total: 5 },
-    { day: "Fri", present: 3, total: 5 },
-  ];
-
   return (
     <div className="space-y-6">
 
-      {/* USER INFO */}
-      <UserInfoCard />
+      {/* ===== USER HEADER ===== */}
+      <Card className="border-none shadow-sm bg-gradient-to-r from-blue-50 to-indigo-50">
+        <CardContent className="flex items-center justify-between p-6">
+          <div className="flex items-center gap-4">
+            <img
+              src={`https://ui-avatars.com/api/?name=${currentUser.name}`}
+              className="w-14 h-14 rounded-full border"
+            />
 
-      {/* HEADER */}
-      <div>
-        <h1 className="font-semibold mb-2">
-          Welcome back, {currentUser.name} 👋
-        </h1>
-        <p className="text-muted-foreground">
-          Here's what's happening with your organization today.
-        </p>
-      </div>
+            <div>
+              <h2 className="text-lg font-semibold">{currentUser.name}</h2>
+              <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                <span className="flex items-center gap-1">
+                  <Shield size={14} /> {currentUser.role}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Mail size={14} /> {currentUser.email}
+                </span>
+              </div>
+            </div>
+          </div>
 
-      {/* ===== MAIN STATS GRID ===== */}
+          <div className="hidden md:block text-right">
+            <p className="text-sm text-gray-500">Attendance</p>
+            <p className="text-2xl font-semibold text-blue-600">
+              {attendanceRate.toFixed(1)}%
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ===== STATS GRID ===== */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <StatCard title="Total Employees" value={totalEmployees} icon={Users} subtitle="Active employees" />
         <StatCard title="Active Projects" value={activeProjects} icon={FolderKanban} subtitle="In progress" />
-        <StatCard title="Attendance Rate" value={`${attendanceRate.toFixed(1)}%`} icon={CheckCircle} subtitle="This week" />
+        <StatCard title="Attendance Rate" value={`${attendanceRate.toFixed(1)}%`} icon={CheckCircle} subtitle="Real-time attendance" />
         <StatCard title="Revenue" value={`$${(totalRevenue / 1000).toFixed(0)}K`} icon={DollarSign} subtitle={`${(outstandingAmount / 1000).toFixed(0)}K outstanding`} />
         <StatCard title="Vendors" value={vendors.length} icon={Briefcase} subtitle="Registered vendors" />
         <StatCard title="Freelancers" value={freelancers.length} icon={UserPlus} subtitle="Active freelancers" />
       </div>
 
-      {/* ===== WORKFORCE SUMMARY SECTION ===== */}
       <DashboardStats />
 
       {/* ===== CHARTS ===== */}
       <div className="grid gap-4 md:grid-cols-2">
 
-        {/* PIE */}
         <Card>
           <CardHeader>
             <CardTitle>Task Status Overview</CardTitle>
@@ -154,7 +207,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* LINE */}
         <Card>
           <CardHeader>
             <CardTitle>Weekly Attendance Trend</CardTitle>
@@ -174,7 +226,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* BAR */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Project Progress & Budget</CardTitle>
@@ -196,7 +247,7 @@ export function Dashboard() {
         </Card>
       </div>
 
-      {/* ===== EMPLOYEE SUMMARY ===== */}
+      {/* ===== EMPLOYEE TASK SUMMARY ===== */}
       {currentUser.role === "employee" && (
         <Card>
           <CardHeader>
@@ -211,7 +262,6 @@ export function Dashboard() {
           </CardContent>
         </Card>
       )}
-
     </div>
   );
 }
@@ -236,11 +286,11 @@ export function DashboardStats() {
   );
 }
 
-/* ================= REUSABLE COMPONENTS ================= */
+/* ================= REUSABLE ================= */
 
 function StatCard({ title, value, subtitle, icon: Icon }: StatCardProps) {
   return (
-    <div className="bg-white rounded-xl shadow p-4">
+    <div className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">{title}</p>
         <Icon className="h-4 w-4 text-gray-400" />

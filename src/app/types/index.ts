@@ -42,40 +42,30 @@ export interface LeaveRequest {
 
 /* ================= TASK ================= */
 
-/* 👉 NEW: exported status type (fixes your error) */
 export type TaskStatus = "pending" | "in-progress" | "completed";
 
-/* 👉 Updated comment model */
-export interface TaskComment {
-  id: string;
-  message: string;
-  createdAt: string;
-  createdBy: string;
-}
-
-/* 👉 Updated production task model */
 export interface Task {
   id: string;
-
   title: string;
   description: string;
 
   assignedTo: string;
+  assignedRole?: string; // ⭐ new field
+
   assignedBy: string;
 
   priority: "low" | "medium" | "high";
   status: TaskStatus;
 
-  category?: string;
-  startDate?: string;
   dueDate: string;
-
-  estimatedHours?: number;
   frequency: "daily" | "weekly" | "monthly" | "one-time";
 
-  notes?: string;
+  comments: string[]; // ⭐ simplified comments
 
-  comments: TaskComment[];
+  category?: string;
+  startDate?: string;
+  estimatedHours?: number;
+  notes?: string;
 
   createdAt: string;
 }

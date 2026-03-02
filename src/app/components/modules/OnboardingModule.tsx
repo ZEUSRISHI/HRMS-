@@ -91,16 +91,12 @@ export function OnboardingModule() {
   const [lastDay, setLastDay] = useState<string>("");
   const [reason, setReason] = useState<string>("");
 
-  /* ===== POPUP STATE ===== */
-
   const [popup, setPopup] = useState("");
 
   function showPopup(message: string) {
     setPopup(message);
     setTimeout(() => setPopup(""), 2500);
   }
-
-  /* ================= HELPERS ================= */
 
   function makeId() {
     return crypto.randomUUID();
@@ -200,8 +196,6 @@ export function OnboardingModule() {
     );
   }
 
-  /* ================= UI ================= */
-
   return (
     <div className="space-y-6">
 
@@ -229,50 +223,54 @@ export function OnboardingModule() {
         </TabsList>
 
         {/* ONBOARDING */}
-        <TabsContent value="onboarding" className="space-y-4">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" /> Start Startup Onboarding
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>New Startup Employee</DialogTitle>
-              </DialogHeader>
+        <TabsContent value="onboarding" className="space-y-6">
 
-              <div className="space-y-4">
-                <div>
-                  <Label>User</Label>
-                  <Select onValueChange={setSelectedUserId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {users.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Start Date</Label>
-                  <Input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                </div>
-
-                <Button className="w-full" onClick={startOnboarding}>
-                  Create Onboarding Track
+          {/* ⭐ EXTRA SPACING WRAPPER */}
+          <div className="pt-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" /> Start Startup Onboarding
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>New Startup Employee</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4">
+                  <div>
+                    <Label>User</Label>
+                    <Select onValueChange={setSelectedUserId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Start Date</Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                    />
+                  </div>
+
+                  <Button className="w-full" onClick={startOnboarding}>
+                    Create Onboarding Track
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
 
           {onboardingList.map((o) => {
             const done = o.tasks.filter((t) => t.completed).length;

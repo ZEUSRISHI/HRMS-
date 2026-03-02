@@ -44,7 +44,6 @@ interface CalendarEvent {
 
 export function CalendarModule() {
   const { currentUser } = useAuth();
-
   if (!currentUser) return <div className="p-6">Loading...</div>;
 
   const isManager = currentUser.role === "manager";
@@ -92,9 +91,7 @@ export function CalendarModule() {
 
     if (isEdit && selectedId) {
       const updated = events.map((e) =>
-        e.id === selectedId
-          ? { ...e, ...form }
-          : e
+        e.id === selectedId ? { ...e, ...form } : e
       );
       persist(updated);
       setMsg("✅ Event updated");
@@ -229,7 +226,9 @@ export function CalendarModule() {
                         setForm({ ...form, type: v })
                       }
                     >
-                      <SelectTrigger><SelectValue/></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="meeting">Meeting</SelectItem>
                         <SelectItem value="event">Event</SelectItem>
@@ -296,11 +295,12 @@ export function CalendarModule() {
 
       {/* EVENT LIST */}
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-2">
           <CardTitle>All Events</CardTitle>
         </CardHeader>
 
-        <CardContent className="space-y-3">
+        {/* Reduced padding + tighter spacing */}
+        <CardContent className="pt-0 pb-3">
           {sortedEvents.length === 0 && (
             <p className="text-muted-foreground text-sm">
               No events created
@@ -309,7 +309,7 @@ export function CalendarModule() {
 
           {sortedEvents.map((event) => (
             <Card key={event.id}>
-              <CardContent className="flex gap-4 py-4">
+              <CardContent className="flex gap-4 py-3">
                 <div className={`w-1 rounded ${color(event.type)}`} />
 
                 <div className="flex-1">
@@ -322,7 +322,7 @@ export function CalendarModule() {
                     {event.description}
                   </p>
 
-                  <div className="text-sm mt-2 text-muted-foreground flex gap-4">
+                  <div className="text-sm mt-1 text-muted-foreground flex gap-4">
                     <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
                     <span>{event.startTime} - {event.endTime}</span>
                     {event.location && <span>{event.location}</span>}
@@ -331,14 +331,20 @@ export function CalendarModule() {
 
                 {isManager && (
                   <div className="flex gap-2">
-                    <Button size="icon" variant="outline"
-                      onClick={() => handleEdit(event)}>
-                      <Pencil className="h-4 w-4"/>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleEdit(event)}
+                    >
+                      <Pencil className="h-4 w-4" />
                     </Button>
 
-                    <Button size="icon" variant="destructive"
-                      onClick={() => handleDelete(event.id)}>
-                      <Trash className="h-4 w-4"/>
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      onClick={() => handleDelete(event.id)}
+                    >
+                      <Trash className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
