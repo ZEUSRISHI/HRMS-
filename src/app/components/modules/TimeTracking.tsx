@@ -17,7 +17,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../ui/dialog";
-import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import {
@@ -27,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Clock, Plus, Trash } from "lucide-react";
+import { Clock, Plus, Trash, Pencil } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockProjects } from "../../data/mockData";
 import { format, subDays } from "date-fns";
@@ -66,13 +65,11 @@ export function TimeTracking() {
   const { currentUser } = useAuth();
   if (!currentUser) return null;
 
-  const isManager =
-    currentUser.role === "manager" || currentUser.role === "admin";
+  const isAdmin = currentUser.role === "admin";
 
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [open, setOpen] = useState(false);
-
-  const [popup, setPopup] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
@@ -82,13 +79,6 @@ export function TimeTracking() {
     description: "",
   });
 
-  /* ================= POPUP ================= */
-
-  function showPopup(message: string) {
-    setPopup(message);
-    setTimeout(() => setPopup(""), 2500);
-  }
-
   /* ================= LOAD ================= */
 
   useEffect(() => {
@@ -96,34 +86,51 @@ export function TimeTracking() {
     if (stored) setEntries(JSON.parse(stored));
   }, []);
 
-  /* ================= SAVE ================= */
-
   const saveEntries = (data: TimeEntry[]) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setEntries(data);
   };
 
-  /* ================= CREATE ================= */
+  /* ================= CREATE / UPDATE ================= */
 
-  const handleLogTime = () => {
+  const handleSubmit = () => {
     if (!form.hours || !form.category) {
       alert("Hours and Category required");
       return;
     }
 
-    const newEntry: TimeEntry = {
-      id: crypto.randomUUID(),
-      userId: currentUser.id,
-      projectId: form.projectId !== "none" ? form.projectId : undefined,
-      date: form.date,
-      hours: parseFloat(form.hours),
-      category: form.category as Category,
-      description: form.description,
-      createdAt: new Date().toISOString(),
-    };
+    if (editingId) {
+      const updated = entries.map((e) =>
+        e.id === editingId
+          ? {
+              ...e,
+              date: form.date,
+              hours: parseFloat(form.hours),
+              category: form.category as Category,
+              description: form.description,
+              projectId:
+                form.projectId !== "none" ? form.projectId : undefined,
+            }
+          : e
+      );
 
-    const updated = [...entries, newEntry];
-    saveEntries(updated);
+      saveEntries(updated);
+      setEditingId(null);
+    } else {
+      const newEntry: TimeEntry = {
+        id: crypto.randomUUID(),
+        userId: currentUser.id,
+        date: form.date,
+        hours: parseFloat(form.hours),
+        category: form.category as Category,
+        description: form.description,
+        projectId:
+          form.projectId !== "none" ? form.projectId : undefined,
+        createdAt: new Date().toISOString(),
+      };
+
+      saveEntries([...entries, newEntry]);
+    }
 
     setForm({
       date: format(new Date(), "yyyy-MM-dd"),
@@ -134,25 +141,27 @@ export function TimeTracking() {
     });
 
     setOpen(false);
-    showPopup("Time entry saved successfully ⏱️");
   };
 
   /* ================= DELETE ================= */
 
   const handleDelete = (id: string) => {
     if (!confirm("Delete this entry?")) return;
-    const updated = entries.filter((e) => e.id !== id);
-    saveEntries(updated);
-    showPopup("Entry deleted 🗑️");
+    saveEntries(entries.filter((e) => e.id !== id));
   };
 
   /* ================= FILTER ================= */
 
-  const timeEntries = isManager
+  const timeEntries = isAdmin
     ? entries
     : entries.filter((t) => t.userId === currentUser.id);
 
-  /* ================= CATEGORY DATA ================= */
+  /* ================= STATS ================= */
+
+  const totalHours = timeEntries.reduce(
+    (sum, e) => sum + e.hours,
+    0
+  );
 
   const categoryData = useMemo(() => {
     const map: Record<Category, number> = {
@@ -172,13 +181,12 @@ export function TimeTracking() {
     }));
   }, [timeEntries]);
 
-  /* ================= DAILY TREND ================= */
-
   const dailyTrend = useMemo(() => {
     const data = [];
 
     for (let i = 6; i >= 0; i--) {
       const date = format(subDays(new Date(), i), "yyyy-MM-dd");
+
       const total = timeEntries
         .filter((t) => t.date === date)
         .reduce((sum, t) => sum + t.hours, 0);
@@ -195,83 +203,104 @@ export function TimeTracking() {
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-6">
-
-      {popup && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded shadow z-50">
-          {popup}
-        </div>
-      )}
+    <div className="space-y-8">
 
       {/* HEADER */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Time Tracking</h1>
-          <p className="text-sm text-muted-foreground">
-            Track work hours and visualize productivity
+          <h1 className="text-2xl font-bold tracking-tight">
+            Time Tracking Dashboard
+          </h1>
+          <p className="text-muted-foreground">
+            Monitor productivity and logged hours
           </p>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Log Time
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Log Work Hours</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              <Input type="date" value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })} />
-
-              <Select value={form.projectId}
-                onValueChange={(v) => setForm({ ...form, projectId: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No Project</SelectItem>
-                  {mockProjects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Input type="number" step="0.5" placeholder="Hours"
-                value={form.hours}
-                onChange={(e) => setForm({ ...form, hours: e.target.value })} />
-
-              <Select value={form.category}
-                onValueChange={(v: Category) => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="project">Project</SelectItem>
-                  <SelectItem value="meeting">Meeting</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Textarea placeholder="Description"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })} />
-
-              <Button className="w-full" onClick={handleLogTime}>
-                Save Entry
+        {!isAdmin && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Log Time
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingId ? "Edit Entry" : "Log Work Hours"}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <Input type="date"
+                  value={form.date}
+                  onChange={(e) =>
+                    setForm({ ...form, date: e.target.value })
+                  }
+                />
+
+                <Input type="number"
+                  placeholder="Hours"
+                  value={form.hours}
+                  onChange={(e) =>
+                    setForm({ ...form, hours: e.target.value })
+                  }
+                />
+
+                <Select value={form.category}
+                  onValueChange={(v: Category) =>
+                    setForm({ ...form, category: v })
+                  }>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="project">Project</SelectItem>
+                    <SelectItem value="meeting">Meeting</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Textarea
+                  placeholder="Description"
+                  value={form.description}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      description: e.target.value,
+                    })
+                  }
+                />
+
+                <Button className="w-full" onClick={handleSubmit}>
+                  {editingId ? "Update Entry" : "Save Entry"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
+
+      {/* SUMMARY CARD */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Total Logged Hours</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold text-primary">
+            {totalHours} hrs
+          </div>
+        </CardContent>
+      </Card>
 
       {/* TABLE */}
       <Card>
         <CardHeader>
-          <CardTitle>Logged Entries</CardTitle>
+          <CardTitle>Time Entries</CardTitle>
         </CardHeader>
+
         <CardContent>
           <Table>
             <TableHeader>
@@ -280,7 +309,7 @@ export function TimeTracking() {
                 <TableHead>Hours</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead></TableHead>
+                {!isAdmin && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
 
@@ -289,14 +318,42 @@ export function TimeTracking() {
                 <TableRow key={e.id}>
                   <TableCell>{e.date}</TableCell>
                   <TableCell>{e.hours}</TableCell>
-                  <TableCell><Badge>{e.category}</Badge></TableCell>
-                  <TableCell>{e.description}</TableCell>
                   <TableCell>
-                    <Button size="icon" variant="destructive"
-                      onClick={() => handleDelete(e.id)}>
-                      <Trash className="h-4 w-4" />
-                    </Button>
+                    <Badge variant="secondary">
+                      {e.category}
+                    </Badge>
                   </TableCell>
+                  <TableCell>{e.description}</TableCell>
+
+                  {!isAdmin && (
+                    <TableCell className="flex gap-2">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingId(e.id);
+                          setForm({
+                            date: e.date,
+                            hours: e.hours.toString(),
+                            category: e.category,
+                            description: e.description,
+                            projectId: "none",
+                          });
+                          setOpen(true);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        onClick={() => handleDelete(e.id)}
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -305,36 +362,41 @@ export function TimeTracking() {
       </Card>
 
       {/* CHARTS */}
-      <Card>
-        <CardHeader><CardTitle>Category Breakdown</CardTitle></CardHeader>
-        <CardContent className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={categoryData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="hours" />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Category Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={categoryData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="hours" fill="#6366f1" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Last 7 Days Trend</CardTitle></CardHeader>
-        <CardContent className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dailyTrend}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="hours" />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
+        <Card>
+          <CardHeader>
+            <CardTitle>Last 7 Days Trend</CardTitle>
+          </CardHeader>
+          <CardContent className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={dailyTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="hours" stroke="#16a34a" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

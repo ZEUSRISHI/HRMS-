@@ -2,8 +2,15 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
-import { DollarSign, Download, FileText } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../ui/table";
+import { DollarSign, Download, FileText, Trash } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockPayroll, mockUsers } from "../../data/mockData";
 import { format } from "date-fns";
@@ -28,7 +35,7 @@ export function PayrollModule() {
 
   const [records, setRecords] = useState<PayrollRecord[]>([]);
 
-  // ✅ load payroll
+  // ================= LOAD =================
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
@@ -39,12 +46,11 @@ export function PayrollModule() {
     }
   }, []);
 
-  // ✅ persist payroll
+  // ================= SAVE =================
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   }, [records]);
 
-  // ✅ guard — prevents TS + runtime crash
   if (!currentUser) {
     return (
       <div className="p-6 text-center text-muted-foreground">
@@ -53,16 +59,14 @@ export function PayrollModule() {
     );
   }
 
-  const isHR = currentUser.role === "hr";
   const isAdmin = currentUser.role === "admin";
 
-  // ✅ role filtering
-  const payrollRecords =
-    isHR || isAdmin
-      ? records
-      : records.filter((p) => p.userId === currentUser.id);
+  // ================= FILTER =================
+  const payrollRecords = isAdmin
+    ? records
+    : records.filter((p) => p.userId === currentUser.id);
 
-  // ✅ totals
+  // ================= TOTALS =================
   const totalProcessed = records
     .filter((p) => p.status === "processed")
     .reduce((sum, p) => sum + p.netSalary, 0);
@@ -71,9 +75,56 @@ export function PayrollModule() {
     .filter((p) => p.status === "pending")
     .reduce((sum, p) => sum + p.netSalary, 0);
 
-  // ✅ HR only processing
+  // ================= CRUD =================
+
+  // ➕ CREATE
+  function addPayroll(userId: string) {
+    if (!isAdmin) return;
+
+    const basicSalary = 5000;
+    const allowances = 500;
+    const deductions = 300;
+
+    const newRecord: PayrollRecord = {
+      id: crypto.randomUUID(),
+      userId,
+      month: new Date().toISOString(),
+      basicSalary,
+      allowances,
+      deductions,
+      netSalary: basicSalary + allowances - deductions,
+      status: "pending",
+    };
+
+    setRecords((prev) => [...prev, newRecord]);
+  }
+
+  // ✏️ UPDATE (auto recalculates net)
+  function updatePayroll(id: string) {
+    if (!isAdmin) return;
+
+    const updated = records.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            allowances: p.allowances + 100,
+            netSalary: p.basicSalary + (p.allowances + 100) - p.deductions,
+          }
+        : p
+    );
+
+    setRecords(updated);
+  }
+
+  // ❌ DELETE
+  function deletePayroll(id: string) {
+    if (!isAdmin) return;
+    setRecords(records.filter((p) => p.id !== id));
+  }
+
+  // ✅ PROCESS (ADMIN ONLY)
   function processPayroll() {
-    if (!isHR) return;
+    if (!isAdmin) return;
 
     const updated = records.map((p) =>
       p.status === "pending"
@@ -86,7 +137,7 @@ export function PayrollModule() {
     );
 
     setRecords(updated);
-    alert("Payroll processed and saved locally");
+    alert("Payroll processed successfully and saved locally.");
   }
 
   // ================= UI =================
@@ -101,8 +152,7 @@ export function PayrollModule() {
           </p>
         </div>
 
-        {/* ✅ HR only button */}
-        {isHR && (
+        {isAdmin && (
           <Button className="gap-2" onClick={processPayroll}>
             <FileText className="h-4 w-4" />
             Process Payroll
@@ -155,17 +205,22 @@ export function PayrollModule() {
       <Card>
         <CardHeader className="flex justify-between">
           <CardTitle>Payroll Records</CardTitle>
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export Report
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => addPayroll(mockUsers[0].id)}
+            >
+              Add Payroll
+            </Button>
+          )}
         </CardHeader>
 
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                {(isHR || isAdmin) && <TableHead>Employee</TableHead>}
+                {isAdmin && <TableHead>Employee</TableHead>}
                 <TableHead>Month</TableHead>
                 <TableHead>Basic</TableHead>
                 <TableHead>Allowances</TableHead>
@@ -173,7 +228,7 @@ export function PayrollModule() {
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Payment Date</TableHead>
-                <TableHead>Actions</TableHead>
+                {isAdmin && <TableHead>Actions</TableHead>}
               </TableRow>
             </TableHeader>
 
@@ -185,7 +240,7 @@ export function PayrollModule() {
 
                 return (
                   <TableRow key={record.id}>
-                    {(isHR || isAdmin) && (
+                    {isAdmin && (
                       <TableCell>{user?.name ?? "-"}</TableCell>
                     )}
 
@@ -228,12 +283,25 @@ export function PayrollModule() {
                         : "-"}
                     </TableCell>
 
-                    <TableCell>
-                      <Button variant="outline" size="sm">
-                        <Download className="h-4 w-4" />
-                        Payslip
-                      </Button>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updatePayroll(record.id)}
+                        >
+                          Update
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deletePayroll(record.id)}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
