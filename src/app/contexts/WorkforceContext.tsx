@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 /* ================= TYPES ================= */
 
-export type Vendor = {
+export interface Vendor {
   id: string;
+  createdAt: string;
   company: string;
   contactPerson: string;
   email: string;
@@ -11,11 +12,11 @@ export type Vendor = {
   category: string;
   taxId: string;
   address: string;
-  createdAt: string;
-};
+}
 
-export type Freelancer = {
+export interface Freelancer {
   id: string;
+  createdAt: string;
   name: string;
   email: string;
   phone: string;
@@ -24,46 +25,41 @@ export type Freelancer = {
   contractStart: string;
   contractEnd: string;
   status: "active" | "expired";
-  createdAt: string;
-};
+}
 
-type WorkforceContextType = {
+interface WorkforceContextType {
   vendors: Vendor[];
   freelancers: Freelancer[];
+
   addVendor: (vendor: Vendor) => void;
   updateVendor: (vendor: Vendor) => void;
   deleteVendor: (id: string) => void;
+
   addFreelancer: (freelancer: Freelancer) => void;
   updateFreelancer: (freelancer: Freelancer) => void;
   deleteFreelancer: (id: string) => void;
-};
+}
 
 /* ================= CONTEXT ================= */
 
-const WorkforceContext = createContext<WorkforceContextType | undefined>(
-  undefined
-);
+const WorkforceContext = createContext<WorkforceContextType | null>(null);
 
-/* ================= PROVIDER ================= */
-
-export function WorkforceProvider({ children }: { children: ReactNode }) {
+export const WorkforceProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [freelancers, setFreelancers] = useState<Freelancer[]>([]);
 
-  /* LOAD FROM STORAGE */
   useEffect(() => {
-    try {
-      const storedVendors = localStorage.getItem("vendors");
-      const storedFreelancers = localStorage.getItem("freelancers");
+    const v = localStorage.getItem("vendors");
+    const f = localStorage.getItem("freelancers");
 
-      if (storedVendors) setVendors(JSON.parse(storedVendors));
-      if (storedFreelancers) setFreelancers(JSON.parse(storedFreelancers));
-    } catch {
-      console.warn("Failed to parse workforce data");
-    }
+    if (v) setVendors(JSON.parse(v));
+    if (f) setFreelancers(JSON.parse(f));
   }, []);
 
-  /* SAVE TO STORAGE */
   useEffect(() => {
     localStorage.setItem("vendors", JSON.stringify(vendors));
   }, [vendors]);
@@ -72,19 +68,23 @@ export function WorkforceProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("freelancers", JSON.stringify(freelancers));
   }, [freelancers]);
 
-  /* CRUD METHODS */
+  /* ========= VENDOR CRUD ========= */
 
   const addVendor = (vendor: Vendor) =>
-    setVendors((prev) => [...prev, vendor]);
+    setVendors((prev) => [vendor, ...prev]);
 
   const updateVendor = (vendor: Vendor) =>
-    setVendors((prev) => prev.map((v) => (v.id === vendor.id ? vendor : v)));
+    setVendors((prev) =>
+      prev.map((v) => (v.id === vendor.id ? vendor : v))
+    );
 
   const deleteVendor = (id: string) =>
     setVendors((prev) => prev.filter((v) => v.id !== id));
 
+  /* ========= FREELANCER CRUD ========= */
+
   const addFreelancer = (freelancer: Freelancer) =>
-    setFreelancers((prev) => [...prev, freelancer]);
+    setFreelancers((prev) => [freelancer, ...prev]);
 
   const updateFreelancer = (freelancer: Freelancer) =>
     setFreelancers((prev) =>
@@ -110,12 +110,10 @@ export function WorkforceProvider({ children }: { children: ReactNode }) {
       {children}
     </WorkforceContext.Provider>
   );
-}
+};
 
-/* ================= HOOK ================= */
-
-export function useWorkforce() {
+export const useWorkforce = () => {
   const context = useContext(WorkforceContext);
-  if (!context) throw new Error("useWorkforce must be used inside WorkforceProvider");
+  if (!context) throw new Error("WorkforceContext missing");
   return context;
-}
+};

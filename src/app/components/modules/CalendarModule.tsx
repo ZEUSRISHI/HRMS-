@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -27,6 +27,13 @@ import { useAuth } from "../../contexts/AuthContext";
 
 type EventType = "meeting" | "holiday" | "event" | "personal";
 
+type RoleType =
+  | "admin"
+  | "manager"
+  | "employee"
+  | "hr"
+  | "all";
+
 interface CalendarEvent {
   id: string;
   title: string;
@@ -36,6 +43,7 @@ interface CalendarEvent {
   startTime: string;
   endTime: string;
   location: string;
+  assignedTo: RoleType;
   createdBy: string;
   createdAt: string;
 }
@@ -44,9 +52,11 @@ interface CalendarEvent {
 
 export function CalendarModule() {
   const { currentUser } = useAuth();
-  if (!currentUser) return <div className="p-6">Loading...</div>;
+  if (!currentUser) return null;
 
-  const isManager = currentUser.role === "manager";
+  const isAdmin = currentUser.role === "admin";
+
+  const STORAGE_KEY = `calendarEvents_admin_${currentUser.id}`;
 
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [open, setOpen] = useState(false);
@@ -62,20 +72,45 @@ export function CalendarModule() {
     startTime: "",
     endTime: "",
     location: "",
+    assignedTo: "all" as RoleType,
   });
 
   /* ================= LOAD ================= */
+
   useEffect(() => {
-    const stored = localStorage.getItem("calendarEvents");
-    if (stored) setEvents(JSON.parse(stored));
-  }, []);
+    if (isAdmin) {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) setEvents(JSON.parse(stored));
+    } else {
+      // Load all admin-created events
+      const allKeys = Object.keys(localStorage).filter((key) =>
+        key.startsWith("calendarEvents_admin_")
+      );
+
+      let allEvents: CalendarEvent[] = [];
+
+      allKeys.forEach((key) => {
+        const data = localStorage.getItem(key);
+        if (data) {
+          try {
+            allEvents.push(...JSON.parse(data));
+          } catch {
+            console.warn("Invalid event data in localStorage");
+          }
+        }
+      });
+
+      setEvents(allEvents);
+    }
+  }, [currentUser]);
 
   const persist = (data: CalendarEvent[]) => {
-    localStorage.setItem("calendarEvents", JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setEvents(data);
   };
 
   /* ================= VALIDATION ================= */
+
   const validate = () => {
     if (!form.title) return "Title required";
     if (!form.date) return "Date required";
@@ -85,6 +120,7 @@ export function CalendarModule() {
   };
 
   /* ================= CREATE / UPDATE ================= */
+
   const handleSubmit = () => {
     const error = validate();
     if (error) return alert(error);
@@ -111,12 +147,14 @@ export function CalendarModule() {
   };
 
   /* ================= DELETE ================= */
+
   const handleDelete = (id: string) => {
     if (!window.confirm("Delete event?")) return;
     persist(events.filter((e) => e.id !== id));
   };
 
   /* ================= EDIT ================= */
+
   const handleEdit = (event: CalendarEvent) => {
     setIsEdit(true);
     setSelectedId(event.id);
@@ -128,6 +166,7 @@ export function CalendarModule() {
       startTime: event.startTime,
       endTime: event.endTime,
       location: event.location,
+      assignedTo: event.assignedTo,
     });
     setOpen(true);
   };
@@ -143,12 +182,24 @@ export function CalendarModule() {
       startTime: "",
       endTime: "",
       location: "",
+      assignedTo: "all",
     });
     setOpen(false);
   };
 
-  /* ================= SORT ================= */
-  const sortedEvents = [...events].sort(
+  /* ================= FILTER BASED ON ROLE ================= */
+
+  const visibleEvents = useMemo(() => {
+    if (isAdmin) return events;
+
+    return events.filter(
+      (e) =>
+        e.assignedTo === "all" ||
+        e.assignedTo === currentUser.role
+    );
+  }, [events, currentUser, isAdmin]);
+
+  const sortedEvents = [...visibleEvents].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
@@ -165,7 +216,7 @@ export function CalendarModule() {
     <div className="space-y-6">
 
       {msg && (
-        <div className="bg-green-100 text-green-700 px-4 py-2 rounded">
+        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm shadow">
           {msg}
         </div>
       )}
@@ -175,20 +226,20 @@ export function CalendarModule() {
         <div>
           <h1 className="font-semibold text-lg">Calendar</h1>
           <p className="text-sm text-muted-foreground">
-            Company schedule & events
+            Organization events & assigned tasks
           </p>
         </div>
 
-        {isManager && (
+        {isAdmin && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
-                Add Event
+                Create Event
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-xl rounded-2xl">
               <DialogHeader>
                 <DialogTitle>
                   {isEdit ? "Edit Event" : "Create Event"}
@@ -196,6 +247,7 @@ export function CalendarModule() {
               </DialogHeader>
 
               <div className="space-y-4">
+
                 <div>
                   <Label>Title *</Label>
                   <Input
@@ -217,72 +269,59 @@ export function CalendarModule() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Type *</Label>
-                    <Select
-                      value={form.type}
-                      onValueChange={(v: EventType) =>
-                        setForm({ ...form, type: v })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="meeting">Meeting</SelectItem>
-                        <SelectItem value="event">Event</SelectItem>
-                        <SelectItem value="holiday">Holiday</SelectItem>
-                        <SelectItem value="personal">Personal</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label>Date *</Label>
-                    <Input
-                      type="date"
-                      value={form.date}
-                      onChange={(e) =>
-                        setForm({ ...form, date: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Start *</Label>
-                    <Input
-                      type="time"
-                      value={form.startTime}
-                      onChange={(e) =>
-                        setForm({ ...form, startTime: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <Label>End *</Label>
-                    <Input
-                      type="time"
-                      value={form.endTime}
-                      onChange={(e) =>
-                        setForm({ ...form, endTime: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <Label>Location</Label>
+                  <Label>Assign To *</Label>
+                  <Select
+                    value={form.assignedTo}
+                    onValueChange={(v: RoleType) =>
+                      setForm({ ...form, assignedTo: v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Entire Organization</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="hr">HR</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                   <Input
-                    value={form.location}
+                    type="date"
+                    value={form.date}
                     onChange={(e) =>
-                      setForm({ ...form, location: e.target.value })
+                      setForm({ ...form, date: e.target.value })
+                    }
+                  />
+                  <Input
+                    type="time"
+                    value={form.startTime}
+                    onChange={(e) =>
+                      setForm({ ...form, startTime: e.target.value })
                     }
                   />
                 </div>
+
+                <Input
+                  type="time"
+                  value={form.endTime}
+                  onChange={(e) =>
+                    setForm({ ...form, endTime: e.target.value })
+                  }
+                />
+
+                <Input
+                  placeholder="Location"
+                  value={form.location}
+                  onChange={(e) =>
+                    setForm({ ...form, location: e.target.value })
+                  }
+                />
 
                 <Button className="w-full" onClick={handleSubmit}>
                   {isEdit ? "Update Event" : "Create Event"}
@@ -294,42 +333,47 @@ export function CalendarModule() {
       </div>
 
       {/* EVENT LIST */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle>All Events</CardTitle>
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader>
+          <CardTitle>Events</CardTitle>
         </CardHeader>
 
-        {/* Reduced padding + tighter spacing */}
-        <CardContent className="pt-0 pb-3">
+        <CardContent className="space-y-4">
           {sortedEvents.length === 0 && (
-            <p className="text-muted-foreground text-sm">
-              No events created
+            <p className="text-sm text-muted-foreground">
+              No events available
             </p>
           )}
 
           {sortedEvents.map((event) => (
-            <Card key={event.id}>
-              <CardContent className="flex gap-4 py-3">
+            <Card key={event.id} className="rounded-xl">
+              <CardContent className="flex gap-4 py-4">
                 <div className={`w-1 rounded ${color(event.type)}`} />
 
                 <div className="flex-1">
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <h4 className="font-medium">{event.title}</h4>
-                    <Badge variant="outline">{event.type}</Badge>
+                    <Badge variant="outline">
+                      {event.assignedTo === "all"
+                        ? "Organization"
+                        : event.assignedTo.toUpperCase()}
+                    </Badge>
                   </div>
 
                   <p className="text-sm text-muted-foreground">
                     {event.description}
                   </p>
 
-                  <div className="text-sm mt-1 text-muted-foreground flex gap-4">
+                  <div className="text-xs mt-2 text-muted-foreground flex gap-4">
                     <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
-                    <span>{event.startTime} - {event.endTime}</span>
+                    <span>
+                      {event.startTime} - {event.endTime}
+                    </span>
                     {event.location && <span>{event.location}</span>}
                   </div>
                 </div>
 
-                {isManager && (
+                {isAdmin && (
                   <div className="flex gap-2">
                     <Button
                       size="icon"

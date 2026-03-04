@@ -1,29 +1,23 @@
 import { useState } from "react";
 import { Vendor, useWorkforce } from "../../contexts/WorkforceContext";
 import { useAuth } from "../../contexts/AuthContext";
-import {
-  canManageVendors,
-  canViewWorkforce,
-} from "../../../utils/permissions";
 
 /**
- * 👉 Extend Vendor ONLY for UI form
- * (not saved to database)
+ * Vendor Form Type
  */
-type VendorForm = Omit<Vendor, "id" | "createdAt"> & {
-  status: "active" | "inactive";
-  contractType: string;
-  notes: string;
-};
+type VendorForm = Omit<Vendor, "id" | "createdAt">;
 
 export default function VendorModule() {
   const { vendors, addVendor, updateVendor, deleteVendor } = useWorkforce();
   const { currentUser } = useAuth();
 
-  const canView = canViewWorkforce(currentUser?.role);
-  const canEdit = canManageVendors(currentUser?.role);
+  if (!currentUser) return null;
 
-  if (!canView) return null;
+  const isAdmin = currentUser.role === "admin";
+  const isManager = currentUser.role === "manager";
+
+  // Only Admin & Manager can view
+  if (!isAdmin && !isManager) return null;
 
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -36,9 +30,6 @@ export default function VendorModule() {
     category: "",
     taxId: "",
     address: "",
-    status: "active",
-    contractType: "",
-    notes: "",
   };
 
   const [form, setForm] = useState<VendorForm>(emptyForm);
@@ -49,30 +40,24 @@ export default function VendorModule() {
 
   const validate = () => {
     if (!form.company || !form.contactPerson || !form.email || !form.phone) {
-      alert("Please fill required fields");
+      alert("Please fill all required fields (*)");
       return false;
     }
     return true;
   };
 
-  /**
-   * ✅ Save ONLY Vendor fields
-   */
   const saveVendor = () => {
+    if (!isAdmin) return;
     if (!validate()) return;
 
     setLoading(true);
 
     const payload: Vendor = {
-      id: editId || crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      company: form.company,
-      contactPerson: form.contactPerson,
-      email: form.email,
-      phone: form.phone,
-      category: form.category,
-      taxId: form.taxId,
-      address: form.address,
+      id: editId ?? crypto.randomUUID(),
+      createdAt: editId
+        ? vendors.find((v) => v.id === editId)?.createdAt || new Date().toISOString()
+        : new Date().toISOString(),
+      ...form,
     };
 
     editId ? updateVendor(payload) : addVendor(payload);
@@ -84,13 +69,17 @@ export default function VendorModule() {
     }, 300);
   };
 
-  const handleEdit = (v: Vendor) => {
+  const startEdit = (v: Vendor) => {
+    if (!isAdmin) return;
     setEditId(v.id);
     setForm({
-      ...v,
-      status: "active",
-      contractType: "",
-      notes: "",
+      company: v.company,
+      contactPerson: v.contactPerson,
+      email: v.email,
+      phone: v.phone,
+      category: v.category,
+      taxId: v.taxId,
+      address: v.address,
     });
   };
 
@@ -99,14 +88,14 @@ export default function VendorModule() {
       <div>
         <h1 className="text-2xl font-semibold">Vendor Management</h1>
         <p className="text-gray-500 text-sm">
-          {canEdit
+          {isAdmin
             ? "Create and manage vendor partnerships"
             : "View vendor information"}
         </p>
       </div>
 
-      {/* ✅ FORM — ONLY visible for users who can edit */}
-      {canEdit && (
+      {/* ADMIN FORM */}
+      {isAdmin && (
         <div className="bg-white p-5 rounded-xl shadow space-y-4">
           <h2 className="font-semibold text-lg">
             {editId ? "Edit Vendor" : "Add New Vendor"}
@@ -143,11 +132,6 @@ export default function VendorModule() {
               value={form.taxId}
               onChange={(v) => handleChange("taxId", v)}
             />
-            <Input
-              label="Contract Type"
-              value={form.contractType}
-              onChange={(v) => handleChange("contractType", v)}
-            />
           </div>
 
           <textarea
@@ -157,24 +141,21 @@ export default function VendorModule() {
             onChange={(e) => handleChange("address", e.target.value)}
           />
 
-          <textarea
-            placeholder="Notes"
-            className="border p-2 rounded w-full"
-            value={form.notes}
-            onChange={(e) => handleChange("notes", e.target.value)}
-          />
-
           <button
             onClick={saveVendor}
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded w-full"
           >
-            {loading ? "Saving..." : editId ? "Update Vendor" : "Add Vendor"}
+            {loading
+              ? "Saving..."
+              : editId
+              ? "Update Vendor"
+              : "Add Vendor"}
           </button>
         </div>
       )}
 
-      {/* LIST — visible to all who can view */}
+      {/* VENDOR LIST */}
       <div className="bg-white p-5 rounded-xl shadow space-y-3">
         <h2 className="font-semibold text-lg">Vendor List</h2>
 
@@ -194,11 +175,10 @@ export default function VendorModule() {
               </p>
             </div>
 
-            {/* Only editable roles see actions */}
-            {canEdit && (
+            {isAdmin && (
               <div className="space-x-4">
                 <button
-                  onClick={() => handleEdit(v)}
+                  onClick={() => startEdit(v)}
                   className="text-blue-600 hover:underline"
                 >
                   Edit
@@ -218,7 +198,7 @@ export default function VendorModule() {
   );
 }
 
-/* 🔹 Reusable Input */
+/* 🔹 Reusable Input Component */
 
 function Input({
   label,
