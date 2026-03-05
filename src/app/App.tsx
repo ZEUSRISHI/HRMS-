@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
 import { WorkforceProvider } from "./contexts/WorkforceContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
@@ -10,15 +11,15 @@ import { AdminUsersProvider } from "./contexts/AdminUsersContext";
 
 import MainLayout from "../layouts/MainLayout";
 
-/* ✅ PERMISSIONS */
+/* PERMISSIONS */
 import { canManageVendors } from "../utils/permissions";
 
-/* ===== AUTH ===== */
+/* AUTH */
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
 import ForgotPassword from "./components/ForgotPassword";
 
-/* ===== ICONS ===== */
+/* ICONS */
 import {
   LayoutDashboard,
   Clock,
@@ -34,9 +35,10 @@ import {
   Briefcase,
   Users,
   Shield,
+  LucideIcon,
 } from "lucide-react";
 
-/* ===== MODULES ===== */
+/* MODULES */
 import { Dashboard, DashboardStats } from "./components/Dashboard";
 import { EmployeeDashboard } from "./components/modules/EmployeeDashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
@@ -62,13 +64,13 @@ import AdminUserManagement from "./components/admin/AdminUserManagement";
 import ProfilePage from "../pages/ProfilePage";
 import AccountPage from "../pages/AccountPage";
 
-/* WORKFORCE QUICK VIEW */
+/* WORKFORCE */
 import VendorModule from "./components/modules/VendorModule";
 import FreelancerModule from "./components/modules/FreelancerModule";
 
 /* ================= TYPES ================= */
 
-type ModuleType =
+export type ModuleType =
   | "dashboard"
   | "attendance"
   | "tasks"
@@ -88,50 +90,79 @@ type ModuleType =
   | "profile"
   | "account";
 
+interface MenuItem {
+  id: ModuleType;
+  name: string;
+  icon: LucideIcon;
+  roles: Role[];
+}
+
 /* ================= APP CONTENT ================= */
 
 function AppContent() {
+
   const { currentUser } = useAuth();
+
   const [activeModule, setActiveModule] =
     useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
 
-  /* ✅ Permission example */
+  /* Permission Example */
+
   if (canManageVendors(currentUser.role)) {
-    console.log("User can manage vendors");
+    console.log("Vendor management allowed");
   }
 
-  const menuItems: {
-    id: ModuleType;
-    name: string;
-    icon: any;
-    roles: Role[];
-  }[] = [
+  /* MENU */
+
+  const menuItems: MenuItem[] = [
+
     { id: "dashboard", name: "Dashboard", icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
+
     { id: "attendance", name: "Attendance", icon: Clock, roles: ["admin","manager","employee","hr"] },
+
     { id: "tasks", name: "Tasks", icon: CheckSquare, roles: ["admin","manager","employee","hr"] },
+
     { id: "employee-task-status", name: "My Task Status", icon: CheckSquare, roles: ["employee"] },
+
     { id: "status", name: "Daily Status", icon: FileText, roles: ["admin","manager","employee","hr"] },
+
     { id: "calendar", name: "Calendar", icon: Calendar, roles: ["admin","manager","employee","hr"] },
+
     { id: "payroll", name: "Payroll", icon: DollarSign, roles: ["admin","hr"] },
-    { id: "clients", name: "Clients & Payments", icon: Building2, roles: ["admin","manager"] },
+
+    { id: "clients", name: "Clients", icon: Building2, roles: ["admin","manager"] },
+
     { id: "projects", name: "Projects", icon: FolderKanban, roles: ["admin","manager","employee"] },
+
     { id: "onboarding", name: "Onboarding", icon: UserPlus, roles: ["admin","hr"] },
+
     { id: "time-tracking", name: "Time Tracking", icon: Timer, roles: ["admin","manager","employee"] },
+
     { id: "analytics", name: "Analytics", icon: BarChart3, roles: ["admin","manager"] },
-    { id: "workforce-overview", name: "Workforce Overview", icon: Briefcase, roles: ["admin","manager","hr"] },
+
+    { id: "workforce-overview", name: "Workforce", icon: Briefcase, roles: ["admin","manager","hr"] },
+
     { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
+
     { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
+
     { id: "admin-users", name: "User Management", icon: Shield, roles: ["admin"] },
+
   ];
 
-  const visibleMenuItems = menuItems.filter(item =>
-    item.roles.includes(currentUser.role)
-  );
+  const visibleMenuItems =
+    menuItems.filter(item =>
+      item.roles.includes(currentUser.role)
+    );
+
+  /* MODULE RENDER */
 
   const renderModule = () => {
+
     switch (activeModule) {
+
       case "dashboard":
         return currentUser.role === "employee"
           ? <EmployeeDashboard />
@@ -164,34 +195,19 @@ function AppContent() {
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
 
-      default: return <Dashboard />;
+      default:
+        return <Dashboard />;
     }
   };
 
   return (
-    <MainLayout onNavigate={setActiveModule}>
-      <div className="flex h-[calc(100vh-64px)]">
-        <aside className="w-64 bg-white border-r p-4 space-y-2">
-          {visibleMenuItems.map(item => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveModule(item.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition 
-                ${activeModule === item.id ? "bg-gray-200" : "hover:bg-gray-100"}`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.name}
-              </button>
-            );
-          })}
-        </aside>
-
-        <main className="flex-1 p-6 overflow-y-auto">
-          {renderModule()}
-        </main>
-      </div>
+    <MainLayout
+      active={activeModule}
+      setActive={setActiveModule}
+      role={currentUser.role}
+      menuItems={visibleMenuItems}
+    >
+      {renderModule()}
     </MainLayout>
   );
 }
@@ -199,11 +215,14 @@ function AppContent() {
 /* ================= AUTH SWITCH ================= */
 
 function AppWrapper() {
+
   const { isAuthenticated } = useAuth();
+
   const [view, setView] =
     useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
+
     if (view === "signup")
       return <SignupPage onBack={() => setView("login")} />;
 
@@ -224,23 +243,40 @@ function AppWrapper() {
 /* ================= ROOT ================= */
 
 export default function App() {
+
   return (
     <AuthProvider>
+
       <AdminUsersProvider>
+
         <ProjectProvider>
+
           <TimesheetProvider>
+
             <PerformanceProvider>
+
               <TaskProvider>
+
                 <WorkforceProvider>
+
                   <NotificationProvider>
+
                     <AppWrapper />
+
                   </NotificationProvider>
+
                 </WorkforceProvider>
+
               </TaskProvider>
+
             </PerformanceProvider>
+
           </TimesheetProvider>
+
         </ProjectProvider>
+
       </AdminUsersProvider>
+
     </AuthProvider>
   );
 }

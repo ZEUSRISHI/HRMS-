@@ -1,158 +1,108 @@
-import { NavLink } from "react-router-dom";
-import { useState } from "react";
-import {
-  LayoutDashboard,
-  Users,
-  CalendarDays,
-  ClipboardList,
-  Menu,
-  X,
-} from "lucide-react";
+import { X, LayoutDashboard, Clock, CheckSquare, FileText, Calendar, DollarSign, Building2, FolderKanban, UserPlus, Timer, BarChart3, Users, Shield } from "lucide-react"
+import { Role } from "../app/contexts/AuthContext"
+import { ModuleType } from "../app/App"
 
-export default function Sidebar() {
-  const [open, setOpen] = useState(false);
+type Props = {
+  active: ModuleType
+  setActive: (module: ModuleType) => void
+  role: Role
+  open: boolean
+  setOpen: (v:boolean)=>void
+}
 
-  const navItem =
-    "flex items-center gap-3 px-4 py-2 rounded-lg text-sm font-medium transition-colors";
+export default function Sidebar({
+  active,
+  setActive,
+  role,
+  open,
+  setOpen
+}: Props){
 
-  const active = "bg-indigo-50 text-indigo-600";
-  const inactive = "text-gray-600 hover:bg-gray-100";
+  const menu = [
+    { id:"dashboard", name:"Dashboard", icon:LayoutDashboard, roles:["admin","manager","employee","hr"] },
+    { id:"attendance", name:"Attendance", icon:Clock, roles:["admin","manager","employee","hr"] },
+    { id:"tasks", name:"Tasks", icon:CheckSquare, roles:["admin","manager","employee","hr"] },
+    { id:"employee-task-status", name:"My Tasks", icon:CheckSquare, roles:["employee"] },
+    { id:"status", name:"Daily Status", icon:FileText, roles:["admin","manager","employee","hr"] },
+    { id:"calendar", name:"Calendar", icon:Calendar, roles:["admin","manager","employee","hr"] },
+    { id:"payroll", name:"Payroll", icon:DollarSign, roles:["admin","hr"] },
+    { id:"clients", name:"Clients", icon:Building2, roles:["admin","manager"] },
+    { id:"projects", name:"Projects", icon:FolderKanban, roles:["admin","manager","employee"] },
+    { id:"onboarding", name:"Onboarding", icon:UserPlus, roles:["admin","hr"] },
+    { id:"time-tracking", name:"Time Tracking", icon:Timer, roles:["admin","manager","employee"] },
+    { id:"analytics", name:"Analytics", icon:BarChart3, roles:["admin","manager"] },
+    { id:"hr-employees", name:"Employee Records", icon:Users, roles:["hr"] },
+    { id:"admin-users", name:"User Management", icon:Shield, roles:["admin"] }
+  ]
 
-  return (
+  const filtered = menu.filter(m => m.roles.includes(role))
+
+  return(
     <>
-      {/* ================= MOBILE HEADER ================= */}
-      {/* md:hidden → hide header in desktop */}
-      <div className="md:hidden sticky top-0 z-50 flex items-center justify-between bg-gray-900 text-white p-4">
-        <h1 className="text-lg font-bold">HRMS</h1>
+    <aside className={`
+      fixed md:static
+      top-0 left-0
+      h-full w-64
+      bg-white border-r
+      transform transition-transform
+      ${open ? "translate-x-0":"-translate-x-full"}
+      md:translate-x-0
+      z-50
+    `}>
 
-        <button
-          onClick={() => setOpen(!open)}
-          className="p-2 rounded-md hover:bg-gray-700"
-        >
-          {open ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
+      <div className="p-4">
 
-      {/* ================= SIDEBAR ================= */}
-      <aside
-        className={`
-        fixed md:static
-        top-0 left-0
-        h-screen
-        w-64
-        bg-white border-r
-        transform transition-transform duration-300 ease-in-out
-        z-40
-        
-        ${open ? "translate-x-0" : "-translate-x-full"}
-        
-        md:translate-x-0
-      `}
-      >
-        <div className="h-full flex flex-col">
+        <div className="flex justify-between mb-6">
 
-          {/* ===== LOGO ===== */}
-          <div className="h-16 flex items-center px-6 border-b">
-            <h1 className="text-lg font-semibold">HRMS</h1>
-          </div>
+          <h2 className="font-bold text-lg">
+            HRMS
+          </h2>
 
-          {/* ===== NAVIGATION ===== */}
-          <nav className="flex-1 overflow-y-auto p-4 space-y-1">
-
-            <NavLink
-              to="/"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <LayoutDashboard size={18} />
-              Dashboard
-            </NavLink>
-
-            <NavLink
-              to="/attendance"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <CalendarDays size={18} />
-              Attendance
-            </NavLink>
-
-            <NavLink
-              to="/tasks"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <ClipboardList size={18} />
-              Tasks
-            </NavLink>
-
-            <NavLink
-              to="/employees"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <Users size={18} />
-              Employees
-            </NavLink>
-
-            <NavLink
-              to="/vendors"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <Users size={18} />
-              Vendors
-            </NavLink>
-
-            <NavLink
-              to="/freelancers"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <Users size={18} />
-              Freelancers
-            </NavLink>
-
-            <NavLink
-              to="/settings"
-              onClick={() => setOpen(false)}
-              className={({ isActive }) =>
-                `${navItem} ${isActive ? active : inactive}`
-              }
-            >
-              <Users size={18} />
-              Settings
-            </NavLink>
-
-          </nav>
-
-          {/* ===== FOOTER ===== */}
-          <div className="p-4 border-t text-xs text-gray-400">
-            © {new Date().getFullYear()} HRMS
-          </div>
+          <button
+            className="md:hidden"
+            onClick={()=>setOpen(false)}
+          >
+            <X/>
+          </button>
 
         </div>
-      </aside>
 
-      {/* ================= MOBILE OVERLAY ================= */}
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm md:hidden z-30"
-          onClick={() => setOpen(false)}
-        />
-      )}
+        {filtered.map(item=>{
+
+          const Icon = item.icon
+
+          return(
+            <button
+              key={item.id}
+              onClick={()=>{
+                setActive(item.id as ModuleType)
+                setOpen(false)
+              }}
+              className={`
+                w-full flex items-center gap-3
+                px-3 py-2 rounded-lg mb-2
+                ${active===item.id
+                  ? "bg-blue-100 text-blue-600"
+                  : "hover:bg-gray-100"}
+              `}
+            >
+              <Icon size={18}/>
+              {item.name}
+            </button>
+          )
+        })}
+
+      </div>
+
+    </aside>
+
+    {open && (
+      <div
+        className="fixed inset-0 bg-black/40 md:hidden"
+        onClick={()=>setOpen(false)}
+      />
+    )}
+
     </>
-  );
+  )
 }

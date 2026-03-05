@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Bell, MessageSquare, LogOut } from "lucide-react";
+import { Menu, Bell, MessageSquare, LogOut } from "lucide-react";
 import { useNotification } from "../contexts/NotificationContext";
 import { useAuth } from "../contexts/AuthContext";
 
 type Props = {
+  toggleSidebar?: () => void;
   onNavigate?: (module: "profile" | "account") => void;
 };
 
-export default function Header({ onNavigate }: Props) {
+export default function Header({ toggleSidebar, onNavigate }: Props) {
   const { notifications } = useNotification();
   const { currentUser, logout } = useAuth();
   const [open, setOpen] = useState(false);
@@ -15,24 +16,37 @@ export default function Header({ onNavigate }: Props) {
   if (!currentUser) return null;
 
   return (
-    <header className="h-16 border-b bg-white flex items-center justify-between px-6 shadow-sm">
+    <header className="bg-white border-b px-4 md:px-6 h-16 flex items-center justify-between shadow-sm">
 
-      {/* ===== APP TITLE ===== */}
-      <h1 className="text-lg font-semibold text-orange-600">
-        Quibo Tech HRMS
-      </h1>
+      {/* ===== LEFT SIDE ===== */}
+      <div className="flex items-center gap-3">
+
+        {/* MOBILE SIDEBAR BUTTON */}
+        <button
+          onClick={toggleSidebar}
+          className="md:hidden p-1 hover:bg-gray-100 rounded"
+        >
+          <Menu size={22} />
+        </button>
+
+        {/* APP TITLE */}
+        <h1 className="text-orange-600 font-semibold text-lg">
+          Quibo Tech HRMS
+        </h1>
+
+      </div>
 
       {/* ===== RIGHT SIDE ===== */}
       <div className="flex items-center gap-5">
 
         {/* MESSAGE ICON */}
         <button className="relative hover:text-orange-600 transition">
-          <MessageSquare className="w-5 h-5" />
+          <MessageSquare size={20} />
         </button>
 
         {/* NOTIFICATION ICON */}
         <button className="relative hover:text-orange-600 transition">
-          <Bell className="w-5 h-5" />
+          <Bell size={20} />
 
           {notifications.length > 0 && (
             <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs px-1.5 rounded-full">
@@ -48,18 +62,18 @@ export default function Header({ onNavigate }: Props) {
             className="flex items-center gap-3 hover:bg-gray-100 px-3 py-2 rounded-lg transition"
           >
             {/* Avatar */}
-            <div className="h-9 w-9 rounded-full bg-orange-500 text-white flex items-center justify-center font-semibold">
+            <div className="h-8 w-8 rounded-full bg-orange-500 text-white flex items-center justify-center font-semibold">
               {currentUser.name.charAt(0)}
             </div>
 
-            {/* User Info */}
-            <div className="text-left leading-tight">
+            {/* USER INFO */}
+            <div className="hidden sm:block text-left leading-tight">
               <p className="text-sm font-medium">{currentUser.name}</p>
               <p className="text-xs text-gray-500">{currentUser.email}</p>
             </div>
           </button>
 
-          {/* ===== DROPDOWN MENU ===== */}
+          {/* ===== DROPDOWN ===== */}
           {open && (
             <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg z-50">
 
@@ -90,15 +104,18 @@ export default function Header({ onNavigate }: Props) {
                 <LogOut size={16} />
                 Logout
               </button>
+
             </div>
           )}
         </div>
+
       </div>
     </header>
   );
 }
 
 /* ===== MENU ITEM COMPONENT ===== */
+
 type MenuItemProps = {
   label: string;
   onClick?: () => void;

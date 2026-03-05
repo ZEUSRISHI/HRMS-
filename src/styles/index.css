@@ -1,14 +1,23 @@
-@import './fonts.css';
-@import './tailwind.css';
-@import './theme.css';
+@import "./fonts.css";
+@import "./tailwind.css";
+@import "./theme.css";
+
+/* ===== Global Layout ===== */
+
+html,
+body,
+#root {
+  height: 100%;
+}
 
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
 }
 
+/* Prevent horizontal overflow */
 body {
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 /* ===== Scrollbar Styling ===== */
