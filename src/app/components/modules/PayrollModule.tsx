@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "../ui/table";
-import { DollarSign, Download, FileText, Trash } from "lucide-react";
+import { DollarSign, FileText, Trash } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockPayroll, mockUsers } from "../../data/mockData";
 import { format } from "date-fns";
@@ -77,7 +77,6 @@ export function PayrollModule() {
 
   // ================= CRUD =================
 
-  // ➕ CREATE
   function addPayroll(userId: string) {
     if (!isAdmin) return;
 
@@ -99,7 +98,6 @@ export function PayrollModule() {
     setRecords((prev) => [...prev, newRecord]);
   }
 
-  // ✏️ UPDATE (auto recalculates net)
   function updatePayroll(id: string) {
     if (!isAdmin) return;
 
@@ -116,13 +114,11 @@ export function PayrollModule() {
     setRecords(updated);
   }
 
-  // ❌ DELETE
   function deletePayroll(id: string) {
     if (!isAdmin) return;
     setRecords(records.filter((p) => p.id !== id));
   }
 
-  // ✅ PROCESS (ADMIN ONLY)
   function processPayroll() {
     if (!isAdmin) return;
 
@@ -144,32 +140,46 @@ export function PayrollModule() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+
+      {/* HEADER */}
+
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
         <div>
-          <h1 className="font-semibold mb-2">Payroll Management</h1>
+          <h1 className="font-semibold text-lg mb-1">
+            Payroll Management
+          </h1>
+
           <p className="text-sm text-muted-foreground">
             Track salary, payslips, and payment status
           </p>
         </div>
 
         {isAdmin && (
-          <Button className="gap-2" onClick={processPayroll}>
+          <Button
+            className="gap-2 w-full md:w-auto"
+            onClick={processPayroll}
+          >
             <FileText className="h-4 w-4" />
             Process Payroll
           </Button>
         )}
       </div>
 
-      {/* ===== Summary ===== */}
+      {/* ===== SUMMARY ===== */}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
         <Card>
           <CardHeader className="flex justify-between pb-2">
-            <CardTitle className="text-sm">Total Processed</CardTitle>
+            <CardTitle className="text-sm">
+              Total Processed
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-green-600" />
           </CardHeader>
+
           <CardContent>
-            <div className="font-semibold text-green-600">
+            <div className="font-semibold text-green-600 text-lg">
               ${totalProcessed.toLocaleString()}
             </div>
           </CardContent>
@@ -177,11 +187,14 @@ export function PayrollModule() {
 
         <Card>
           <CardHeader className="flex justify-between pb-2">
-            <CardTitle className="text-sm">Pending Payment</CardTitle>
+            <CardTitle className="text-sm">
+              Pending Payment
+            </CardTitle>
             <DollarSign className="h-4 w-4 text-orange-600" />
           </CardHeader>
+
           <CardContent>
-            <div className="font-semibold text-orange-600">
+            <div className="font-semibold text-orange-600 text-lg">
               ${totalPending.toLocaleString()}
             </div>
           </CardContent>
@@ -189,22 +202,29 @@ export function PayrollModule() {
 
         <Card>
           <CardHeader className="flex justify-between pb-2">
-            <CardTitle className="text-sm">Employees</CardTitle>
+            <CardTitle className="text-sm">
+              Employees
+            </CardTitle>
             <FileText className="h-4 w-4" />
           </CardHeader>
+
           <CardContent>
-            <div className="font-semibold">
+            <div className="font-semibold text-lg">
               {mockUsers.filter((u) => u.status === "active").length}
             </div>
           </CardContent>
         </Card>
+
       </div>
 
-      {/* ===== Table ===== */}
+      {/* ===== TABLE ===== */}
 
       <Card>
-        <CardHeader className="flex justify-between">
+
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
           <CardTitle>Payroll Records</CardTitle>
+
           {isAdmin && (
             <Button
               variant="outline"
@@ -214,101 +234,150 @@ export function PayrollModule() {
               Add Payroll
             </Button>
           )}
+
         </CardHeader>
 
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {isAdmin && <TableHead>Employee</TableHead>}
-                <TableHead>Month</TableHead>
-                <TableHead>Basic</TableHead>
-                <TableHead>Allowances</TableHead>
-                <TableHead>Deductions</TableHead>
-                <TableHead>Net</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment Date</TableHead>
-                {isAdmin && <TableHead>Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
 
-            <TableBody>
-              {payrollRecords.map((record) => {
-                const user = mockUsers.find(
-                  (u) => u.id === record.userId
-                );
+          {/* MOBILE SCROLL */}
 
-                return (
-                  <TableRow key={record.id}>
-                    {isAdmin && (
-                      <TableCell>{user?.name ?? "-"}</TableCell>
-                    )}
+          <div className="w-full overflow-x-auto">
 
-                    <TableCell>
-                      {format(new Date(record.month), "MMMM yyyy")}
-                    </TableCell>
+            <Table className="min-w-[900px]">
 
-                    <TableCell>${record.basicSalary}</TableCell>
+              <TableHeader>
 
-                    <TableCell className="text-green-600">
-                      +${record.allowances}
-                    </TableCell>
+                <TableRow>
 
-                    <TableCell className="text-red-600">
-                      -${record.deductions}
-                    </TableCell>
+                  {isAdmin && <TableHead>Employee</TableHead>}
 
-                    <TableCell className="font-semibold">
-                      ${record.netSalary}
-                    </TableCell>
+                  <TableHead>Month</TableHead>
+                  <TableHead>Basic</TableHead>
+                  <TableHead>Allowances</TableHead>
+                  <TableHead>Deductions</TableHead>
+                  <TableHead>Net</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Payment Date</TableHead>
 
-                    <TableCell>
-                      <Badge
-                        variant={
-                          record.status === "processed"
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {record.status}
-                      </Badge>
-                    </TableCell>
+                  {isAdmin && <TableHead>Actions</TableHead>}
 
-                    <TableCell>
-                      {record.paymentDate
-                        ? format(
-                            new Date(record.paymentDate),
-                            "MMM d, yyyy"
-                          )
-                        : "-"}
-                    </TableCell>
+                </TableRow>
 
-                    {isAdmin && (
-                      <TableCell className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updatePayroll(record.id)}
-                        >
-                          Update
-                        </Button>
+              </TableHeader>
 
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deletePayroll(record.id)}
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
+              <TableBody>
+
+                {payrollRecords.map((record) => {
+
+                  const user = mockUsers.find(
+                    (u) => u.id === record.userId
+                  );
+
+                  return (
+
+                    <TableRow key={record.id}>
+
+                      {isAdmin && (
+                        <TableCell>
+                          {user?.name ?? "-"}
+                        </TableCell>
+                      )}
+
+                      <TableCell>
+                        {format(
+                          new Date(record.month),
+                          "MMMM yyyy"
+                        )}
                       </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+
+                      <TableCell>
+                        ${record.basicSalary}
+                      </TableCell>
+
+                      <TableCell className="text-green-600">
+                        +${record.allowances}
+                      </TableCell>
+
+                      <TableCell className="text-red-600">
+                        -${record.deductions}
+                      </TableCell>
+
+                      <TableCell className="font-semibold">
+                        ${record.netSalary}
+                      </TableCell>
+
+                      <TableCell>
+
+                        <Badge
+                          variant={
+                            record.status === "processed"
+                              ? "default"
+                              : "secondary"
+                          }
+                        >
+                          {record.status}
+                        </Badge>
+
+                      </TableCell>
+
+                      <TableCell>
+
+                        {record.paymentDate
+                          ? format(
+                              new Date(record.paymentDate),
+                              "MMM d, yyyy"
+                            )
+                          : "-"}
+
+                      </TableCell>
+
+                      {isAdmin && (
+
+                        <TableCell>
+
+                          <div className="flex flex-wrap gap-2">
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                updatePayroll(record.id)
+                              }
+                            >
+                              Update
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                deletePayroll(record.id)
+                              }
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+
+                          </div>
+
+                        </TableCell>
+
+                      )}
+
+                    </TableRow>
+
+                  );
+                })}
+
+              </TableBody>
+
+            </Table>
+
+          </div>
+
         </CardContent>
+
       </Card>
+
     </div>
   );
 }

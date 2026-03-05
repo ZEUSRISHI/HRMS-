@@ -81,15 +81,16 @@ const startupTasks = [
 /* ================= COMPONENT ================= */
 
 export function OnboardingModule() {
+
   const [onboardingList, setOnboardingList] = useState<OnboardingItem[]>([]);
   const [offboardingList, setOffboardingList] = useState<OffboardingItem[]>([]);
 
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
-  const [startDate, setStartDate] = useState<string>("");
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [startDate, setStartDate] = useState("");
 
-  const [offUserId, setOffUserId] = useState<string>("");
-  const [lastDay, setLastDay] = useState<string>("");
-  const [reason, setReason] = useState<string>("");
+  const [offUserId, setOffUserId] = useState("");
+  const [lastDay, setLastDay] = useState("");
+  const [reason, setReason] = useState("");
 
   const [popup, setPopup] = useState("");
 
@@ -103,6 +104,7 @@ export function OnboardingModule() {
   }
 
   function startOnboarding() {
+
     if (!selectedUserId || !startDate) return;
 
     const user = users.find((u) => u.id === selectedUserId);
@@ -131,8 +133,10 @@ export function OnboardingModule() {
   }
 
   function toggleTask(onboardingId: string, taskId: string) {
+
     setOnboardingList((prev) =>
       prev.map((o) => {
+
         if (o.id !== onboardingId) return o;
 
         const updatedTasks = o.tasks.map((t) =>
@@ -146,11 +150,13 @@ export function OnboardingModule() {
           tasks: updatedTasks,
           status: done ? "completed" : "in-progress",
         };
+
       })
     );
   }
 
   function startOffboarding() {
+
     if (!offUserId || !lastDay || !reason) return;
 
     const user = users.find((u) => u.id === offUserId);
@@ -176,8 +182,10 @@ export function OnboardingModule() {
   }
 
   function toggleClearance(offId: string, key: keyof ClearanceStatus) {
+
     setOffboardingList((prev) =>
       prev.map((o) => {
+
         if (o.id !== offId) return o;
 
         const updated = {
@@ -192,59 +200,85 @@ export function OnboardingModule() {
           clearanceStatus: updated,
           status: done ? "completed" : "in-progress",
         };
+
       })
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-6xl mx-auto">
 
       {popup && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded shadow-lg z-50">
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50">
           {popup}
         </div>
       )}
 
-      <div>
-        <h1 className="text-xl font-semibold">Startup Employee Lifecycle</h1>
-        <p className="text-sm text-muted-foreground">
-          Fast onboarding & clean offboarding for startup teams
-        </p>
+      {/* HEADER */}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+
+        <div>
+          <h1 className="text-lg sm:text-xl font-semibold">
+            Startup Employee Lifecycle
+          </h1>
+
+          <p className="text-sm text-muted-foreground">
+            Fast onboarding & clean offboarding for startup teams
+          </p>
+        </div>
+
       </div>
 
-      <Tabs defaultValue="onboarding">
+      <Tabs defaultValue="onboarding" className="space-y-6">
+
         <TabsList className="grid grid-cols-2 w-full">
-          <TabsTrigger value="onboarding" className="gap-2">
-            <UserPlus className="h-4 w-4" /> Onboarding
+
+          <TabsTrigger value="onboarding" className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4" />
+            Onboarding
           </TabsTrigger>
-          <TabsTrigger value="offboarding" className="gap-2">
-            <UserMinus className="h-4 w-4" /> Offboarding
+
+          <TabsTrigger value="offboarding" className="flex items-center gap-2">
+            <UserMinus className="h-4 w-4" />
+            Offboarding
           </TabsTrigger>
+
         </TabsList>
 
-        {/* ONBOARDING */}
+        {/* ================= ONBOARDING ================= */}
+
         <TabsContent value="onboarding" className="space-y-6">
 
-          {/* ⭐ EXTRA SPACING WRAPPER */}
-          <div className="pt-2">
+          <div className="flex justify-end">
+
             <Dialog>
+
               <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <Plus className="h-4 w-4" /> Start Startup Onboarding
+                <Button className="gap-2 w-full sm:w-auto">
+                  <Plus className="h-4 w-4" />
+                  Start Startup Onboarding
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+
                 <DialogHeader>
                   <DialogTitle>New Startup Employee</DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-4">
-                  <div>
+
+                  <div className="space-y-2">
+
                     <Label>User</Label>
+
                     <Select onValueChange={setSelectedUserId}>
+
                       <SelectTrigger>
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder="Select employee" />
                       </SelectTrigger>
+
                       <SelectContent>
                         {users.map((u) => (
                           <SelectItem key={u.id} value={u.id}>
@@ -252,143 +286,197 @@ export function OnboardingModule() {
                           </SelectItem>
                         ))}
                       </SelectContent>
+
                     </Select>
+
                   </div>
 
-                  <div>
+                  <div className="space-y-2">
+
                     <Label>Start Date</Label>
+
                     <Input
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                     />
+
                   </div>
 
                   <Button className="w-full" onClick={startOnboarding}>
                     Create Onboarding Track
                   </Button>
+
                 </div>
+
               </DialogContent>
+
             </Dialog>
+
           </div>
 
           {onboardingList.map((o) => {
+
             const done = o.tasks.filter((t) => t.completed).length;
             const progress = (done / o.tasks.length) * 100;
 
             return (
-              <Card key={o.id} className="rounded-2xl shadow">
-                <CardHeader>
-                  <div className="flex justify-between">
-                    <div>
-                      <CardTitle>{o.userName}</CardTitle>
-                      <p className="text-sm text-muted-foreground">{o.role}</p>
-                    </div>
-                    <Badge>{o.status}</Badge>
+
+              <Card key={o.id} className="rounded-xl">
+
+                <CardHeader className="flex flex-row items-center justify-between">
+
+                  <div>
+                    <CardTitle className="text-base">{o.userName}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{o.role}</p>
                   </div>
+
+                  <Badge>{o.status}</Badge>
+
                 </CardHeader>
 
                 <CardContent className="space-y-4">
+
                   <Progress value={progress} />
 
-                  {o.tasks.map((t) => (
-                    <div
-                      key={t.id}
-                      onClick={() => toggleTask(o.id, t.id)}
-                      className="flex items-center gap-2 border rounded-xl p-2 cursor-pointer"
-                    >
-                      <CheckCircle2
-                        className={`h-4 w-4 ${
-                          t.completed ? "text-green-600" : "opacity-30"
-                        }`}
-                      />
-                      <span
-                        className={
-                          t.completed
-                            ? "line-through text-muted-foreground"
-                            : ""
-                        }
+                  <div className="space-y-2">
+
+                    {o.tasks.map((t) => (
+
+                      <div
+                        key={t.id}
+                        onClick={() => toggleTask(o.id, t.id)}
+                        className="flex items-center gap-3 border rounded-lg p-3 cursor-pointer hover:bg-muted/50 transition"
                       >
-                        {t.task}
-                      </span>
-                    </div>
-                  ))}
+
+                        <CheckCircle2
+                          className={`h-4 w-4 ${
+                            t.completed ? "text-green-600" : "opacity-30"
+                          }`}
+                        />
+
+                        <span
+                          className={
+                            t.completed
+                              ? "line-through text-muted-foreground"
+                              : ""
+                          }
+                        >
+                          {t.task}
+                        </span>
+
+                      </div>
+
+                    ))}
+
+                  </div>
+
                 </CardContent>
+
               </Card>
+
             );
           })}
+
         </TabsContent>
 
-        {/* OFFBOARDING */}
-        <TabsContent value="offboarding" className="space-y-4">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="destructive">Start Offboarding</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Offboard Employee</DialogTitle>
-              </DialogHeader>
+        {/* ================= OFFBOARDING ================= */}
 
-              <div className="space-y-4">
-                <Select onValueChange={setOffUserId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="User" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        <TabsContent value="offboarding" className="space-y-6">
 
-                <Input
-                  type="date"
-                  value={lastDay}
-                  onChange={(e) => setLastDay(e.target.value)}
-                />
+          <div className="flex justify-end">
 
-                <Textarea
-                  placeholder="Reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                />
+            <Dialog>
 
-                <Button variant="destructive" onClick={startOffboarding}>
-                  Create Offboarding
+              <DialogTrigger asChild>
+                <Button variant="destructive" className="w-full sm:w-auto">
+                  Start Offboarding
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+
+                <DialogHeader>
+                  <DialogTitle>Offboard Employee</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4">
+
+                  <Select onValueChange={setOffUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select employee" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {users.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Input
+                    type="date"
+                    value={lastDay}
+                    onChange={(e) => setLastDay(e.target.value)}
+                  />
+
+                  <Textarea
+                    placeholder="Reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                  />
+
+                  <Button variant="destructive" onClick={startOffboarding}>
+                    Create Offboarding
+                  </Button>
+
+                </div>
+
+              </DialogContent>
+
+            </Dialog>
+
+          </div>
 
           {offboardingList.map((o) => (
-            <Card key={o.id} className="rounded-2xl shadow">
-              <CardHeader>
-                <div className="flex justify-between">
-                  <CardTitle>{o.userName}</CardTitle>
-                  <Badge>{o.status}</Badge>
-                </div>
+
+            <Card key={o.id} className="rounded-xl">
+
+              <CardHeader className="flex flex-row items-center justify-between">
+
+                <CardTitle className="text-base">{o.userName}</CardTitle>
+                <Badge>{o.status}</Badge>
+
               </CardHeader>
 
-              <CardContent className="grid grid-cols-2 gap-3">
+              <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
                 {(Object.keys(o.clearanceStatus) as (keyof ClearanceStatus)[]).map(
                   (k) => (
+
                     <Button
                       key={k}
                       variant={o.clearanceStatus[k] ? "default" : "outline"}
                       onClick={() => toggleClearance(o.id, k)}
                     >
-                      {k}
+                      {k.toUpperCase()}
                     </Button>
+
                   )
                 )}
+
               </CardContent>
+
             </Card>
+
           ))}
+
         </TabsContent>
+
       </Tabs>
+
     </div>
   );
 }

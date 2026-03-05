@@ -17,11 +17,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../ui/dialog";
-import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
-import { Building2, DollarSign, FileText, Plus, TrendingUp } from "lucide-react";
-import { format } from "date-fns";
+import {
+  Building2,
+  DollarSign,
+  FileText,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
 
 /* ================= TYPES ================= */
 
@@ -103,7 +107,8 @@ export function ClientManagement() {
   /* ================= ADD CLIENT ================= */
 
   const handleAddClient = () => {
-    if (!clientForm.name || !clientForm.email) return alert("Fill required fields");
+    if (!clientForm.name || !clientForm.email)
+      return alert("Fill required fields");
 
     const newClient: Client = {
       id: crypto.randomUUID(),
@@ -117,13 +122,20 @@ export function ClientManagement() {
     saveClients(updated);
     showMessage("✅ Client added successfully");
 
-    setClientForm({ name: "", company: "", email: "", phone: "", address: "" });
+    setClientForm({
+      name: "",
+      company: "",
+      email: "",
+      phone: "",
+      address: "",
+    });
   };
 
   /* ================= CREATE INVOICE ================= */
 
   const handleCreateInvoice = () => {
-    if (!invoiceForm.clientId || !invoiceForm.amount) return alert("Fill required fields");
+    if (!invoiceForm.clientId || !invoiceForm.amount)
+      return alert("Fill required fields");
 
     const newInvoice: Invoice = {
       id: crypto.randomUUID(),
@@ -139,12 +151,16 @@ export function ClientManagement() {
     const updatedInvoices = [...invoices, newInvoice];
     saveInvoices(updatedInvoices);
 
-    /* Update outstanding balance */
     const updatedClients = clients.map((c) =>
       c.id === invoiceForm.clientId
-        ? { ...c, outstandingBalance: c.outstandingBalance + Number(invoiceForm.amount) }
+        ? {
+            ...c,
+            outstandingBalance:
+              c.outstandingBalance + Number(invoiceForm.amount),
+          }
         : c
     );
+
     saveClients(updatedClients);
 
     showMessage("💰 Invoice created successfully");
@@ -160,8 +176,15 @@ export function ClientManagement() {
 
   /* ================= STATS ================= */
 
-  const totalOutstanding = clients.reduce((s, c) => s + c.outstandingBalance, 0);
-  const activeClients = clients.filter((c) => c.status === "active").length;
+  const totalOutstanding = clients.reduce(
+    (s, c) => s + c.outstandingBalance,
+    0
+  );
+
+  const activeClients = clients.filter(
+    (c) => c.status === "active"
+  ).length;
+
   const totalInvoiced = invoices.reduce((s, i) => s + i.amount, 0);
   const totalPaid = invoices.reduce((s, i) => s + i.paidAmount, 0);
 
@@ -177,166 +200,387 @@ export function ClientManagement() {
       )}
 
       {/* HEADER */}
-      <div className="flex justify-between">
+
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
         <div>
-          <h1 className="font-semibold mb-2">Client & Payment Tracking</h1>
+          <h1 className="font-semibold text-lg">
+            Client & Payment Tracking
+          </h1>
+
           <p className="text-sm text-muted-foreground">
             Manage clients, invoices, and payment status
           </p>
         </div>
 
         {/* ADD CLIENT */}
+
         <Dialog>
+
           <DialogTrigger asChild>
-            <Button className="gap-2">
+
+            <Button className="gap-2 w-full md:w-auto">
               <Plus className="h-4 w-4" /> Add Client
             </Button>
+
           </DialogTrigger>
-          <DialogContent>
+
+          <DialogContent className="sm:max-w-lg">
+
             <DialogHeader>
               <DialogTitle>Add New Client</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-3">
-              <Input placeholder="Name"
-                value={clientForm.name}
-                onChange={(e)=>setClientForm({...clientForm,name:e.target.value})}/>
-              <Input placeholder="Company"
-                value={clientForm.company}
-                onChange={(e)=>setClientForm({...clientForm,company:e.target.value})}/>
-              <Input placeholder="Email"
-                value={clientForm.email}
-                onChange={(e)=>setClientForm({...clientForm,email:e.target.value})}/>
-              <Input placeholder="Phone"
-                value={clientForm.phone}
-                onChange={(e)=>setClientForm({...clientForm,phone:e.target.value})}/>
-              <Textarea placeholder="Address"
-                value={clientForm.address}
-                onChange={(e)=>setClientForm({...clientForm,address:e.target.value})}/>
 
-              <Button onClick={handleAddClient}>Add Client</Button>
+              <Input
+                placeholder="Name"
+                value={clientForm.name}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    name: e.target.value,
+                  })
+                }
+              />
+
+              <Input
+                placeholder="Company"
+                value={clientForm.company}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    company: e.target.value,
+                  })
+                }
+              />
+
+              <Input
+                placeholder="Email"
+                value={clientForm.email}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    email: e.target.value,
+                  })
+                }
+              />
+
+              <Input
+                placeholder="Phone"
+                value={clientForm.phone}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    phone: e.target.value,
+                  })
+                }
+              />
+
+              <Textarea
+                placeholder="Address"
+                value={clientForm.address}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    address: e.target.value,
+                  })
+                }
+              />
+
+              <Button
+                className="w-full"
+                onClick={handleAddClient}
+              >
+                Add Client
+              </Button>
+
             </div>
+
           </DialogContent>
+
         </Dialog>
+
       </div>
 
       {/* STATS */}
-      <div className="grid md:grid-cols-4 gap-4">
-        <StatCard title="Active Clients" value={activeClients} icon={<Building2 />} />
-        <StatCard title="Total Invoiced" value={`$${totalInvoiced}`} icon={<FileText />} />
-        <StatCard title="Payments Received" value={`$${totalPaid}`} icon={<DollarSign />} />
-        <StatCard title="Outstanding" value={`$${totalOutstanding}`} icon={<TrendingUp />} />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <StatCard
+          title="Active Clients"
+          value={activeClients}
+          icon={<Building2 />}
+        />
+
+        <StatCard
+          title="Total Invoiced"
+          value={`$${totalInvoiced}`}
+          icon={<FileText />}
+        />
+
+        <StatCard
+          title="Payments Received"
+          value={`$${totalPaid}`}
+          icon={<DollarSign />}
+        />
+
+        <StatCard
+          title="Outstanding"
+          value={`$${totalOutstanding}`}
+          icon={<TrendingUp />}
+        />
+
       </div>
 
       {/* CLIENT TABLE */}
+
       <Card>
-        <CardHeader><CardTitle>Clients</CardTitle></CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Outstanding</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {clients.map(c=>(
-                <TableRow key={c.id}>
-                  <TableCell>{c.name}</TableCell>
-                  <TableCell>{c.company}</TableCell>
-                  <TableCell>{c.email}</TableCell>
-                  <TableCell>${c.outstandingBalance}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
 
-      {/* INVOICE */}
-      <Card>
-        <CardHeader className="flex justify-between">
-          <CardTitle>Invoices</CardTitle>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button size="sm">Create Invoice</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Create Invoice</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <select className="border rounded px-3 py-2"
-                  value={invoiceForm.clientId}
-                  onChange={(e)=>setInvoiceForm({...invoiceForm,clientId:e.target.value})}>
-                  <option value="">Select Client</option>
-                  {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-
-                <Input placeholder="Invoice Number"
-                  value={invoiceForm.invoiceNumber}
-                  onChange={(e)=>setInvoiceForm({...invoiceForm,invoiceNumber:e.target.value})}/>
-
-                <Input type="number" placeholder="Amount"
-                  value={invoiceForm.amount}
-                  onChange={(e)=>setInvoiceForm({...invoiceForm,amount:e.target.value})}/>
-
-                <Input type="date"
-                  value={invoiceForm.date}
-                  onChange={(e)=>setInvoiceForm({...invoiceForm,date:e.target.value})}/>
-
-                <Input type="date"
-                  value={invoiceForm.dueDate}
-                  onChange={(e)=>setInvoiceForm({...invoiceForm,dueDate:e.target.value})}/>
-
-                <Button onClick={handleCreateInvoice}>Create Invoice</Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+        <CardHeader>
+          <CardTitle>Clients</CardTitle>
         </CardHeader>
 
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.map(inv=>{
-                const client = clients.find(c=>c.id===inv.clientId);
-                return(
-                  <TableRow key={inv.id}>
-                    <TableCell>{inv.invoiceNumber}</TableCell>
-                    <TableCell>{client?.name}</TableCell>
-                    <TableCell>${inv.amount}</TableCell>
-                    <TableCell><Badge>{inv.status}</Badge></TableCell>
+
+          <div className="w-full overflow-x-auto">
+
+            <Table className="min-w-[600px]">
+
+              <TableHeader>
+
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Outstanding</TableHead>
+                </TableRow>
+
+              </TableHeader>
+
+              <TableBody>
+
+                {clients.map((c) => (
+
+                  <TableRow key={c.id}>
+
+                    <TableCell>{c.name}</TableCell>
+                    <TableCell>{c.company}</TableCell>
+                    <TableCell>{c.email}</TableCell>
+                    <TableCell>${c.outstandingBalance}</TableCell>
+
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+
+                ))}
+
+              </TableBody>
+
+            </Table>
+
+          </div>
+
         </CardContent>
+
       </Card>
+
+      {/* INVOICE */}
+
+      <Card>
+
+        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+
+          <CardTitle>Invoices</CardTitle>
+
+          <Dialog>
+
+            <DialogTrigger asChild>
+
+              <Button size="sm" className="w-full md:w-auto">
+                Create Invoice
+              </Button>
+
+            </DialogTrigger>
+
+            <DialogContent>
+
+              <DialogHeader>
+                <DialogTitle>Create Invoice</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-3">
+
+                <select
+                  className="border rounded px-3 py-2 w-full"
+                  value={invoiceForm.clientId}
+                  onChange={(e) =>
+                    setInvoiceForm({
+                      ...invoiceForm,
+                      clientId: e.target.value,
+                    })
+                  }
+                >
+
+                  <option value="">Select Client</option>
+
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+
+                </select>
+
+                <Input
+                  placeholder="Invoice Number"
+                  value={invoiceForm.invoiceNumber}
+                  onChange={(e) =>
+                    setInvoiceForm({
+                      ...invoiceForm,
+                      invoiceNumber: e.target.value,
+                    })
+                  }
+                />
+
+                <Input
+                  type="number"
+                  placeholder="Amount"
+                  value={invoiceForm.amount}
+                  onChange={(e) =>
+                    setInvoiceForm({
+                      ...invoiceForm,
+                      amount: e.target.value,
+                    })
+                  }
+                />
+
+                <Input
+                  type="date"
+                  value={invoiceForm.date}
+                  onChange={(e) =>
+                    setInvoiceForm({
+                      ...invoiceForm,
+                      date: e.target.value,
+                    })
+                  }
+                />
+
+                <Input
+                  type="date"
+                  value={invoiceForm.dueDate}
+                  onChange={(e) =>
+                    setInvoiceForm({
+                      ...invoiceForm,
+                      dueDate: e.target.value,
+                    })
+                  }
+                />
+
+                <Button
+                  className="w-full"
+                  onClick={handleCreateInvoice}
+                >
+                  Create Invoice
+                </Button>
+
+              </div>
+
+            </DialogContent>
+
+          </Dialog>
+
+        </CardHeader>
+
+        <CardContent>
+
+          <div className="w-full overflow-x-auto">
+
+            <Table className="min-w-[600px]">
+
+              <TableHeader>
+
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+
+              </TableHeader>
+
+              <TableBody>
+
+                {invoices.map((inv) => {
+
+                  const client = clients.find(
+                    (c) => c.id === inv.clientId
+                  );
+
+                  return (
+
+                    <TableRow key={inv.id}>
+
+                      <TableCell>{inv.invoiceNumber}</TableCell>
+                      <TableCell>{client?.name}</TableCell>
+                      <TableCell>${inv.amount}</TableCell>
+
+                      <TableCell>
+                        <Badge>{inv.status}</Badge>
+                      </TableCell>
+
+                    </TableRow>
+
+                  );
+                })}
+
+              </TableBody>
+
+            </Table>
+
+          </div>
+
+        </CardContent>
+
+      </Card>
+
     </div>
   );
 }
 
-/* ================= REUSABLE STAT CARD ================= */
+/* ================= STAT CARD ================= */
 
-function StatCard({title,value,icon}:{title:string,value:any,icon:any}) {
+function StatCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: any;
+  icon: any;
+}) {
+
   return (
+
     <Card>
+
       <CardHeader className="flex justify-between pb-2">
-        <CardTitle className="text-sm">{title}</CardTitle>
+
+        <CardTitle className="text-sm">
+          {title}
+        </CardTitle>
+
         {icon}
+
       </CardHeader>
+
       <CardContent>
-        <div className="font-semibold">{value}</div>
+
+        <div className="font-semibold text-lg">
+          {value}
+        </div>
+
       </CardContent>
+
     </Card>
+
   );
 }

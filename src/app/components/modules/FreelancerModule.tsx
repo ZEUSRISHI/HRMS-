@@ -68,9 +68,7 @@ export default function FreelancerModule() {
       ...form,
     };
 
-    editId
-      ? updateFreelancer(payload)
-      : addFreelancer(payload);
+    editId ? updateFreelancer(payload) : addFreelancer(payload);
 
     setTimeout(() => {
       setEditId(null);
@@ -83,6 +81,7 @@ export default function FreelancerModule() {
     if (!isAdmin) return;
 
     setEditId(f.id);
+
     setForm({
       name: f.name,
       email: f.email,
@@ -96,11 +95,15 @@ export default function FreelancerModule() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6">
+
+      {/* HEADER */}
+
       <div>
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-xl md:text-2xl font-semibold">
           Freelancer Management
         </h1>
+
         <p className="text-gray-500 text-sm">
           {isAdmin
             ? "Manage freelancer profiles and contracts"
@@ -108,44 +111,53 @@ export default function FreelancerModule() {
         </p>
       </div>
 
-      {/* 🔹 ADMIN FORM */}
+      {/* ================= ADMIN FORM ================= */}
+
       {isAdmin && (
-        <div className="bg-white p-5 rounded-xl shadow space-y-4">
+        <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-5">
+
           <h2 className="font-semibold text-lg">
             {editId ? "Edit Freelancer" : "Add New Freelancer"}
           </h2>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
             <Input
               label="Name *"
               value={form.name}
               onChange={(v) => handleChange("name", v)}
             />
+
             <Input
               label="Email *"
               value={form.email}
               onChange={(v) => handleChange("email", v)}
             />
+
             <Input
               label="Phone"
               value={form.phone}
               onChange={(v) => handleChange("phone", v)}
             />
+
             <Input
               label="Primary Skill *"
               value={form.skill}
               onChange={(v) => handleChange("skill", v)}
             />
+
             <Input
               label="Rate"
               value={form.rate}
               onChange={(v) => handleChange("rate", v)}
             />
+
             <DateInput
               label="Contract Start"
               value={form.contractStart}
               onChange={(v) => handleChange("contractStart", v)}
             />
+
             <DateInput
               label="Contract End"
               value={form.contractEnd}
@@ -156,8 +168,9 @@ export default function FreelancerModule() {
               <label className="text-sm text-gray-600">
                 Status
               </label>
+
               <select
-                className="border p-2 rounded"
+                className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                 value={form.status}
                 onChange={(e) =>
                   handleChange(
@@ -170,12 +183,13 @@ export default function FreelancerModule() {
                 <option value="expired">Expired</option>
               </select>
             </div>
+
           </div>
 
           <button
             onClick={saveFreelancer}
             disabled={loading}
-            className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded w-full"
+            className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
           >
             {loading
               ? "Saving..."
@@ -183,11 +197,14 @@ export default function FreelancerModule() {
               ? "Update Freelancer"
               : "Add Freelancer"}
           </button>
+
         </div>
       )}
 
-      {/* 🔹 LIST (Visible to Admin, Manager, HR) */}
-      <div className="bg-white p-5 rounded-xl shadow space-y-3">
+      {/* ================= FREELANCER LIST ================= */}
+
+      <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-4">
+
         <h2 className="font-semibold text-lg">
           Freelancer List
         </h2>
@@ -198,42 +215,70 @@ export default function FreelancerModule() {
           </p>
         )}
 
-        {freelancers.map((f) => (
-          <div
-            key={f.id}
-            className="flex justify-between items-center border rounded-lg p-3 hover:bg-gray-50"
-          >
-            <div>
-              <p className="font-semibold">{f.name}</p>
-              <p className="text-sm text-gray-500">
-                {f.skill} • {f.status}
-              </p>
-            </div>
+        <div className="space-y-3">
 
-            {isAdmin && (
-              <div className="space-x-4">
-                <button
-                  onClick={() => startEdit(f)}
-                  className="text-blue-600 hover:underline"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => deleteFreelancer(f.id)}
-                  className="text-red-600 hover:underline"
-                >
-                  Delete
-                </button>
+          {freelancers.map((f) => (
+            <div
+              key={f.id}
+              className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-lg p-4 hover:bg-gray-50 transition"
+            >
+
+              {/* INFO */}
+
+              <div className="space-y-1">
+
+                <p className="font-semibold">
+                  {f.name}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  {f.skill}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  {f.email}
+                </p>
+
+                <p className="text-sm text-gray-500">
+                  Status: {f.status}
+                </p>
+
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* ACTIONS */}
+
+              {isAdmin && (
+                <div className="flex gap-4 mt-3 md:mt-0">
+
+                  <button
+                    onClick={() => startEdit(f)}
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => deleteFreelancer(f.id)}
+                    className="text-red-600 hover:text-red-800 text-sm font-medium"
+                  >
+                    Delete
+                  </button>
+
+                </div>
+              )}
+
+            </div>
+          ))}
+
+        </div>
+
       </div>
+
     </div>
   );
 }
 
-/* 🔹 Reusable Inputs */
+/* ================= INPUT ================= */
 
 function Input({
   label,
@@ -246,17 +291,22 @@ function Input({
 }) {
   return (
     <div className="flex flex-col space-y-1">
+
       <label className="text-sm text-gray-600">
         {label}
       </label>
+
       <input
-        className="border p-2 rounded focus:ring-2 focus:ring-green-500 outline-none"
+        className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+
     </div>
   );
 }
+
+/* ================= DATE INPUT ================= */
 
 function DateInput({
   label,
@@ -269,15 +319,18 @@ function DateInput({
 }) {
   return (
     <div className="flex flex-col space-y-1">
+
       <label className="text-sm text-gray-600">
         {label}
       </label>
+
       <input
         type="date"
-        className="border p-2 rounded"
+        className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+
     </div>
   );
 }

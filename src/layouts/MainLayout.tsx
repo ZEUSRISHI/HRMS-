@@ -46,9 +46,10 @@ export default function MainLayout({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
+    <div className="min-h-screen w-full bg-gray-100 flex overflow-hidden">
 
-      {/* MOBILE OVERLAY */}
+      {/* ================= MOBILE OVERLAY ================= */}
+
       {mobileOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-40 lg:hidden"
@@ -128,11 +129,13 @@ export default function MainLayout({
                     {item.name}
                   </span>
                 )}
+
               </button>
             );
           })}
 
         </nav>
+
       </aside>
 
       {/* ================= MAIN AREA ================= */}
@@ -157,6 +160,7 @@ export default function MainLayout({
             <h1 className="text-lg font-semibold text-orange-500">
               Quibo Tech HRMS
             </h1>
+
           </div>
 
           {/* ================= USER MENU ================= */}
@@ -182,6 +186,7 @@ export default function MainLayout({
                 </p>
 
               </div>
+
             </button>
 
             {/* DROPDOWN */}
@@ -221,13 +226,14 @@ export default function MainLayout({
 
               </div>
             )}
+
           </div>
 
         </header>
 
         {/* ================= CONTENT ================= */}
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-100">
           {children}
         </main>
 

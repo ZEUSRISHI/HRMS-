@@ -49,56 +49,11 @@ type AttendanceRecord = {
 
 const ATT_KEY = "startup_attendance_records";
 const LEAVE_KEY = "startup_leave_records";
-const ATT_STATS_KEY = "startup_attendance_stats";
-
-/* ================= HELPERS ================= */
-
-// Monthly stats per user
-const calculateMonthlyStats = (userId: string, data: AttendanceRecord[]) => {
-  const monthly: Record<string, { present: number; total: number }> = {};
-
-  data.forEach((r) => {
-    if (r.userId !== userId) return;
-    const month = r.date.slice(0, 7);
-
-    if (!monthly[month]) monthly[month] = { present: 0, total: 0 };
-
-    monthly[month].total += 1;
-    if (r.checkIn) monthly[month].present += 1;
-  });
-
-  const result: Record<string, number> = {};
-
-  Object.entries(monthly).forEach(([m, v]) => {
-    result[m] = Math.round((v.present / v.total) * 100);
-  });
-
-  return result;
-};
-
-// Save overall + monthly stats for dashboards
-const updateAttendanceStats = (data: AttendanceRecord[]) => {
-  const stats: any = {};
-  const users = Array.from(new Set(data.map((r) => r.userId)));
-
-  users.forEach((userId) => {
-    const userRecords = data.filter((r) => r.userId === userId);
-    const present = userRecords.filter((r) => r.checkIn).length;
-    const total = userRecords.length || 1;
-
-    stats[userId] = {
-      overallPercentage: Math.round((present / total) * 100),
-      monthly: calculateMonthlyStats(userId, data),
-      lastUpdated: new Date().toISOString(),
-    };
-  });
-
-  localStorage.setItem(ATT_STATS_KEY, JSON.stringify(stats));
-};
 
 /* ================= COMPONENT ================= */
 
 export function AttendanceModule() {
+
   const { currentUser } = useAuth();
   const role = currentUser?.role;
 
@@ -110,8 +65,6 @@ export function AttendanceModule() {
   const [leaveData, setLeaveData] = useState<LeaveRecord[]>([]);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
-
-  /* ===== LEAVE FORM ===== */
 
   const [leaveType, setLeaveType] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
@@ -127,23 +80,18 @@ export function AttendanceModule() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  /* ===== LOAD ===== */
+  /* LOAD */
 
   useEffect(() => {
     const a = localStorage.getItem(ATT_KEY);
     const l = localStorage.getItem(LEAVE_KEY);
 
-    const att = a ? JSON.parse(a) : mockAttendance;
-    const lev = l ? JSON.parse(l) : mockLeaveRequests;
-
-    setAttendanceData(att);
-    setLeaveData(lev);
-    updateAttendanceStats(att);
+    setAttendanceData(a ? JSON.parse(a) : mockAttendance);
+    setLeaveData(l ? JSON.parse(l) : mockLeaveRequests);
   }, []);
 
   useEffect(() => {
     localStorage.setItem(ATT_KEY, JSON.stringify(attendanceData));
-    updateAttendanceStats(attendanceData);
   }, [attendanceData]);
 
   useEffect(() => {
@@ -158,7 +106,7 @@ export function AttendanceModule() {
     (a) => a.userId === currentUser.id && a.date === todayDate
   );
 
-  /* ===== CHECK IN ===== */
+  /* CHECK IN */
 
   const handleCheckIn = () => {
     if (todayAttendance) return;
@@ -178,9 +126,10 @@ export function AttendanceModule() {
     showToast("Checked in");
   };
 
-  /* ===== CHECK OUT ===== */
+  /* CHECK OUT */
 
   const handleCheckOut = () => {
+
     const now = format(new Date(), "HH:mm");
 
     const updated = attendanceData.map((r) =>
@@ -193,9 +142,10 @@ export function AttendanceModule() {
     showToast("Checked out");
   };
 
-  /* ===== SUBMIT LEAVE ===== */
+  /* SUBMIT LEAVE */
 
   const submitLeave = () => {
+
     const days =
       Math.ceil(
         (new Date(endDate).getTime() - new Date(startDate).getTime()) /
@@ -230,7 +180,7 @@ export function AttendanceModule() {
     setAttachmentUrl("");
   };
 
-  /* ===== APPROVAL FLOW ===== */
+  /* APPROVAL */
 
   const approveLeave = (id: string) => {
     setLeaveData((prev) =>
@@ -255,7 +205,7 @@ export function AttendanceModule() {
     showToast("Leave rejected");
   };
 
-  /* ===== FILTER ===== */
+  /* FILTER */
 
   const visibleLeaves = leaveData.filter((l) => {
     if (isAdmin) return true;
@@ -267,129 +217,209 @@ export function AttendanceModule() {
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10 max-w-7xl mx-auto">
 
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg">
+        <div className="fixed top-6 right-6 bg-black text-white px-5 py-3 rounded-xl shadow-lg z-50">
           {toast}
         </div>
       )}
 
       {/* ATTENDANCE */}
-      <Card>
+
+      <Card className="shadow-md rounded-xl">
+
         <CardHeader>
-          <CardTitle>Today's Attendance</CardTitle>
+          <CardTitle className="text-lg">
+            Today's Attendance
+          </CardTitle>
         </CardHeader>
-        <CardContent className="flex justify-between">
-          <div>
-            <p>In: {todayAttendance?.checkIn || checkInTime || "-"}</p>
-            <p>Out: {todayAttendance?.checkOut || "-"}</p>
+
+        <CardContent className="flex flex-col md:flex-row md:justify-between gap-6">
+
+          <div className="text-sm space-y-1">
+            <p>Check In : {todayAttendance?.checkIn || checkInTime || "-"}</p>
+            <p>Check Out : {todayAttendance?.checkOut || "-"}</p>
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex gap-3 flex-wrap">
+
             {!todayAttendance && (
-              <Button onClick={handleCheckIn}>
-                <LogIn size={16} /> Check In
+              <Button
+                onClick={handleCheckIn}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <LogIn size={16} className="mr-2" />
+                Check In
               </Button>
             )}
+
             {(todayAttendance || checkInTime) &&
               !todayAttendance?.checkOut && (
-                <Button onClick={handleCheckOut} variant="destructive">
-                  <LogOut size={16} /> Check Out
+                <Button
+                  onClick={handleCheckOut}
+                  className="bg-red-500 hover:bg-red-600 text-white"
+                >
+                  <LogOut size={16} className="mr-2" />
+                  Check Out
                 </Button>
               )}
+
           </div>
+
         </CardContent>
+
       </Card>
 
       {/* LEAVE REQUEST */}
+
       {!isAdmin && (
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button>Request Leave</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Submit Leave</DialogTitle>
-            </DialogHeader>
 
-            <div className="space-y-3">
-              <Select value={leaveType} onValueChange={setLeaveType}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Leave Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vacation">Vacation</SelectItem>
-                  <SelectItem value="sick">Sick</SelectItem>
-                  <SelectItem value="emergency">Emergency</SelectItem>
-                </SelectContent>
-              </Select>
+        <div className="mt-4">
 
-              <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                </SelectContent>
-              </Select>
+          <Dialog>
 
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-              <input placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-              <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-              <input placeholder="Emergency Contact" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} />
-              <input placeholder="Attachment URL" value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)} />
+            <DialogTrigger asChild>
+              <Button className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                Request Leave
+              </Button>
+            </DialogTrigger>
 
-              <Button onClick={submitLeave}>Submit Leave</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            <DialogContent className="max-w-lg">
+
+              <DialogHeader>
+                <DialogTitle>Submit Leave</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+
+                <Select value={leaveType} onValueChange={setLeaveType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Leave Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vacation">Vacation</SelectItem>
+                    <SelectItem value="sick">Sick</SelectItem>
+                    <SelectItem value="emergency">Emergency</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <input className="border p-2 rounded w-full" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <input className="border p-2 rounded w-full" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                <input className="border p-2 rounded w-full" placeholder="Reason" value={reason} onChange={(e) => setReason(e.target.value)} />
+                <Textarea placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <input className="border p-2 rounded w-full" placeholder="Emergency Contact" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} />
+                <input className="border p-2 rounded w-full" placeholder="Attachment URL" value={attachmentUrl} onChange={(e) => setAttachmentUrl(e.target.value)} />
+
+                <Button
+                  onClick={submitLeave}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  Submit Leave
+                </Button>
+
+              </div>
+
+            </DialogContent>
+
+          </Dialog>
+
+        </div>
+
       )}
 
       {/* LEAVE TABLE */}
-      <Card>
+
+      <Card className="shadow-md rounded-xl">
+
         <CardHeader>
           <CardTitle>Leave Requests</CardTitle>
         </CardHeader>
-        <CardContent>
-          <Table>
+
+        <CardContent className="overflow-x-auto">
+
+          <Table className="min-w-full">
+
             <TableBody>
+
               {visibleLeaves.map((l) => {
+
                 const user = mockUsers.find((u) => u.id === l.userId);
+
                 return (
-                  <TableRow key={l.id}>
+                  <TableRow key={l.id} className="border-b">
+
                     {(isManager || isHR || isAdmin) && (
-                      <TableCell>{user?.name}</TableCell>
+                      <TableCell className="font-medium">
+                        {user?.name}
+                      </TableCell>
                     )}
+
                     <TableCell>{l.type}</TableCell>
-                    <TableCell>{l.startDate} — {l.endDate}</TableCell>
+
                     <TableCell>
-                      <Badge>{l.status}</Badge>
+                      {l.startDate} — {l.endDate}
                     </TableCell>
+
+                    <TableCell>
+                      <Badge className="capitalize bg-slate-200 text-slate-800">
+                        {l.status.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+
                     <TableCell>{l.reason}</TableCell>
 
                     {(isManager || isHR || isAdmin) &&
                       l.status !== "approved" &&
                       l.status !== "rejected" && (
+
                         <TableCell>
+
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => approveLeave(l.id)}>
+
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                              onClick={() => approveLeave(l.id)}
+                            >
                               Approve
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => rejectLeave(l.id)}>
+
+                            <Button
+                              size="sm"
+                              className="bg-rose-600 hover:bg-rose-700 text-white"
+                              onClick={() => rejectLeave(l.id)}
+                            >
                               Reject
                             </Button>
+
                           </div>
+
                         </TableCell>
                       )}
+
                   </TableRow>
                 );
+
               })}
+
             </TableBody>
+
           </Table>
+
         </CardContent>
+
       </Card>
 
     </div>

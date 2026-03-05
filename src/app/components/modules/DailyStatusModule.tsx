@@ -25,15 +25,11 @@ export function DailyStatusModule() {
   const isAdmin = currentUser.role === "admin";
   const isManager = currentUser.role === "manager";
 
-  /* ================= TOAST ================= */
-
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
   };
-
-  /* ================= STATE ================= */
 
   const [statusList, setStatusList] = useState<any[]>([]);
 
@@ -43,7 +39,7 @@ export function DailyStatusModule() {
   const [nextPlan, setNextPlan] = useState("");
   const [commentText, setCommentText] = useState("");
 
-  /* ================= LOAD FROM LOCAL ================= */
+  /* LOAD */
 
   useEffect(() => {
     const saved = localStorage.getItem(STATUS_KEY);
@@ -52,16 +48,16 @@ export function DailyStatusModule() {
     }
   }, []);
 
-  /* ================= SAVE TO LOCAL ================= */
+  /* SAVE */
 
   useEffect(() => {
     localStorage.setItem(STATUS_KEY, JSON.stringify(statusList));
   }, [statusList]);
 
-  /* ================= FILTER BASED ON ROLE ================= */
+  /* FILTER */
 
   const statusUpdates = isAdmin
-    ? statusList // Admin sees all
+    ? statusList
     : statusList.filter((s) => s.userId === currentUser.id);
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
@@ -70,7 +66,7 @@ export function DailyStatusModule() {
     (s) => s.userId === currentUser.id && s.date === todayStr
   );
 
-  /* ================= SUBMIT STATUS ================= */
+  /* SUBMIT STATUS */
 
   const submitStatus = () => {
     if (!overallStatus || !achievements) {
@@ -104,7 +100,7 @@ export function DailyStatusModule() {
     showToast("Daily status submitted successfully");
   };
 
-  /* ================= ADD COMMENT ================= */
+  /* ADD COMMENT */
 
   const addComment = (statusId: string) => {
     if (!commentText) return;
@@ -131,18 +127,19 @@ export function DailyStatusModule() {
     showToast("Comment added");
   };
 
-  /* ================= UI ================= */
-
   return (
-    <div className="space-y-8 relative">
+    <div className="space-y-8 relative max-w-6xl mx-auto px-2 sm:px-4">
+
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50">
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
           {toast}
         </div>
       )}
 
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
         <div>
           <h1 className="text-xl font-semibold">Daily Status Updates</h1>
           <p className="text-sm text-muted-foreground">
@@ -150,25 +147,27 @@ export function DailyStatusModule() {
           </p>
         </div>
 
-        {/* ✅ Submit button now available for Admin also */}
         {!todayStatus && (
           <Dialog>
+
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2 w-full sm:w-auto">
                 <Plus className="h-4 w-4" />
                 Submit Status
               </Button>
             </DialogTrigger>
 
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+
               <DialogHeader>
                 <DialogTitle>
                   Status Update — {format(new Date(), "MMMM d, yyyy")}
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-6">
-                <div>
+              <div className="space-y-5">
+
+                <div className="space-y-1">
                   <Label>Overall Status *</Label>
                   <Textarea
                     rows={3}
@@ -177,7 +176,7 @@ export function DailyStatusModule() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <Label>Today’s Achievements *</Label>
                   <Textarea
                     rows={4}
@@ -186,7 +185,7 @@ export function DailyStatusModule() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <Label>Blockers</Label>
                   <Textarea
                     rows={3}
@@ -195,7 +194,7 @@ export function DailyStatusModule() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <Label>Next Day Plan</Label>
                   <Textarea
                     rows={3}
@@ -207,68 +206,93 @@ export function DailyStatusModule() {
                 <Button className="w-full" onClick={submitStatus}>
                   Submit Status
                 </Button>
+
               </div>
+
             </DialogContent>
+
           </Dialog>
         )}
+
       </div>
 
-      {/* TODAY STATUS (For Everyone Including Admin) */}
+      {/* TODAY STATUS */}
+
       {todayStatus && (
+
         <Card className="border-primary">
+
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
               <FileText className="h-5 w-5" />
               Today — {format(new Date(todayStatus.date), "MMMM d, yyyy")}
             </CardTitle>
           </CardHeader>
 
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 text-sm sm:text-base">
             <p>{todayStatus.status}</p>
             <p>{todayStatus.achievements}</p>
             {todayStatus.blockers && <p>{todayStatus.blockers}</p>}
             {todayStatus.nextDayPlan && <p>{todayStatus.nextDayPlan}</p>}
           </CardContent>
+
         </Card>
+
       )}
 
       {/* HISTORY */}
+
       <Card>
+
         <CardHeader>
           <CardTitle>Status History</CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-4">
+
           {statusUpdates.map((status) => {
+
             const user = mockUsers.find((u) => u.id === status.userId);
 
             return (
+
               <Card key={status.id} className="border">
-                <CardHeader className="flex justify-between">
+
+                <CardHeader className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+
                   <div>
                     {isAdmin && (
                       <p className="font-medium">{user?.name}</p>
                     )}
+
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(status.date), "MMM d, yyyy")}
                     </p>
                   </div>
-                  <Badge>{status.status}</Badge>
+
+                  <Badge className="w-fit">
+                    {status.status}
+                  </Badge>
+
                 </CardHeader>
 
-                <CardContent className="space-y-3">
+                <CardContent className="space-y-3 text-sm">
+
                   <p>{status.achievements}</p>
 
                   {(isManager || isAdmin) && (
+
                     <Dialog>
+
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="outline">
+                        <Button size="sm" variant="outline" className="w-full sm:w-auto">
                           <MessageCircle className="h-4 w-4 mr-1" />
                           Comment
                         </Button>
                       </DialogTrigger>
 
-                      <DialogContent>
+                      <DialogContent className="w-[95vw] max-w-md">
+
                         <DialogHeader>
                           <DialogTitle>Add Comment</DialogTitle>
                         </DialogHeader>
@@ -281,35 +305,59 @@ export function DailyStatusModule() {
                         <Button onClick={() => addComment(status.id)}>
                           Submit
                         </Button>
+
                       </DialogContent>
+
                     </Dialog>
+
                   )}
 
-                  {/* Show comments */}
                   {status.managerComments?.length > 0 && (
+
                     <div className="space-y-2 pt-2 border-t">
+
                       {status.managerComments.map((c: any) => {
+
                         const manager = mockUsers.find(
                           (u) => u.id === c.managerId
                         );
+
                         return (
-                          <div key={c.id} className="text-sm bg-muted p-2 rounded">
+
+                          <div
+                            key={c.id}
+                            className="text-sm bg-muted p-2 rounded break-words"
+                          >
+
                             <p className="font-medium">{manager?.name}</p>
                             <p>{c.comment}</p>
+
                             <p className="text-xs text-muted-foreground">
                               {format(new Date(c.timestamp), "MMM d, yyyy h:mm a")}
                             </p>
+
                           </div>
+
                         );
+
                       })}
+
                     </div>
+
                   )}
+
                 </CardContent>
+
               </Card>
+
             );
+
           })}
+
         </CardContent>
+
       </Card>
+
     </div>
   );
 }

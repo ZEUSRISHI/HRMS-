@@ -26,10 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Clock, Plus, Trash, Pencil } from "lucide-react";
+
+import { Plus, Trash, Pencil, Clock } from "lucide-react";
+
 import { useAuth } from "../../contexts/AuthContext";
-import { mockProjects } from "../../data/mockData";
 import { format, subDays } from "date-fns";
+
 import {
   ResponsiveContainer,
   BarChart,
@@ -108,8 +110,6 @@ export function TimeTracking() {
               hours: parseFloat(form.hours),
               category: form.category as Category,
               description: form.description,
-              projectId:
-                form.projectId !== "none" ? form.projectId : undefined,
             }
           : e
       );
@@ -124,8 +124,6 @@ export function TimeTracking() {
         hours: parseFloat(form.hours),
         category: form.category as Category,
         description: form.description,
-        projectId:
-          form.projectId !== "none" ? form.projectId : undefined,
         createdAt: new Date().toISOString(),
       };
 
@@ -158,10 +156,7 @@ export function TimeTracking() {
 
   /* ================= STATS ================= */
 
-  const totalHours = timeEntries.reduce(
-    (sum, e) => sum + e.hours,
-    0
-  );
+  const totalHours = timeEntries.reduce((sum, e) => sum + e.hours, 0);
 
   const categoryData = useMemo(() => {
     const map: Record<Category, number> = {
@@ -203,15 +198,17 @@ export function TimeTracking() {
   /* ================= UI ================= */
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
 
       {/* HEADER */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Time Tracking Dashboard
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Clock className="h-6 w-6 text-primary" />
+            Time Tracking
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Monitor productivity and logged hours
           </p>
         </div>
@@ -225,7 +222,8 @@ export function TimeTracking() {
               </Button>
             </DialogTrigger>
 
-            <DialogContent>
+            <DialogContent className="max-w-md">
+
               <DialogHeader>
                 <DialogTitle>
                   {editingId ? "Edit Entry" : "Log Work Hours"}
@@ -233,14 +231,17 @@ export function TimeTracking() {
               </DialogHeader>
 
               <div className="space-y-4">
-                <Input type="date"
+
+                <Input
+                  type="date"
                   value={form.date}
                   onChange={(e) =>
                     setForm({ ...form, date: e.target.value })
                   }
                 />
 
-                <Input type="number"
+                <Input
+                  type="number"
                   placeholder="Hours"
                   value={form.hours}
                   onChange={(e) =>
@@ -248,13 +249,16 @@ export function TimeTracking() {
                   }
                 />
 
-                <Select value={form.category}
+                <Select
+                  value={form.category}
                   onValueChange={(v: Category) =>
                     setForm({ ...form, category: v })
-                  }>
+                  }
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Category" />
                   </SelectTrigger>
+
                   <SelectContent>
                     <SelectItem value="project">Project</SelectItem>
                     <SelectItem value="meeting">Meeting</SelectItem>
@@ -283,92 +287,125 @@ export function TimeTracking() {
         )}
       </div>
 
-      {/* SUMMARY CARD */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Total Logged Hours</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-3xl font-bold text-primary">
-            {totalHours} hrs
-          </div>
-        </CardContent>
-      </Card>
+      {/* SUMMARY */}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">
+              Total Hours
+            </CardTitle>
+          </CardHeader>
+
+          <CardContent>
+            <div className="text-3xl font-bold text-primary">
+              {totalHours} hrs
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
 
       {/* TABLE */}
+
       <Card>
+
         <CardHeader>
           <CardTitle>Time Entries</CardTitle>
         </CardHeader>
 
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Description</TableHead>
-                {!isAdmin && <TableHead>Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
 
-            <TableBody>
-              {timeEntries.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell>{e.date}</TableCell>
-                  <TableCell>{e.hours}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {e.category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{e.description}</TableCell>
+          <div className="overflow-x-auto">
 
-                  {!isAdmin && (
-                    <TableCell className="flex gap-2">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingId(e.id);
-                          setForm({
-                            date: e.date,
-                            hours: e.hours.toString(),
-                            category: e.category,
-                            description: e.description,
-                            projectId: "none",
-                          });
-                          setOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+            <Table>
 
-                      <Button
-                        size="icon"
-                        variant="destructive"
-                        onClick={() => handleDelete(e.id)}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Hours</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  {!isAdmin && <TableHead>Actions</TableHead>}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+
+              <TableBody>
+                {timeEntries.map((e) => (
+                  <TableRow key={e.id}>
+
+                    <TableCell>{e.date}</TableCell>
+
+                    <TableCell>{e.hours}</TableCell>
+
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {e.category}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell className="max-w-xs truncate">
+                      {e.description}
+                    </TableCell>
+
+                    {!isAdmin && (
+                      <TableCell className="flex gap-2">
+
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingId(e.id);
+                            setForm({
+                              date: e.date,
+                              hours: e.hours.toString(),
+                              category: e.category,
+                              description: e.description,
+                              projectId: "none",
+                            });
+                            setOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={() => handleDelete(e.id)}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+
+                      </TableCell>
+                    )}
+
+                  </TableRow>
+                ))}
+              </TableBody>
+
+            </Table>
+
+          </div>
+
         </CardContent>
       </Card>
 
       {/* CHARTS */}
-      <div className="grid md:grid-cols-2 gap-6">
+
+      <div className="grid gap-6 md:grid-cols-2">
+
         <Card>
+
           <CardHeader>
             <CardTitle>Category Breakdown</CardTitle>
           </CardHeader>
+
           <CardContent className="h-64">
+
             <ResponsiveContainer width="100%" height="100%">
+
               <BarChart data={categoryData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
@@ -376,27 +413,43 @@ export function TimeTracking() {
                 <Tooltip />
                 <Bar dataKey="hours" fill="#6366f1" />
               </BarChart>
+
             </ResponsiveContainer>
+
           </CardContent>
+
         </Card>
 
         <Card>
+
           <CardHeader>
             <CardTitle>Last 7 Days Trend</CardTitle>
           </CardHeader>
+
           <CardContent className="h-64">
+
             <ResponsiveContainer width="100%" height="100%">
+
               <LineChart data={dailyTrend}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip />
-                <Line type="monotone" dataKey="hours" stroke="#16a34a" />
+                <Line
+                  type="monotone"
+                  dataKey="hours"
+                  stroke="#16a34a"
+                />
               </LineChart>
+
             </ResponsiveContainer>
+
           </CardContent>
+
         </Card>
+
       </div>
+
     </div>
   );
 }
