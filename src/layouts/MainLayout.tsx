@@ -1,10 +1,18 @@
 import { ReactNode, useState } from "react";
-import { Menu, User, LogOut, Settings, X } from "lucide-react";
+import {
+  Menu,
+  User,
+  LogOut,
+  Settings,
+  X,
+  ChevronLeft,
+  LucideIcon,
+} from "lucide-react";
+
 import { useAuth, Role } from "../app/contexts/AuthContext";
 import { ModuleType } from "../app/App";
-import { LucideIcon } from "lucide-react";
 
-/* MENU ITEM TYPE */
+/* ================= MENU TYPE ================= */
 
 interface MenuItem {
   id: ModuleType;
@@ -13,7 +21,7 @@ interface MenuItem {
   roles: Role[];
 }
 
-/* PROPS */
+/* ================= PROPS ================= */
 
 interface Props {
   children: ReactNode;
@@ -23,56 +31,76 @@ interface Props {
   menuItems: MenuItem[];
 }
 
+/* ================= COMPONENT ================= */
+
 export default function MainLayout({
   children,
   active,
   setActive,
-  role,
   menuItems,
 }: Props) {
   const { currentUser, logout } = useAuth();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
 
       {/* MOBILE OVERLAY */}
-      {sidebarOpen && (
+      {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 md:hidden"
-          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
         />
       )}
 
-      {/* SIDEBAR */}
+      {/* ================= SIDEBAR ================= */}
 
       <aside
         className={`
-        fixed md:static z-40
-        top-0 left-0 h-full
-        w-64 bg-white border-r
-        transform transition-transform
-        ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
-        md:translate-x-0
+        fixed lg:static top-0 left-0 z-50 h-full
+        bg-white border-r shadow-sm
+        transition-all duration-300
+        ${collapsed ? "w-20" : "w-64"}
+        ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}
       >
+        {/* HEADER */}
+
         <div className="flex items-center justify-between p-4 border-b">
 
-          <h2 className="font-bold text-orange-500">
-            Quibo Tech HRMS
-          </h2>
+          {!collapsed && (
+            <h2 className="font-bold text-orange-500 text-lg">
+              Quibo Tech HRMS
+            </h2>
+          )}
+
+          {/* DESKTOP COLLAPSE BUTTON */}
 
           <button
-            className="md:hidden"
-            onClick={() => setSidebarOpen(false)}
+            className="hidden lg:block"
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            <ChevronLeft
+              className={`transition ${collapsed ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {/* MOBILE CLOSE */}
+
+          <button
+            className="lg:hidden"
+            onClick={() => setMobileOpen(false)}
           >
             <X />
           </button>
         </div>
 
-        <nav className="p-4 space-y-2">
+        {/* MENU */}
+
+        <nav className="p-3 space-y-2">
 
           {menuItems.map((item) => {
 
@@ -83,18 +111,23 @@ export default function MainLayout({
                 key={item.id}
                 onClick={() => {
                   setActive(item.id);
-                  setSidebarOpen(false);
+                  setMobileOpen(false);
                 }}
                 className={`
-                  w-full flex items-center gap-3 px-3 py-2 rounded-lg
-                  transition text-left
-                  ${active === item.id
-                    ? "bg-gray-200"
+                flex items-center gap-3 w-full p-3 rounded-lg
+                transition text-left
+                ${active === item.id
+                    ? "bg-orange-100 text-orange-600"
                     : "hover:bg-gray-100"}
-                `}
+              `}
               >
-                <Icon size={18} />
-                {item.name}
+                <Icon size={20} />
+
+                {!collapsed && (
+                  <span className="text-sm font-medium">
+                    {item.name}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -102,11 +135,11 @@ export default function MainLayout({
         </nav>
       </aside>
 
-      {/* MAIN AREA */}
+      {/* ================= MAIN AREA ================= */}
 
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 w-0">
 
-        {/* HEADER */}
+        {/* ================= HEADER ================= */}
 
         <header className="h-16 bg-white border-b flex items-center justify-between px-4">
 
@@ -115,8 +148,8 @@ export default function MainLayout({
             {/* MOBILE MENU BUTTON */}
 
             <button
-              className="md:hidden"
-              onClick={() => setSidebarOpen(true)}
+              className="lg:hidden"
+              onClick={() => setMobileOpen(true)}
             >
               <Menu />
             </button>
@@ -126,7 +159,7 @@ export default function MainLayout({
             </h1>
           </div>
 
-          {/* USER MENU */}
+          {/* ================= USER MENU ================= */}
 
           <div className="relative">
 
@@ -134,7 +167,6 @@ export default function MainLayout({
               onClick={() => setMenuOpen(!menuOpen)}
               className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-lg"
             >
-
               <div className="w-8 h-8 rounded-full bg-orange-500 text-white flex items-center justify-center">
                 {currentUser?.name?.charAt(0)}
               </div>
@@ -193,13 +225,14 @@ export default function MainLayout({
 
         </header>
 
-        {/* CONTENT */}
+        {/* ================= CONTENT ================= */}
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {children}
         </main>
 
       </div>
+
     </div>
   );
 }
