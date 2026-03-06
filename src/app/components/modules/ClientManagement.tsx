@@ -36,6 +36,7 @@ interface Client {
   email: string;
   phone: string;
   address: string;
+  description?: string;
   status: "active" | "inactive";
   totalProjects: number;
   outstandingBalance: number;
@@ -70,6 +71,7 @@ export function ClientManagement() {
     email: "",
     phone: "",
     address: "",
+    description: "",
   });
 
   const [invoiceForm, setInvoiceForm] = useState({
@@ -120,6 +122,7 @@ export function ClientManagement() {
 
     const updated = [...clients, newClient];
     saveClients(updated);
+
     showMessage("✅ Client added successfully");
 
     setClientForm({
@@ -128,6 +131,7 @@ export function ClientManagement() {
       email: "",
       phone: "",
       address: "",
+      description: "",
     });
   };
 
@@ -218,11 +222,9 @@ export function ClientManagement() {
         <Dialog>
 
           <DialogTrigger asChild>
-
             <Button className="gap-2 w-full md:w-auto">
               <Plus className="h-4 w-4" /> Add Client
             </Button>
-
           </DialogTrigger>
 
           <DialogContent className="sm:max-w-lg">
@@ -284,6 +286,19 @@ export function ClientManagement() {
                   setClientForm({
                     ...clientForm,
                     address: e.target.value,
+                  })
+                }
+              />
+
+              {/* NEW OPTIONAL DESCRIPTION FIELD */}
+
+              <Textarea
+                placeholder="Description (Optional)"
+                value={clientForm.description}
+                onChange={(e) =>
+                  setClientForm({
+                    ...clientForm,
+                    description: e.target.value,
                   })
                 }
               />

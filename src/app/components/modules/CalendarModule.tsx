@@ -23,9 +23,7 @@ import { Plus, Pencil, Trash } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "../../contexts/AuthContext";
 
-/* ================= TYPES ================= */
-
-type EventType = "meeting" | "holiday" | "event" | "personal";
+type EventType = string;
 
 type RoleType =
   | "admin"
@@ -48,8 +46,6 @@ interface CalendarEvent {
   createdAt: string;
 }
 
-/* ================= COMPONENT ================= */
-
 export function CalendarModule() {
 
   const { currentUser } = useAuth();
@@ -67,7 +63,7 @@ export function CalendarModule() {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    type: "meeting" as EventType,
+    type: "",
     date: "",
     startTime: "",
     endTime: "",
@@ -91,15 +87,15 @@ export function CalendarModule() {
       let allEvents: CalendarEvent[] = [];
 
       allKeys.forEach((key) => {
+
         const data = localStorage.getItem(key);
 
         if (data) {
           try {
             allEvents.push(...JSON.parse(data));
-          } catch {
-            console.warn("Invalid event data");
-          }
+          } catch {}
         }
+
       });
 
       setEvents(allEvents);
@@ -117,11 +113,13 @@ export function CalendarModule() {
   const validate = () => {
 
     if (!form.title) return "Title required";
+    if (!form.type) return "Event type required";
     if (!form.date) return "Date required";
     if (!form.startTime) return "Start time required";
     if (!form.endTime) return "End time required";
 
     return "";
+
   };
 
   /* ================= CREATE / UPDATE ================= */
@@ -156,6 +154,7 @@ export function CalendarModule() {
 
     resetForm();
     setTimeout(() => setMsg(""), 3000);
+
   };
 
   /* ================= DELETE ================= */
@@ -165,6 +164,7 @@ export function CalendarModule() {
     if (!window.confirm("Delete event?")) return;
 
     persist(events.filter((e) => e.id !== id));
+
   };
 
   /* ================= EDIT ================= */
@@ -186,6 +186,7 @@ export function CalendarModule() {
     });
 
     setOpen(true);
+
   };
 
   const resetForm = () => {
@@ -196,7 +197,7 @@ export function CalendarModule() {
     setForm({
       title: "",
       description: "",
-      type: "meeting",
+      type: "",
       date: "",
       startTime: "",
       endTime: "",
@@ -205,6 +206,7 @@ export function CalendarModule() {
     });
 
     setOpen(false);
+
   };
 
   /* ================= FILTER ================= */
@@ -225,46 +227,49 @@ export function CalendarModule() {
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  /* ================= EVENT COLORS ================= */
+  /* ================= COLORS ================= */
 
-  const bgColor = (type: EventType) => {
+  const bgColor = (type: string) => {
 
-    if (type === "meeting")
-      return "bg-blue-50 border-blue-200";
+    const t = type.toLowerCase();
 
-    if (type === "holiday")
-      return "bg-red-50 border-red-200";
-
-    if (type === "event")
-      return "bg-green-50 border-green-200";
+    if (t.includes("meeting")) return "bg-blue-50 border-blue-200";
+    if (t.includes("holiday")) return "bg-red-50 border-red-200";
+    if (t.includes("training")) return "bg-yellow-50 border-yellow-200";
+    if (t.includes("event")) return "bg-green-50 border-green-200";
 
     return "bg-purple-50 border-purple-200";
+
   };
 
-  const colorBar = (type: EventType) => {
+  const colorBar = (type: string) => {
 
-    if (type === "meeting") return "bg-blue-500";
-    if (type === "holiday") return "bg-red-500";
-    if (type === "event") return "bg-green-500";
+    const t = type.toLowerCase();
+
+    if (t.includes("meeting")) return "bg-blue-500";
+    if (t.includes("holiday")) return "bg-red-500";
+    if (t.includes("training")) return "bg-yellow-500";
+    if (t.includes("event")) return "bg-green-500";
 
     return "bg-purple-500";
+
   };
 
   /* ================= UI ================= */
 
   return (
 
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-6">
 
       {msg && (
-        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm shadow">
+        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-sm">
           {msg}
         </div>
       )}
 
       {/* HEADER */}
 
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
         <div>
           <h1 className="font-semibold text-lg">Calendar</h1>
@@ -279,7 +284,7 @@ export function CalendarModule() {
 
             <DialogTrigger asChild>
 
-              <Button className="gap-2 w-full md:w-auto">
+              <Button className="w-full sm:w-auto flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Create Event
               </Button>
@@ -288,7 +293,7 @@ export function CalendarModule() {
 
             {/* FORM */}
 
-            <DialogContent className="max-w-xl rounded-2xl">
+            <DialogContent className="w-[95%] max-w-md rounded-xl p-5">
 
               <DialogHeader>
                 <DialogTitle>
@@ -296,9 +301,9 @@ export function CalendarModule() {
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-2">
 
-                <div>
+                <div className="space-y-1">
                   <Label>Title *</Label>
                   <Input
                     value={form.title}
@@ -308,7 +313,7 @@ export function CalendarModule() {
                   />
                 </div>
 
-                <div>
+                <div className="space-y-1">
                   <Label>Description</Label>
                   <Textarea
                     rows={3}
@@ -319,51 +324,19 @@ export function CalendarModule() {
                   />
                 </div>
 
-                {/* TYPE */}
-
-                <div>
-                  <Label>Event Type</Label>
-
-                  <Select
+                <div className="space-y-1">
+                  <Label>Event Type *</Label>
+                  <Input
+                    placeholder="Meeting / Deployment / Training"
                     value={form.type}
-                    onValueChange={(v: EventType) =>
-                      setForm({ ...form, type: v })
+                    onChange={(e) =>
+                      setForm({ ...form, type: e.target.value })
                     }
-                  >
-
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-
-                    <SelectContent>
-
-                      <SelectItem value="meeting">
-                        Meeting
-                      </SelectItem>
-
-                      <SelectItem value="holiday">
-                        Holiday
-                      </SelectItem>
-
-                      <SelectItem value="event">
-                        Company Event
-                      </SelectItem>
-
-                      <SelectItem value="personal">
-                        Personal
-                      </SelectItem>
-
-                    </SelectContent>
-
-                  </Select>
-
+                  />
                 </div>
 
-                {/* ROLE */}
-
-                <div>
-
-                  <Label>Assign To *</Label>
+                <div className="space-y-1">
+                  <Label>Assign To</Label>
 
                   <Select
                     value={form.assignedTo}
@@ -377,37 +350,19 @@ export function CalendarModule() {
                     </SelectTrigger>
 
                     <SelectContent>
-
-                      <SelectItem value="all">
-                        Entire Organization
-                      </SelectItem>
-
-                      <SelectItem value="admin">
-                        Admin
-                      </SelectItem>
-
-                      <SelectItem value="manager">
-                        Manager
-                      </SelectItem>
-
-                      <SelectItem value="employee">
-                        Employee
-                      </SelectItem>
-
-                      <SelectItem value="hr">
-                        HR
-                      </SelectItem>
-
+                      <SelectItem value="all">Entire Organization</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="manager">Manager</SelectItem>
+                      <SelectItem value="employee">Employee</SelectItem>
+                      <SelectItem value="hr">HR</SelectItem>
                     </SelectContent>
 
                   </Select>
 
                 </div>
 
-                {/* DATE */}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
+                <div className="space-y-1">
+                  <Label>Date *</Label>
                   <Input
                     type="date"
                     value={form.date}
@@ -415,37 +370,46 @@ export function CalendarModule() {
                       setForm({ ...form, date: e.target.value })
                     }
                   />
+                </div>
 
-                  <Input
-                    type="time"
-                    value={form.startTime}
-                    onChange={(e) =>
-                      setForm({ ...form, startTime: e.target.value })
-                    }
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                  <div className="space-y-1">
+                    <Label>Start Time</Label>
+                    <Input
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) =>
+                        setForm({ ...form, startTime: e.target.value })
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>End Time</Label>
+                    <Input
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) =>
+                        setForm({ ...form, endTime: e.target.value })
+                      }
+                    />
+                  </div>
 
                 </div>
 
-                <Input
-                  type="time"
-                  value={form.endTime}
-                  onChange={(e) =>
-                    setForm({ ...form, endTime: e.target.value })
-                  }
-                />
+                <div className="space-y-1">
+                  <Label>Location</Label>
+                  <Input
+                    placeholder="Conference room / Zoom"
+                    value={form.location}
+                    onChange={(e) =>
+                      setForm({ ...form, location: e.target.value })
+                    }
+                  />
+                </div>
 
-                <Input
-                  placeholder="Location"
-                  value={form.location}
-                  onChange={(e) =>
-                    setForm({ ...form, location: e.target.value })
-                  }
-                />
-
-                <Button
-                  className="w-full"
-                  onClick={handleSubmit}
-                >
+                <Button className="w-full mt-2" onClick={handleSubmit}>
                   {isEdit ? "Update Event" : "Create Event"}
                 </Button>
 
@@ -461,7 +425,7 @@ export function CalendarModule() {
 
       {/* EVENTS */}
 
-      <Card className="rounded-2xl shadow-sm">
+      <Card className="rounded-xl shadow-sm">
 
         <CardHeader>
           <CardTitle>Events</CardTitle>
@@ -479,46 +443,39 @@ export function CalendarModule() {
 
             <Card
               key={event.id}
-              className={`rounded-xl border ${bgColor(event.type)}`}
+              className={`rounded-lg border ${bgColor(event.type)}`}
             >
 
-              <CardContent className="flex flex-col md:flex-row md:items-center gap-4 py-4">
+              <CardContent className="flex gap-3 py-4">
 
                 <div
-                  className={`w-1 h-full rounded ${colorBar(event.type)}`}
+                  className={`w-1 rounded ${colorBar(event.type)}`}
                 />
 
-                <div className="flex-1">
+                <div className="flex-1 space-y-1">
 
-                  <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:justify-between gap-1">
 
-                    <h4 className="font-medium">
+                    <h4 className="font-medium text-sm sm:text-base">
                       {event.title}
                     </h4>
 
-                    <Badge variant="outline">
-
+                    <Badge variant="outline" className="w-fit">
                       {event.assignedTo === "all"
                         ? "Organization"
                         : event.assignedTo.toUpperCase()}
-
                     </Badge>
 
                   </div>
 
-                  <p className="text-sm text-muted-foreground">
-
+                  <p className="text-xs sm:text-sm text-muted-foreground">
                     {event.description}
-
                   </p>
 
-                  <div className="text-xs mt-2 text-muted-foreground flex flex-wrap gap-4">
+                  <div className="text-xs text-muted-foreground flex flex-wrap gap-3">
 
                     <span>
-                      {format(
-                        new Date(event.date),
-                        "MMM d, yyyy"
-                      )}
+                      {format(new Date(event.date), "MMM d, yyyy")}
                     </span>
 
                     <span>
@@ -535,7 +492,7 @@ export function CalendarModule() {
 
                 {isAdmin && (
 
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
 
                     <Button
                       size="icon"
@@ -568,5 +525,7 @@ export function CalendarModule() {
       </Card>
 
     </div>
+
   );
+
 }
