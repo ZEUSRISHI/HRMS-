@@ -1,7 +1,8 @@
+"use client";
+
 import { useEffect, useState } from "react";
 
 /* ================= TYPES ================= */
-
 type LeavePolicy = {
   workingHoursPerDay: string;
   workingDaysPerWeek: string;
@@ -25,7 +26,6 @@ type LeavePolicy = {
 const KEY = "hr_attendance_leave_policy";
 
 /* ================= COMPONENT ================= */
-
 export default function AttendanceLeaveModule() {
   const empty: LeavePolicy = {
     workingHoursPerDay: "",
@@ -50,17 +50,19 @@ export default function AttendanceLeaveModule() {
   const [policy, setPolicy] = useState<LeavePolicy>(empty);
   const [saved, setSaved] = useState(false);
 
-  /* ================= LOAD ================= */
-
+  /* ================= LOAD FROM LOCAL STORAGE ================= */
   useEffect(() => {
     const stored = localStorage.getItem(KEY);
     if (stored) setPolicy(JSON.parse(stored));
   }, []);
 
   /* ================= HELPERS ================= */
-
   const setField = (k: keyof LeavePolicy, v: string) =>
-    setPolicy(p => ({ ...p, [k]: v }));
+    setPolicy(p => {
+      const updated = { ...p, [k]: v };
+      localStorage.setItem(KEY, JSON.stringify(updated)); // auto-save on change
+      return updated;
+    });
 
   const savePolicy = () => {
     localStorage.setItem(KEY, JSON.stringify(policy));
@@ -75,34 +77,27 @@ export default function AttendanceLeaveModule() {
   };
 
   /* ================= UI ================= */
-
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
 
       {/* HEADER */}
-
       <div>
-        <h2 className="text-2xl font-bold">
-          Attendance & Leave Policy (Startup HR)
-        </h2>
+        <h2 className="text-2xl font-bold">Attendance & Leave Policy (Startup HR)</h2>
         <p className="text-sm text-gray-500">
           Define attendance rules and leave structure for your organization
         </p>
       </div>
 
       {/* WORK SCHEDULE */}
-
       <div className="border rounded-xl p-4 bg-white shadow space-y-4">
         <h3 className="font-semibold text-lg">Work Schedule</h3>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <input
             placeholder="Working Hours Per Day"
             value={policy.workingHoursPerDay}
             onChange={e => setField("workingHoursPerDay", e.target.value)}
             className="border p-2 rounded w-full"
           />
-
           <input
             placeholder="Working Days Per Week"
             value={policy.workingDaysPerWeek}
@@ -113,25 +108,21 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* LEAVE BALANCE */}
-
       <div className="border rounded-xl p-4 bg-white shadow space-y-4">
         <h3 className="font-semibold text-lg">Annual Leave Allocation</h3>
-
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <input
             placeholder="Casual Leave / Year"
             value={policy.casualLeave}
             onChange={e => setField("casualLeave", e.target.value)}
             className="border p-2 rounded w-full"
           />
-
           <input
             placeholder="Sick Leave / Year"
             value={policy.sickLeave}
             onChange={e => setField("sickLeave", e.target.value)}
             className="border p-2 rounded w-full"
           />
-
           <input
             placeholder="Earned Leave / Year"
             value={policy.earnedLeave}
@@ -142,11 +133,9 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* CARRY FORWARD */}
-
       <div className="border rounded-xl p-4 bg-white shadow space-y-4">
         <h3 className="font-semibold text-lg">Carry Forward Rules</h3>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <select
             value={policy.carryForward}
             onChange={e => setField("carryForward", e.target.value)}
@@ -156,7 +145,6 @@ export default function AttendanceLeaveModule() {
             <option>Yes</option>
             <option>No</option>
           </select>
-
           <input
             placeholder="Max Carry Forward Days"
             value={policy.maxCarryForward}
@@ -167,18 +155,15 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* ATTENDANCE RULES */}
-
       <div className="border rounded-xl p-4 bg-white shadow space-y-4">
         <h3 className="font-semibold text-lg">Attendance Rules</h3>
-
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <input
             placeholder="Late Mark After (minutes)"
             value={policy.lateMarkAfterMinutes}
             onChange={e => setField("lateMarkAfterMinutes", e.target.value)}
             className="border p-2 rounded w-full"
           />
-
           <input
             placeholder="Half Day If Less Than (hours worked)"
             value={policy.halfDayAfterHours}
@@ -189,17 +174,14 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* WORK POLICIES */}
-
       <div className="border rounded-xl p-4 bg-white shadow space-y-4">
         <h3 className="font-semibold text-lg">Work & Approval Policies</h3>
-
         <textarea
           placeholder="Leave Approval Flow (example: Employee → Manager → HR)"
           value={policy.approvalFlow}
           onChange={e => setField("approvalFlow", e.target.value)}
           className="border p-2 rounded w-full min-h-[100px]"
         />
-
         <textarea
           placeholder="Remote / Hybrid Work Policy"
           value={policy.remoteWorkPolicy}
@@ -209,10 +191,8 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* NOTES */}
-
       <div className="border rounded-xl p-4 bg-white shadow">
         <h3 className="font-semibold text-lg mb-2">Additional HR Notes</h3>
-
         <textarea
           placeholder="Startup specific attendance rules, probation rules, penalties, etc."
           value={policy.notes}
@@ -222,29 +202,25 @@ export default function AttendanceLeaveModule() {
       </div>
 
       {/* ACTIONS */}
-
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <button
           onClick={savePolicy}
           className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
         >
           Save Policy
         </button>
-
         <button
           onClick={resetPolicy}
           className="bg-gray-300 px-6 py-2 rounded hover:bg-gray-400"
         >
           Reset
         </button>
-
         {saved && (
-          <span className="text-green-600 font-medium self-center">
+          <span className="text-green-600 font-medium self-center mt-2 sm:mt-0">
             Saved ✓
           </span>
         )}
       </div>
-
     </div>
   );
 }

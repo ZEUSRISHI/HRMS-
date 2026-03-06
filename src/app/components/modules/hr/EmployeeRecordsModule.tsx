@@ -5,7 +5,6 @@ import * as XLSX from "xlsx";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 /* ================= TYPES ================= */
-
 type Employee = {
   id: string;
   empCode: string;
@@ -35,7 +34,6 @@ type Employee = {
 const KEY = "hr_employee_records";
 
 /* ================= COMPONENT ================= */
-
 export default function EmployeeRecordsModule() {
   const { currentUser } = useAuth();
 
@@ -68,7 +66,6 @@ export default function EmployeeRecordsModule() {
   const [form, setForm] = useState<Employee>(emptyForm);
 
   /* ================= LOAD / SAVE ================= */
-
   useEffect(() => {
     const saved = localStorage.getItem(KEY);
     if (saved) {
@@ -85,7 +82,6 @@ export default function EmployeeRecordsModule() {
   }, [list]);
 
   /* ================= HELPERS ================= */
-
   const updateField = (k: keyof Employee, v: string) => {
     setForm(prev => ({ ...prev, [k]: v }));
   };
@@ -115,7 +111,6 @@ export default function EmployeeRecordsModule() {
   };
 
   /* ================= FILE HANDLERS ================= */
-
   const handleResume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -129,7 +124,6 @@ export default function EmployeeRecordsModule() {
   };
 
   /* ================= SAVE ================= */
-
   const saveEmployee = () => {
     if (!canEdit) {
       alert("No permission");
@@ -170,7 +164,6 @@ export default function EmployeeRecordsModule() {
   };
 
   /* ================= OFFER LETTER ================= */
-
   const downloadOfferLetter = (emp: Employee) => {
     const text = `
 OFFER LETTER
@@ -197,7 +190,6 @@ HR Department
   };
 
   /* ================= EXPORT ================= */
-
   const exportExcel = () => {
     const ws = XLSX.utils.json_to_sheet(list);
     const wb = XLSX.utils.book_new();
@@ -206,62 +198,52 @@ HR Department
   };
 
   /* ================= UI ================= */
-
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
 
-      <h2 className="text-2xl font-bold">
+      <h2 className="text-2xl font-bold text-center md:text-left">
         Employee Records — HR Module
       </h2>
 
       {/* ===== FORM ===== */}
-
       {canEdit && (
-        <div className="border rounded-xl p-4 grid grid-cols-3 gap-4 bg-white shadow">
-
-          <input className="border p-2 rounded"
+        <div className="border rounded-xl p-4 bg-white shadow grid grid-cols-1 md:grid-cols-3 gap-4">
+          <input className="border p-2 rounded w-full"
             placeholder="First Name *"
             value={form.firstName}
             onChange={e => updateField("firstName", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Last Name"
             value={form.lastName}
             onChange={e => updateField("lastName", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Email"
             value={form.email}
             onChange={e => updateField("email", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Phone"
             value={form.phone}
             onChange={e => updateField("phone", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Department"
             value={form.department}
             onChange={e => updateField("department", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Designation"
             value={form.designation}
             onChange={e => updateField("designation", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             type="date"
             value={form.joiningDate}
             onChange={e => updateField("joiningDate", e.target.value)}
           />
-
-          <select className="border p-2 rounded"
+          <select className="border p-2 rounded w-full"
             value={form.employmentType}
             onChange={e => updateField("employmentType", e.target.value)}
           >
@@ -271,52 +253,44 @@ HR Department
             <option>Contract</option>
             <option>Intern</option>
           </select>
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Salary"
             value={form.salary}
             onChange={e => updateField("salary", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Aadhaar"
             value={form.aadhaar}
             onChange={e => updateField("aadhaar", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="PAN"
             value={form.pan}
             onChange={e => updateField("pan", e.target.value)}
           />
-
-          <input className="border p-2 rounded"
+          <input className="border p-2 rounded w-full"
             placeholder="Bank Account"
             value={form.bankAccount}
             onChange={e => updateField("bankAccount", e.target.value)}
           />
 
-          {/* ===== Resume Upload ===== */}
-          <div>
-            <label className="text-sm font-medium">
-              Upload Resume (PDF/DOC)
-            </label>
+          {/* Resume */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium">Upload Resume</label>
             <input type="file" onChange={handleResume}/>
-            <div className="text-xs">{form.resumeName}</div>
+            <span className="text-xs mt-1">{form.resumeName}</span>
           </div>
 
-          {/* ===== ID Proof Upload ===== */}
-          <div>
-            <label className="text-sm font-medium">
-              Upload ID Proof
-            </label>
+          {/* ID Proof */}
+          <div className="flex flex-col">
+            <label className="text-sm font-medium">Upload ID Proof</label>
             <input type="file" onChange={handleIdProof}/>
-            <div className="text-xs">{form.idProofName}</div>
+            <span className="text-xs mt-1">{form.idProofName}</span>
           </div>
 
           <button
             onClick={saveEmployee}
-            className="bg-blue-600 text-white rounded px-4 py-2 col-span-3"
+            className="bg-blue-600 text-white rounded px-4 py-2 col-span-1 md:col-span-3"
           >
             {editingId ? "Update Employee" : "Add Employee"}
           </button>
@@ -324,61 +298,74 @@ HR Department
       )}
 
       {/* ===== ACTION BAR ===== */}
-
-      <button
-        onClick={exportExcel}
-        className="bg-green-600 text-white px-4 py-2 rounded"
-      >
-        Export to Excel
-      </button>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          onClick={exportExcel}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          Export to Excel
+        </button>
+      </div>
 
       {/* ===== TABLE ===== */}
-
-      <table className="w-full border text-sm bg-white">
-        <thead className="bg-gray-100">
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Dept</th>
-            <th>Designation</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {list.map(emp => (
-            <tr key={emp.id} className="border-t">
-              <td>{emp.empCode}</td>
-              <td>{emp.firstName} {emp.lastName}</td>
-              <td>{emp.department}</td>
-              <td>{emp.designation}</td>
-              <td>{emp.status}</td>
-              <td className="space-x-2">
-                <button onClick={() => downloadOfferLetter(emp)}>
-                  Offer
-                </button>
-
-                {canEdit && (
-                  <>
-                    <button onClick={() => editEmployee(emp)}>Edit</button>
-                    <button onClick={() => deleteEmployee(emp.id)}>Delete</button>
-                  </>
-                )}
-              </td>
-            </tr>
-          ))}
-
-          {list.length === 0 && (
+      <div className="overflow-x-auto">
+        <table className="w-full border text-sm bg-white min-w-[600px] md:min-w-full">
+          <thead className="bg-gray-100">
             <tr>
-              <td colSpan={6} className="p-6 text-center text-gray-400">
-                No employees added
-              </td>
+              <th className="p-2 border">ID</th>
+              <th className="p-2 border">Name</th>
+              <th className="p-2 border">Dept</th>
+              <th className="p-2 border">Designation</th>
+              <th className="p-2 border">Status</th>
+              <th className="p-2 border">Actions</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
 
+          <tbody>
+            {list.map(emp => (
+              <tr key={emp.id} className="border-t">
+                <td className="p-2 border">{emp.empCode}</td>
+                <td className="p-2 border">{emp.firstName} {emp.lastName}</td>
+                <td className="p-2 border">{emp.department}</td>
+                <td className="p-2 border">{emp.designation}</td>
+                <td className="p-2 border">{emp.status}</td>
+                <td className="p-2 border space-x-1 flex flex-wrap gap-1">
+                  <button
+                    onClick={() => downloadOfferLetter(emp)}
+                    className="bg-yellow-400 text-black px-2 py-1 rounded text-xs"
+                  >
+                    Offer
+                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => editEmployee(emp)}
+                        className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deleteEmployee(emp.id)}
+                        className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+
+            {list.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-gray-400">
+                  No employees added
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
