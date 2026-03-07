@@ -86,21 +86,55 @@ export default function VendorModule() {
     });
   };
 
+  /* ================= DOWNLOAD REPORT ================= */
+  const downloadReport = () => {
+    if (!isAdmin) return;
+
+    const rows: string[] = [];
+    rows.push(
+      "Company,Contact Person,Email,Phone,Category,Tax ID/ GST,Address,Created At"
+    );
+    vendors.forEach((v) => {
+      rows.push(
+        `${v.company},${v.contactPerson},${v.email},${v.phone},${v.category},${v.taxId},${v.address},${v.createdAt}`
+      );
+    });
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `vendors_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
 
       {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold">
+            Vendor Management
+          </h1>
 
-      <div>
-        <h1 className="text-xl md:text-2xl font-semibold">
-          Vendor Management
-        </h1>
+          <p className="text-gray-500 text-sm">
+            {isAdmin
+              ? "Create and manage vendor partnerships"
+              : "View vendor information"}
+          </p>
+        </div>
 
-        <p className="text-gray-500 text-sm">
-          {isAdmin
-            ? "Create and manage vendor partnerships"
-            : "View vendor information"}
-        </p>
+        {/* DOWNLOAD BUTTON */}
+        {isAdmin && (
+          <button
+            onClick={downloadReport}
+            className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
+          >
+            Download Report
+          </button>
+        )}
       </div>
 
       {/* ================= ADMIN FORM ================= */}
@@ -113,7 +147,6 @@ export default function VendorModule() {
           </h2>
 
           {/* FORM GRID */}
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
             <Input
@@ -155,7 +188,6 @@ export default function VendorModule() {
           </div>
 
           {/* ADDRESS */}
-
           <div>
             <label className="text-sm text-gray-600">Address</label>
 
@@ -168,7 +200,6 @@ export default function VendorModule() {
           </div>
 
           {/* BUTTON */}
-
           <button
             onClick={saveVendor}
             disabled={loading}
@@ -205,7 +236,6 @@ export default function VendorModule() {
             >
 
               {/* VENDOR INFO */}
-
               <div className="space-y-1">
 
                 <p className="font-semibold">
@@ -227,7 +257,6 @@ export default function VendorModule() {
               </div>
 
               {/* ACTIONS */}
-
               {isAdmin && (
                 <div className="flex gap-4 mt-3 md:mt-0">
 
@@ -260,7 +289,6 @@ export default function VendorModule() {
 }
 
 /* ================= REUSABLE INPUT ================= */
-
 function Input({
   label,
   value,

@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "../ui/select";
 
-import { Plus, Pencil, Trash } from "lucide-react";
+import { Plus, Pencil, Trash, Download } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { mockProjects } from "../../data/mockData";
 
@@ -194,6 +194,47 @@ export function ProjectManagement() {
     ? projects.filter(p => p.managerId === userId)
     : projects.filter(p => p.teamMembers.includes(userId));
 
+  /* ================= DOWNLOAD REPORT ================= */
+
+  const downloadReport = () => {
+    if (!projects.length) return alert("No projects to download.");
+
+    const headers = [
+      "Project Name",
+      "Description",
+      "Client",
+      "Deadline",
+      "Status",
+      "Budget",
+      "Spent",
+      "Progress",
+      "Manager ID",
+      "Team Members"
+    ];
+
+    const rows = projects.map(p => [
+      p.name,
+      p.description,
+      p.clientName,
+      p.deadline,
+      p.status,
+      p.budget,
+      p.spent,
+      p.progress,
+      p.managerId,
+      p.teamMembers.join("; ")
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers, ...rows].map(r => r.join(",")).join("\n");
+
+    const link = document.createElement("a");
+    link.href = encodeURI(csvContent);
+    link.download = `project_report_${Date.now()}.csv`;
+    link.click();
+  };
+
   /* ================= UI ================= */
 
   return (
@@ -202,94 +243,104 @@ export function ProjectManagement() {
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
 
-        <h1 className="text-lg sm:text-xl font-semibold">
-          Project Management
-        </h1>
+        <h1 className="text-lg sm:text-xl font-semibold">Project Management</h1>
 
-        {isAdmin && (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2"/> New Project
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          {isAdmin && (
+            <>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button className="w-full sm:w-auto">
+                    <Plus className="h-4 w-4 mr-2"/> New Project
+                  </Button>
+                </DialogTrigger>
+
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
+
+                  <DialogHeader>
+                    <DialogTitle>
+                      {isEdit ? "Edit Project" : "Create Project"}
+                    </DialogTitle>
+                  </DialogHeader>
+
+                  <div className="space-y-3">
+
+                    <Input
+                      placeholder="Project Name"
+                      value={form.name}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                    />
+
+                    <Input
+                      placeholder="Client Name"
+                      value={form.clientName}
+                      onChange={e => setForm({ ...form, clientName: e.target.value })}
+                    />
+
+                    <Textarea
+                      placeholder="Description"
+                      value={form.description}
+                      onChange={e => setForm({ ...form, description: e.target.value })}
+                    />
+
+                    <Input
+                      type="date"
+                      value={form.deadline}
+                      onChange={e => setForm({ ...form, deadline: e.target.value })}
+                    />
+
+                    <Input
+                      type="number"
+                      placeholder="Budget"
+                      value={form.budget}
+                      onChange={e => setForm({ ...form, budget: e.target.value })}
+                    />
+
+                    {/* MANAGER */}
+                    <Select
+                      value={form.managerId}
+                      onValueChange={v => setForm({ ...form, managerId: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Assign Manager"/>
+                      </SelectTrigger>
+
+                      <SelectContent>
+                        {users
+                          ?.filter(u => u.role === "manager")
+                          .map(u => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      placeholder="Team Member IDs (comma separated)"
+                      value={form.teamMembers}
+                      onChange={e => setForm({ ...form, teamMembers: e.target.value })}
+                    />
+
+                    <Button className="w-full" onClick={handleSubmit}>
+                      {isEdit ? "Update Project" : "Create Project"}
+                    </Button>
+
+                  </div>
+
+                </DialogContent>
+              </Dialog>
+
+              <Button
+                className="w-full sm:w-auto"
+                variant="outline"
+                onClick={downloadReport}
+              >
+                <Download className="h-4 w-4 mr-2"/> Download Report
               </Button>
-            </DialogTrigger>
-
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-
-              <DialogHeader>
-                <DialogTitle>
-                  {isEdit ? "Edit Project" : "Create Project"}
-                </DialogTitle>
-              </DialogHeader>
-
-              <div className="space-y-3">
-
-                <Input
-                  placeholder="Project Name"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                />
-
-                <Input
-                  placeholder="Client Name"
-                  value={form.clientName}
-                  onChange={e => setForm({ ...form, clientName: e.target.value })}
-                />
-
-                <Textarea
-                  placeholder="Description"
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                />
-
-                <Input
-                  type="date"
-                  value={form.deadline}
-                  onChange={e => setForm({ ...form, deadline: e.target.value })}
-                />
-
-                <Input
-                  type="number"
-                  placeholder="Budget"
-                  value={form.budget}
-                  onChange={e => setForm({ ...form, budget: e.target.value })}
-                />
-
-                {/* MANAGER */}
-                <Select
-                  value={form.managerId}
-                  onValueChange={v => setForm({ ...form, managerId: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assign Manager"/>
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {users
-                      ?.filter(u => u.role === "manager")
-                      .map(u => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-
-                <Input
-                  placeholder="Team Member IDs (comma separated)"
-                  value={form.teamMembers}
-                  onChange={e => setForm({ ...form, teamMembers: e.target.value })}
-                />
-
-                <Button className="w-full" onClick={handleSubmit}>
-                  {isEdit ? "Update Project" : "Create Project"}
-                </Button>
-
-              </div>
-
-            </DialogContent>
-          </Dialog>
-        )}
+            </>
+          )}
+        </div>
 
       </div>
 
@@ -313,7 +364,6 @@ export function ProjectManagement() {
       </div>
 
       {/* PROJECT LIST */}
-
       <div className="grid grid-cols-1 gap-4">
 
         {visibleProjects.map(project => (
@@ -322,9 +372,7 @@ export function ProjectManagement() {
 
             <CardHeader className="flex flex-row items-center justify-between">
 
-              <CardTitle className="text-base sm:text-lg">
-                {project.name}
-              </CardTitle>
+              <CardTitle className="text-base sm:text-lg">{project.name}</CardTitle>
 
               <Badge>{project.status}</Badge>
 
@@ -332,18 +380,13 @@ export function ProjectManagement() {
 
             <CardContent className="space-y-3">
 
-              <p className="text-sm text-gray-600">
-                {project.description}
-              </p>
+              <p className="text-sm text-gray-600">{project.description}</p>
 
-              <p className="text-xs text-gray-500">
-                Deadline: {project.deadline}
-              </p>
+              <p className="text-xs text-gray-500">Deadline: {project.deadline}</p>
 
               <Progress value={project.progress}/>
 
               {/* MANAGER UPDATE */}
-
               {isManager && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
 
@@ -379,10 +422,8 @@ export function ProjectManagement() {
               )}
 
               {/* ADMIN ACTIONS */}
-
               {isAdmin && (
                 <div className="flex gap-2">
-
                   <Button
                     size="icon"
                     variant="outline"
@@ -398,7 +439,6 @@ export function ProjectManagement() {
                   >
                     <Trash className="h-4 w-4"/>
                   </Button>
-
                 </div>
               )}
 

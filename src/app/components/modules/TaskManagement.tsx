@@ -21,9 +21,17 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { Plus, User, Trash, Pencil, ClipboardList } from "lucide-react";
-import { format } from "date-fns";
 
+import {
+  Plus,
+  User,
+  Trash,
+  Pencil,
+  ClipboardList,
+  Download,
+} from "lucide-react";
+
+import { format } from "date-fns";
 import { Task, TaskStatus } from "../../types";
 
 /* ================= TYPES ================= */
@@ -61,15 +69,44 @@ export function TaskManagement() {
     localStorage.setItem("tasks", JSON.stringify(tasks));
   }, [tasks]);
 
+  /* ================= REPORT DOWNLOAD ================= */
+
+  const downloadReport = () => {
+    const headers = [
+      "Title",
+      "Assigned To",
+      "Priority",
+      "Status",
+      "Start Date",
+      "Due Date",
+      "Estimated Hours",
+    ];
+
+    const rows = tasks.map((t) => [
+      t.title,
+      t.assignedTo,
+      t.priority,
+      t.status,
+      t.startDate || "-",
+      t.dueDate,
+      t.estimatedHours || "-",
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers, ...rows].map((r) => r.join(",")).join("\n");
+
+    const link = document.createElement("a");
+    link.href = encodeURI(csvContent);
+    link.download = "task_report.csv";
+    link.click();
+  };
+
   /* ================= FILTERS ================= */
 
-  const myTasks = tasks.filter(
-    (t) => t.assignedTo === currentUser.role
-  );
+  const myTasks = tasks.filter((t) => t.assignedTo === currentUser.role);
 
-  const assignedByMe = tasks.filter(
-    (t) => t.assignedBy === currentUser.id
-  );
+  const assignedByMe = tasks.filter((t) => t.assignedBy === currentUser.id);
 
   /* ================= FORM ================= */
 
@@ -139,6 +176,7 @@ export function TaskManagement() {
         createdAt: new Date().toISOString(),
         ...baseTask,
       };
+
       setTasks((prev) => [...prev, newTask]);
     }
 
@@ -167,10 +205,10 @@ export function TaskManagement() {
   /* ================= TASK CARD ================= */
 
   const TaskCard = ({ task }: { task: Task }) => (
-    <Card className="shadow-md hover:shadow-xl transition-all rounded-2xl border">
+    <Card className="shadow-sm hover:shadow-lg transition rounded-xl">
       <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-          <CardTitle className="text-base font-semibold">
+        <div className="flex justify-between">
+          <CardTitle className="text-sm sm:text-base">
             {task.title}
           </CardTitle>
           <Badge variant="outline">{task.status}</Badge>
@@ -187,36 +225,50 @@ export function TaskManagement() {
             <User className="h-3 w-3" />
             {task.assignedTo.toUpperCase()}
           </span>
-          <span>{format(new Date(task.dueDate), "MMM d, yyyy")}</span>
+
+          <span>{format(new Date(task.dueDate), "MMM d")}</span>
         </div>
 
         {task.status !== "completed" && (
-          <Button size="sm" className="w-full" onClick={() => advanceStatus(task)}>
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={() => advanceStatus(task)}
+          >
             Move to Next Stage
           </Button>
         )}
 
         {(isAdmin || isManager) && (
           <div className="flex justify-end gap-2 pt-2">
-            <Button size="icon" variant="ghost" onClick={() => {
-              setForm({
-                title: task.title,
-                description: task.description,
-                assignedRole: task.assignedTo as any,
-                priority: task.priority,
-                category: task.category || "",
-                startDate: task.startDate || "",
-                dueDate: task.dueDate,
-                estimatedHours: String(task.estimatedHours || ""),
-                frequency: task.frequency,
-                notes: task.notes || "",
-              });
-              setEditingTaskId(task.id);
-            }}>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                setForm({
+                  title: task.title,
+                  description: task.description,
+                  assignedRole: task.assignedTo as any,
+                  priority: task.priority,
+                  category: task.category || "",
+                  startDate: task.startDate || "",
+                  dueDate: task.dueDate,
+                  estimatedHours: String(task.estimatedHours || ""),
+                  frequency: task.frequency,
+                  notes: task.notes || "",
+                });
+
+                setEditingTaskId(task.id);
+              }}
+            >
               <Pencil className="h-4 w-4" />
             </Button>
 
-            <Button size="icon" variant="ghost" onClick={() => handleDelete(task.id)}>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => handleDelete(task.id)}
+            >
               <Trash className="h-4 w-4 text-red-500" />
             </Button>
           </div>
@@ -227,42 +279,46 @@ export function TaskManagement() {
 
   /* ================= TAB CONTROL ================= */
 
-  const defaultTab = isAdmin
-    ? "assigned"
-    : isHR || isEmployee
-    ? "my"
-    : "my";
+  const defaultTab = isAdmin ? "assigned" : "my";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-2 sm:p-4">
+
       {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl font-bold flex items-center gap-2">
+
+      <div className="flex flex-col sm:flex-row justify-between gap-3 sm:items-center">
+        <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2">
           <ClipboardList className="h-5 w-5" />
           Task Management
         </h1>
 
-        {(isAdmin || isManager) && (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                {editingTaskId ? "Edit Task" : "Create Task"}
-              </Button>
-            </DialogTrigger>
+        <div className="flex gap-2 flex-wrap">
 
-            <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingTaskId ? "Update Task" : "Create New Task"}
-                </DialogTitle>
-              </DialogHeader>
+          {isAdmin && (
+            <Button variant="outline" onClick={downloadReport}>
+              <Download className="h-4 w-4 mr-2" />
+              Download Report
+            </Button>
+          )}
 
-              {/* ===== Improved Professional Form ===== */}
-              <div className="space-y-6">
+          {(isAdmin || isManager) && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  {editingTaskId ? "Edit Task" : "Create Task"}
+                </Button>
+              </DialogTrigger>
 
-                {/* Basic Info */}
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingTaskId ? "Update Task" : "Create Task"}
+                  </DialogTitle>
+                </DialogHeader>
+
                 <div className="space-y-4">
+
                   <Input
                     placeholder="Task Title"
                     value={form.title}
@@ -273,16 +329,12 @@ export function TaskManagement() {
 
                   <Textarea
                     placeholder="Task Description"
-                    rows={3}
                     value={form.description}
                     onChange={(e) =>
                       setForm({ ...form, description: e.target.value })
                     }
                   />
-                </div>
 
-                {/* Assignment & Priority */}
-                <div className="grid md:grid-cols-2 gap-4">
                   <Select
                     value={form.assignedRole}
                     onValueChange={(v) =>
@@ -292,15 +344,23 @@ export function TaskManagement() {
                     <SelectTrigger>
                       <SelectValue placeholder="Assign Role" />
                     </SelectTrigger>
+
                     <SelectContent>
                       {isAdmin && (
-                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="manager">
+                          Manager
+                        </SelectItem>
                       )}
+
                       {isManager && (
                         <>
                           <SelectItem value="hr">HR</SelectItem>
-                          <SelectItem value="employee">Employee</SelectItem>
-                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="employee">
+                            Employee
+                          </SelectItem>
+                          <SelectItem value="manager">
+                            Manager
+                          </SelectItem>
                         </>
                       )}
                     </SelectContent>
@@ -313,25 +373,15 @@ export function TaskManagement() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Priority Level" />
+                      <SelectValue placeholder="Priority" />
                     </SelectTrigger>
+
                     <SelectContent>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="high">High</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                {/* Dates & Hours */}
-                <div className="grid md:grid-cols-3 gap-4">
-                  <Input
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) =>
-                      setForm({ ...form, startDate: e.target.value })
-                    }
-                  />
 
                   <Input
                     type="date"
@@ -341,77 +391,36 @@ export function TaskManagement() {
                     }
                   />
 
-                  <Input
-                    type="number"
-                    placeholder="Estimated Hours"
-                    value={form.estimatedHours}
-                    onChange={(e) =>
-                      setForm({ ...form, estimatedHours: e.target.value })
-                    }
-                  />
+                  <Button className="w-full" onClick={handleSave}>
+                    {editingTaskId ? "Update Task" : "Save Task"}
+                  </Button>
                 </div>
-
-                {/* Category & Frequency */}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <Input
-                    placeholder="Category"
-                    value={form.category}
-                    onChange={(e) =>
-                      setForm({ ...form, category: e.target.value })
-                    }
-                  />
-
-                  <Select
-                    value={form.frequency}
-                    onValueChange={(v: any) =>
-                      setForm({ ...form, frequency: v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Task Frequency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="weekly">Weekly</SelectItem>
-                      <SelectItem value="monthly">Monthly</SelectItem>
-                      <SelectItem value="one-time">One Time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Textarea
-                  placeholder="Additional Notes"
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) =>
-                    setForm({ ...form, notes: e.target.value })
-                  }
-                />
-
-                <Button className="w-full mt-2" size="lg" onClick={handleSave}>
-                  {editingTaskId ? "Update Task" : "Save Task"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
       </div>
 
-      {/* ================= TABS ================= */}
+      {/* TABS */}
 
       <Tabs defaultValue={defaultTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid grid-cols-2 w-full">
+
           {(isManager || isHR || isEmployee) && (
             <TabsTrigger value="my">My Tasks</TabsTrigger>
           )}
+
           {(isAdmin || isManager) && (
-            <TabsTrigger value="assigned">Assigned By Me</TabsTrigger>
+            <TabsTrigger value="assigned">
+              Assigned By Me
+            </TabsTrigger>
           )}
+
         </TabsList>
 
         {(isManager || isHR || isEmployee) && (
           <TabsContent value="my">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {myTasks.map((task) => (
                 <TaskCard key={task.id} task={task} />
               ))}
@@ -421,7 +430,7 @@ export function TaskManagement() {
 
         {(isAdmin || isManager) && (
           <TabsContent value="assigned">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {assignedByMe.map((task) => (
                 <TaskCard key={task.id} task={task} />
               ))}

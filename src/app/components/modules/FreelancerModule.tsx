@@ -94,21 +94,54 @@ export default function FreelancerModule() {
     });
   };
 
+  /* ================= DOWNLOAD REPORT ================= */
+  const downloadReport = () => {
+    if (!isAdmin) return;
+
+    const rows: string[] = [];
+    rows.push("Name,Email,Phone,Skill,Rate,Contract Start,Contract End,Status,Created At");
+    freelancers.forEach((f) => {
+      rows.push(
+        `${f.name},${f.email},${f.phone},${f.skill},${f.rate},${f.contractStart},${f.contractEnd},${f.status},${f.createdAt}`
+      );
+    });
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `freelancers_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
 
       {/* HEADER */}
 
-      <div>
-        <h1 className="text-xl md:text-2xl font-semibold">
-          Freelancer Management
-        </h1>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-xl md:text-2xl font-semibold">
+            Freelancer Management
+          </h1>
 
-        <p className="text-gray-500 text-sm">
-          {isAdmin
-            ? "Manage freelancer profiles and contracts"
-            : "View freelancer information"}
-        </p>
+          <p className="text-gray-500 text-sm">
+            {isAdmin
+              ? "Manage freelancer profiles and contracts"
+              : "View freelancer information"}
+          </p>
+        </div>
+
+        {/* DOWNLOAD BUTTON */}
+        {isAdmin && (
+          <button
+            onClick={downloadReport}
+            className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
+          >
+            Download Report
+          </button>
+        )}
       </div>
 
       {/* ================= ADMIN FORM ================= */}

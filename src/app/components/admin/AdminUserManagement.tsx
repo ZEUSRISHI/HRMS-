@@ -52,11 +52,9 @@ export default function AdminUserManagement() {
   };
 
   /* ===== CHART DATA ===== */
-
   const roleStats = useMemo(() => {
     const hr = users.filter((u) => u.role === "HR").length;
     const manager = users.filter((u) => u.role === "Manager").length;
-
     return [
       { name: "HR", value: hr },
       { name: "Manager", value: manager },
@@ -64,6 +62,23 @@ export default function AdminUserManagement() {
   }, [users]);
 
   const COLORS = ["#6366f1", "#22c55e"];
+
+  /* ===== DOWNLOAD REPORT ===== */
+  const downloadReport = () => {
+    const rows: string[] = [];
+    rows.push("Name,Email,Phone,Role");
+    users.forEach((u) => {
+      rows.push(`${u.name},${u.email},${u.phone},${u.role}`);
+    });
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `users_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6 relative p-4 md:p-6">
@@ -76,16 +91,25 @@ export default function AdminUserManagement() {
       )}
 
       {/* HEADER */}
-      <div>
-        <h2 className="text-xl md:text-2xl font-bold">User Management</h2>
-        <p className="text-gray-500 text-sm md:text-base">
-          Create and manage HR & Manager accounts
-        </p>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div>
+          <h2 className="text-xl md:text-2xl font-bold">User Management</h2>
+          <p className="text-gray-500 text-sm md:text-base">
+            Create and manage HR & Manager accounts
+          </p>
+        </div>
+
+        {/* DOWNLOAD REPORT BUTTON */}
+        <button
+          onClick={downloadReport}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded w-full md:w-auto"
+        >
+          Download Report
+        </button>
       </div>
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
         <div className="p-4 bg-white rounded-xl shadow">
           <p className="text-gray-500">Total Users</p>
           <p className="text-2xl font-bold">{users.length}</p>
@@ -104,15 +128,12 @@ export default function AdminUserManagement() {
             {users.filter((u) => u.role === "Manager").length}
           </p>
         </div>
-
       </div>
 
       {/* CHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="font-semibold mb-3">Role Distribution</h3>
-
           <div className="w-full h-[250px]">
             <ResponsiveContainer>
               <PieChart>
@@ -134,7 +155,6 @@ export default function AdminUserManagement() {
 
         <div className="bg-white p-4 rounded-xl shadow">
           <h3 className="font-semibold mb-3">User Count</h3>
-
           <div className="w-full h-[250px]">
             <ResponsiveContainer>
               <BarChart data={roleStats}>
@@ -146,56 +166,39 @@ export default function AdminUserManagement() {
             </ResponsiveContainer>
           </div>
         </div>
-
       </div>
 
       {/* FORM */}
       <div className="bg-white p-4 md:p-6 rounded-xl shadow space-y-4">
-
-        <h3 className="font-semibold">
-          {editing ? "Update User" : "Add New User"}
-        </h3>
+        <h3 className="font-semibold">{editing ? "Update User" : "Add New User"}</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
           <input
             placeholder="Full Name"
             className="border p-2 rounded w-full"
             value={form.name}
-            onChange={(e) =>
-              setForm({ ...form, name: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
-
           <input
             placeholder="Email"
             className="border p-2 rounded w-full"
             value={form.email}
-            onChange={(e) =>
-              setForm({ ...form, email: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
           />
-
           <input
             placeholder="Phone"
             className="border p-2 rounded w-full"
             value={form.phone}
-            onChange={(e) =>
-              setForm({ ...form, phone: e.target.value })
-            }
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
           />
-
           <select
             className="border p-2 rounded w-full"
             value={form.role}
-            onChange={(e) =>
-              setForm({ ...form, role: e.target.value as Role })
-            }
+            onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
           >
             <option value="HR">HR</option>
             <option value="Manager">Manager</option>
           </select>
-
         </div>
 
         <button
@@ -204,17 +207,12 @@ export default function AdminUserManagement() {
         >
           {editing ? "Update User" : "Add User"}
         </button>
-
       </div>
 
       {/* USER LIST */}
       <div className="bg-white p-4 md:p-6 rounded-xl shadow space-y-3">
-
         <h3 className="font-semibold mb-3">Users</h3>
-
-        {users.length === 0 && (
-          <p className="text-gray-500 text-sm">No users added yet</p>
-        )}
+        {users.length === 0 && <p className="text-gray-500 text-sm">No users added yet</p>}
 
         {users.map((u) => (
           <div
@@ -229,27 +227,22 @@ export default function AdminUserManagement() {
             </div>
 
             <div className="flex gap-2">
-
               <button
                 onClick={() => handleEdit(u)}
                 className="px-3 py-1 bg-yellow-500 text-white rounded"
               >
                 Edit
               </button>
-
               <button
                 onClick={() => deleteUser(u.id)}
                 className="px-3 py-1 bg-red-500 text-white rounded"
               >
                 Delete
               </button>
-
             </div>
           </div>
         ))}
-
       </div>
-
     </div>
   );
 }

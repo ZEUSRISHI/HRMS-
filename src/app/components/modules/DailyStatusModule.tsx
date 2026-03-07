@@ -11,7 +11,14 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 import { Badge } from "../ui/badge";
-import { FileText, MessageCircle, Plus } from "lucide-react";
+
+import {
+  FileText,
+  MessageCircle,
+  Plus,
+  Download
+} from "lucide-react";
+
 import { useAuth } from "../../contexts/AuthContext";
 import { mockUsers } from "../../data/mockData";
 import { format } from "date-fns";
@@ -19,6 +26,7 @@ import { format } from "date-fns";
 const STATUS_KEY = "startup_daily_status";
 
 export function DailyStatusModule() {
+
   const { currentUser } = useAuth();
   if (!currentUser) return null;
 
@@ -26,6 +34,7 @@ export function DailyStatusModule() {
   const isManager = currentUser.role === "manager";
 
   const [toast, setToast] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2500);
@@ -66,9 +75,48 @@ export function DailyStatusModule() {
     (s) => s.userId === currentUser.id && s.date === todayStr
   );
 
-  /* SUBMIT STATUS */
+  /* ================= ADMIN REPORT ================= */
+
+  const downloadReport = () => {
+
+    const headers = [
+      "Employee",
+      "Date",
+      "Status",
+      "Achievements",
+      "Blockers",
+      "Next Day Plan"
+    ];
+
+    const rows = statusList.map((s) => {
+
+      const user = mockUsers.find((u) => u.id === s.userId);
+
+      return [
+        user?.name || "Unknown",
+        s.date,
+        s.status,
+        s.achievements,
+        s.blockers || "-",
+        s.nextDayPlan || "-"
+      ];
+
+    });
+
+    const csv =
+      "data:text/csv;charset=utf-8," +
+      [headers, ...rows].map((r) => r.join(",")).join("\n");
+
+    const link = document.createElement("a");
+    link.href = encodeURI(csv);
+    link.download = "daily_status_report.csv";
+    link.click();
+  };
+
+  /* ================= SUBMIT STATUS ================= */
 
   const submitStatus = () => {
+
     if (!overallStatus || !achievements) {
       showToast("Please fill required fields");
       return;
@@ -100,9 +148,10 @@ export function DailyStatusModule() {
     showToast("Daily status submitted successfully");
   };
 
-  /* ADD COMMENT */
+  /* ================= ADD COMMENT ================= */
 
   const addComment = (statusId: string) => {
+
     if (!commentText) return;
 
     const newComment = {
@@ -124,11 +173,15 @@ export function DailyStatusModule() {
     );
 
     setCommentText("");
+
     showToast("Comment added");
   };
 
   return (
-    <div className="space-y-8 relative max-w-6xl mx-auto px-2 sm:px-4">
+
+    <div className="space-y-8 relative max-w-6xl mx-auto px-3 sm:px-6">
+
+      {/* TOAST */}
 
       {toast && (
         <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
@@ -147,72 +200,97 @@ export function DailyStatusModule() {
           </p>
         </div>
 
-        {!todayStatus && (
-          <Dialog>
+        <div className="flex flex-wrap gap-2">
 
-            <DialogTrigger asChild>
-              <Button className="gap-2 w-full sm:w-auto">
-                <Plus className="h-4 w-4" />
-                Submit Status
-              </Button>
-            </DialogTrigger>
+          {/* ADMIN DOWNLOAD */}
 
-            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+          {isAdmin && (
 
-              <DialogHeader>
-                <DialogTitle>
-                  Status Update — {format(new Date(), "MMMM d, yyyy")}
-                </DialogTitle>
-              </DialogHeader>
+            <Button
+              variant="outline"
+              onClick={downloadReport}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Download Report
+            </Button>
 
-              <div className="space-y-5">
+          )}
 
-                <div className="space-y-1">
-                  <Label>Overall Status *</Label>
-                  <Textarea
-                    rows={3}
-                    value={overallStatus}
-                    onChange={(e) => setOverallStatus(e.target.value)}
-                  />
-                </div>
+          {!todayStatus && (
 
-                <div className="space-y-1">
-                  <Label>Today’s Achievements *</Label>
-                  <Textarea
-                    rows={4}
-                    value={achievements}
-                    onChange={(e) => setAchievements(e.target.value)}
-                  />
-                </div>
+            <Dialog>
 
-                <div className="space-y-1">
-                  <Label>Blockers</Label>
-                  <Textarea
-                    rows={3}
-                    value={blockers}
-                    onChange={(e) => setBlockers(e.target.value)}
-                  />
-                </div>
+              <DialogTrigger asChild>
 
-                <div className="space-y-1">
-                  <Label>Next Day Plan</Label>
-                  <Textarea
-                    rows={3}
-                    value={nextPlan}
-                    onChange={(e) => setNextPlan(e.target.value)}
-                  />
-                </div>
+                <Button className="gap-2">
 
-                <Button className="w-full" onClick={submitStatus}>
+                  <Plus className="h-4 w-4" />
                   Submit Status
+
                 </Button>
 
-              </div>
+              </DialogTrigger>
 
-            </DialogContent>
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
 
-          </Dialog>
-        )}
+                <DialogHeader>
+                  <DialogTitle>
+                    Status Update — {format(new Date(), "MMMM d, yyyy")}
+                  </DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-5">
+
+                  <div className="space-y-1">
+                    <Label>Overall Status *</Label>
+                    <Textarea
+                      rows={3}
+                      value={overallStatus}
+                      onChange={(e) => setOverallStatus(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Today's Achievements *</Label>
+                    <Textarea
+                      rows={4}
+                      value={achievements}
+                      onChange={(e) => setAchievements(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Blockers</Label>
+                    <Textarea
+                      rows={3}
+                      value={blockers}
+                      onChange={(e) => setBlockers(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Next Day Plan</Label>
+                    <Textarea
+                      rows={3}
+                      value={nextPlan}
+                      onChange={(e) => setNextPlan(e.target.value)}
+                    />
+                  </div>
+
+                  <Button className="w-full" onClick={submitStatus}>
+                    Submit Status
+                  </Button>
+
+                </div>
+
+              </DialogContent>
+
+            </Dialog>
+
+          )}
+
+        </div>
 
       </div>
 
@@ -223,17 +301,27 @@ export function DailyStatusModule() {
         <Card className="border-primary">
 
           <CardHeader>
+
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+
               <FileText className="h-5 w-5" />
+
               Today — {format(new Date(todayStatus.date), "MMMM d, yyyy")}
+
             </CardTitle>
+
           </CardHeader>
 
           <CardContent className="space-y-2 text-sm sm:text-base">
+
             <p>{todayStatus.status}</p>
+
             <p>{todayStatus.achievements}</p>
+
             {todayStatus.blockers && <p>{todayStatus.blockers}</p>}
+
             {todayStatus.nextDayPlan && <p>{todayStatus.nextDayPlan}</p>}
+
           </CardContent>
 
         </Card>
@@ -261,6 +349,7 @@ export function DailyStatusModule() {
                 <CardHeader className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
 
                   <div>
+
                     {isAdmin && (
                       <p className="font-medium">{user?.name}</p>
                     )}
@@ -268,6 +357,7 @@ export function DailyStatusModule() {
                     <p className="text-xs text-muted-foreground">
                       {format(new Date(status.date), "MMM d, yyyy")}
                     </p>
+
                   </div>
 
                   <Badge className="w-fit">
@@ -285,10 +375,19 @@ export function DailyStatusModule() {
                     <Dialog>
 
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="outline" className="w-full sm:w-auto">
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                        >
+
                           <MessageCircle className="h-4 w-4 mr-1" />
+
                           Comment
+
                         </Button>
+
                       </DialogTrigger>
 
                       <DialogContent className="w-[95vw] max-w-md">
@@ -329,11 +428,19 @@ export function DailyStatusModule() {
                             className="text-sm bg-muted p-2 rounded break-words"
                           >
 
-                            <p className="font-medium">{manager?.name}</p>
+                            <p className="font-medium">
+                              {manager?.name}
+                            </p>
+
                             <p>{c.comment}</p>
 
                             <p className="text-xs text-muted-foreground">
-                              {format(new Date(c.timestamp), "MMM d, yyyy h:mm a")}
+
+                              {format(
+                                new Date(c.timestamp),
+                                "MMM d, yyyy h:mm a"
+                              )}
+
                             </p>
 
                           </div>
