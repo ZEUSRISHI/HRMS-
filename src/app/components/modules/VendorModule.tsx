@@ -1,316 +1,208 @@
-import { useState } from "react";
-import { Vendor, useWorkforce } from "../../contexts/WorkforceContext";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-
-/**
- * Vendor Form Type
- */
-type VendorForm = Omit<Vendor, "id" | "createdAt">;
+import { vendorApi } from "@/services/api";
 
 export default function VendorModule() {
-  const { vendors, addVendor, updateVendor, deleteVendor } = useWorkforce();
   const { currentUser } = useAuth();
-
   if (!currentUser) return null;
 
-  const isAdmin = currentUser.role === "admin";
+  const isAdmin   = currentUser.role === "admin";
   const isManager = currentUser.role === "manager";
+  const isHR      = currentUser.role === "hr";
 
-  // Only Admin & Manager can view
-  if (!isAdmin && !isManager) return null;
+  if (!isAdmin && !isManager && !isHR) return null;
 
-  const [editId, setEditId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving]   = useState(false);
+  const [toast, setToast]     = useState("");
+  const [editId, setEditId]   = useState<string | null>(null);
 
-  const emptyForm: VendorForm = {
-    company: "",
-    contactPerson: "",
-    email: "",
-    phone: "",
-    category: "",
-    taxId: "",
-    address: "",
+  const emptyForm = {
+    company: "", contactPerson: "", email: "",
+    phone: "", category: "", taxId: "", address: "",
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
   };
 
-  const [form, setForm] = useState<VendorForm>(emptyForm);
-
-  const handleChange = (key: keyof VendorForm, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const validate = () => {
-    if (!form.company || !form.contactPerson || !form.email || !form.phone) {
-      alert("Please fill all required fields (*)");
-      return false;
-    }
-    return true;
-  };
-
-  const saveVendor = () => {
-    if (!isAdmin) return;
-    if (!validate()) return;
-
-    setLoading(true);
-
-    const payload: Vendor = {
-      id: editId ?? crypto.randomUUID(),
-      createdAt: editId
-        ? vendors.find((v) => v.id === editId)?.createdAt ||
-          new Date().toISOString()
-        : new Date().toISOString(),
-      ...form,
-    };
-
-    editId ? updateVendor(payload) : addVendor(payload);
-
-    setTimeout(() => {
+  const loadVendors = async () => {
+    try {
+      setLoading(true);
+      const data = await vendorApi.getAll();
+      setVendors(data.vendors || []);
+    } catch (err: any) {
+      console.error(err.message);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadVendors(); }, []);
+
+  const handleSave = async () => {
+    if (!form.company || !form.contactPerson || !form.email || !form.phone) {
+      showToast("Please fill all required fields (*)");
+      return;
+    }
+    try {
+      setSaving(true);
+      if (editId) {
+        await vendorApi.update(editId, form);
+        showToast("✅ Vendor updated");
+      } else {
+        await vendorApi.create(form);
+        showToast("✅ Vendor added");
+      }
       setEditId(null);
       setForm(emptyForm);
-    }, 300);
+      await loadVendors();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const startEdit = (v: Vendor) => {
-    if (!isAdmin) return;
-
-    setEditId(v.id);
-
+  const handleEdit = (v: any) => {
+    setEditId(v._id);
     setForm({
-      company: v.company,
+      company:       v.company,
       contactPerson: v.contactPerson,
-      email: v.email,
-      phone: v.phone,
-      category: v.category,
-      taxId: v.taxId,
-      address: v.address,
+      email:         v.email,
+      phone:         v.phone,
+      category:      v.category,
+      taxId:         v.taxId,
+      address:       v.address,
     });
   };
 
-  /* ================= DOWNLOAD REPORT ================= */
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete vendor?")) return;
+    try {
+      await vendorApi.delete(id);
+      showToast("✅ Vendor deleted");
+      await loadVendors();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
+
   const downloadReport = () => {
-    if (!isAdmin) return;
-
-    const rows: string[] = [];
-    rows.push(
-      "Company,Contact Person,Email,Phone,Category,Tax ID/ GST,Address,Created At"
-    );
+    const rows = ["Company,Contact,Email,Phone,Category,Tax ID,Address"];
     vendors.forEach((v) => {
-      rows.push(
-        `${v.company},${v.contactPerson},${v.email},${v.phone},${v.category},${v.taxId},${v.address},${v.createdAt}`
-      );
+      rows.push(`${v.company},${v.contactPerson},${v.email},${v.phone},${v.category},${v.taxId},${v.address}`);
     });
-
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `vendors_${Date.now()}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
   };
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6">
 
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+          {toast}
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold">
-            Vendor Management
-          </h1>
-
-          <p className="text-gray-500 text-sm">
-            {isAdmin
-              ? "Create and manage vendor partnerships"
-              : "View vendor information"}
-          </p>
+          <h1 className="text-xl font-semibold">Vendor Management</h1>
+          <p className="text-gray-500 text-sm">{vendors.length} vendors registered</p>
         </div>
-
-        {/* DOWNLOAD BUTTON */}
         {isAdmin && (
-          <button
-            onClick={downloadReport}
-            className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
-          >
+          <button onClick={downloadReport}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
             Download Report
           </button>
         )}
       </div>
 
-      {/* ================= ADMIN FORM ================= */}
-
+      {/* FORM */}
       {isAdmin && (
-        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border space-y-5">
-
+        <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border space-y-4">
           <h2 className="font-semibold text-lg">
             {editId ? "Edit Vendor" : "Add New Vendor"}
           </h2>
-
-          {/* FORM GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-            <Input
-              label="Company Name *"
-              value={form.company}
-              onChange={(v) => handleChange("company", v)}
-            />
-
-            <Input
-              label="Contact Person *"
-              value={form.contactPerson}
-              onChange={(v) => handleChange("contactPerson", v)}
-            />
-
-            <Input
-              label="Email *"
-              value={form.email}
-              onChange={(v) => handleChange("email", v)}
-            />
-
-            <Input
-              label="Phone *"
-              value={form.phone}
-              onChange={(v) => handleChange("phone", v)}
-            />
-
-            <Input
-              label="Category"
-              value={form.category}
-              onChange={(v) => handleChange("category", v)}
-            />
-
-            <Input
-              label="Tax ID / GST"
-              value={form.taxId}
-              onChange={(v) => handleChange("taxId", v)}
-            />
-
+            {[
+              { label: "Company Name *", key: "company" },
+              { label: "Contact Person *", key: "contactPerson" },
+              { label: "Email *", key: "email" },
+              { label: "Phone *", key: "phone" },
+              { label: "Category", key: "category" },
+              { label: "Tax ID / GST", key: "taxId" },
+            ].map(({ label, key }) => (
+              <div key={key} className="flex flex-col space-y-1">
+                <label className="text-sm text-gray-600">{label}</label>
+                <input
+                  className="border p-2 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={(form as any)[key]}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                />
+              </div>
+            ))}
           </div>
-
-          {/* ADDRESS */}
           <div>
             <label className="text-sm text-gray-600">Address</label>
-
             <textarea
-              placeholder="Vendor address..."
               className="border p-2 rounded-md w-full mt-1 focus:ring-2 focus:ring-blue-500 outline-none"
               value={form.address}
-              onChange={(e) => handleChange("address", e.target.value)}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
             />
           </div>
-
-          {/* BUTTON */}
-          <button
-            onClick={saveVendor}
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
-          >
-            {loading
-              ? "Saving..."
-              : editId
-              ? "Update Vendor"
-              : "Add Vendor"}
+          <button onClick={handleSave} disabled={saving}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+            {saving ? "Saving..." : editId ? "Update Vendor" : "Add Vendor"}
           </button>
-
         </div>
       )}
 
-      {/* ================= VENDOR LIST ================= */}
-
-      <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border space-y-4">
-
+      {/* VENDOR LIST */}
+      <div className="bg-white p-4 md:p-6 rounded-xl shadow-sm border space-y-3">
         <h2 className="font-semibold text-lg">Vendor List</h2>
-
         {vendors.length === 0 && (
-          <p className="text-gray-500 text-sm">
-            No vendors added yet
-          </p>
+          <p className="text-gray-500 text-sm">No vendors added yet</p>
         )}
-
-        <div className="space-y-3">
-
-          {vendors.map((v) => (
-            <div
-              key={v.id}
-              className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-lg p-4 hover:bg-gray-50 transition"
-            >
-
-              {/* VENDOR INFO */}
-              <div className="space-y-1">
-
-                <p className="font-semibold">
-                  {v.company}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  {v.contactPerson}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  {v.email}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  {v.phone}
-                </p>
-
-              </div>
-
-              {/* ACTIONS */}
-              {isAdmin && (
-                <div className="flex gap-4 mt-3 md:mt-0">
-
-                  <button
-                    onClick={() => startEdit(v)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    onClick={() => deleteVendor(v.id)}
-                    className="text-red-600 hover:text-red-800 text-sm font-medium"
-                  >
-                    Delete
-                  </button>
-
-                </div>
-              )}
-
+        {vendors.map((v) => (
+          <div key={v._id}
+            className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-lg p-4 hover:bg-gray-50">
+            <div className="space-y-1">
+              <p className="font-semibold">{v.company}</p>
+              <p className="text-sm text-gray-500">{v.contactPerson} • {v.category}</p>
+              <p className="text-sm text-gray-500">{v.email} • {v.phone}</p>
+              {v.taxId && <p className="text-xs text-gray-400">GST: {v.taxId}</p>}
             </div>
-          ))}
-
-        </div>
-
+            {isAdmin && (
+              <div className="flex gap-4 mt-3 md:mt-0">
+                <button onClick={() => handleEdit(v)}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                  Edit
+                </button>
+                <button onClick={() => handleDelete(v._id)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium">
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-
-    </div>
-  );
-}
-
-/* ================= REUSABLE INPUT ================= */
-function Input({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col space-y-1">
-
-      <label className="text-sm text-gray-600">
-        {label}
-      </label>
-
-      <input
-        className="border p-2 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-
     </div>
   );
 }

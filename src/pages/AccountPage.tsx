@@ -1,93 +1,129 @@
 import { useState } from "react";
 import { useAuth } from "../app/contexts/AuthContext";
+import { authApi } from "../services/api";
 
 export default function AccountPage() {
-  const { currentUser, users, logout } = useAuth();
+  const { currentUser, logout } = useAuth();
 
   if (!currentUser) return null;
 
   const [form, setForm] = useState({
-    email: currentUser.email,
-    role: currentUser.role,
+    email:         currentUser.email,
+    role:          currentUser.role,
     notifications: true,
-    twoFactor: false,
-    language: "English",
-    timezone: "Asia/Kolkata",
+    twoFactor:     false,
+    language:      "English",
+    timezone:      "Asia/Kolkata",
+    oldPassword:   "",
+    newPassword:   "",
+    confirmPassword: "",
   });
 
-  /* ===== HANDLE CHANGE ===== */
+  const [saving, setSaving]   = useState(false);
+  const [message, setMessage] = useState("");
+
   const handleChange = (e: any) => {
     const { name, value, type, checked } = e.target;
-    setForm({
-      ...form,
-      [name]: type === "checkbox" ? checked : value,
-    });
+    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
   };
 
-  /* ===== SAVE ===== */
-  const handleSave = () => {
-    const updatedUsers = users.map((u) =>
-      u.id === currentUser.id
-        ? { ...u, email: form.email }
-        : u
-    );
+  const handleSave = async () => {
+    if (form.newPassword && form.newPassword !== form.confirmPassword) {
+      setMessage("❌ New passwords do not match");
+      return;
+    }
 
-    localStorage.setItem("hrms_users", JSON.stringify(updatedUsers));
-    localStorage.setItem(
-      "hrms_current",
-      JSON.stringify({ ...currentUser, email: form.email })
-    );
+    setSaving(true);
+    setMessage("");
 
-    alert("Account settings saved ✅");
-    window.location.reload();
+    try {
+      if (form.oldPassword && form.newPassword) {
+        await authApi.changePassword(form.oldPassword, form.newPassword);
+        setForm({ ...form, oldPassword: "", newPassword: "", confirmPassword: "" });
+      }
+      setMessage("✅ Account settings saved successfully!");
+    } catch (err: any) {
+      setMessage("❌ " + (err.message || "Failed to save settings"));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  /* ===== CANCEL ===== */
   const handleCancel = () => {
     setForm({
-      email: currentUser.email,
-      role: currentUser.role,
-      notifications: true,
-      twoFactor: false,
-      language: "English",
-      timezone: "Asia/Kolkata",
+      ...form,
+      email:           currentUser.email,
+      role:            currentUser.role,
+      oldPassword:     "",
+      newPassword:     "",
+      confirmPassword: "",
     });
+    setMessage("");
+  };
+
+  const handleLogout = async () => {
+    await logout();
   };
 
   return (
     <div className="w-full bg-white p-8 rounded-xl shadow space-y-8">
 
-      {/* ===== HEADER ===== */}
       <h2 className="text-2xl font-semibold">Account Settings</h2>
 
-      {/* ===== ACCOUNT INFO ===== */}
-      <Section title="Account Information">
-        <Input
-          label="Email Address"
-          name="email"
-          value={form.email}
-          onChange={handleChange}
-        />
+      {message && (
+        <div className={`p-3 rounded-lg text-sm text-center ${
+          message.startsWith("✅")
+            ? "bg-green-50 text-green-600 border border-green-200"
+            : "bg-red-50 text-red-600 border border-red-200"
+        }`}>
+          {message}
+        </div>
+      )}
 
-        <Input
-          label="Role"
-          name="role"
-          value={form.role}
-          disabled
+      {/* ACCOUNT INFO */}
+      <Section title="Account Information">
+        <Field label="Email Address" name="email" value={form.email} disabled />
+        <Field label="Role"          name="role"  value={form.role}  disabled />
+      </Section>
+
+      {/* CHANGE PASSWORD */}
+      <Section title="Change Password">
+        <Field
+          label="Current Password"
+          name="oldPassword"
+          type="password"
+          value={form.oldPassword}
+          onChange={handleChange}
+          placeholder="Enter current password"
+        />
+        <Field
+          label="New Password"
+          name="newPassword"
+          type="password"
+          value={form.newPassword}
+          onChange={handleChange}
+          placeholder="Min. 6 characters"
+        />
+        <Field
+          label="Confirm New Password"
+          name="confirmPassword"
+          type="password"
+          value={form.confirmPassword}
+          onChange={handleChange}
+          placeholder="Repeat new password"
         />
       </Section>
 
-      {/* ===== PREFERENCES ===== */}
+      {/* PREFERENCES */}
       <Section title="Preferences">
-        <Select
+        <SelectField
           label="Language"
           name="language"
           value={form.language}
           onChange={handleChange}
           options={["English", "Tamil", "Hindi"]}
         />
-
-        <Select
+        <SelectField
           label="Timezone"
           name="timezone"
           value={form.timezone}
@@ -96,16 +132,15 @@ export default function AccountPage() {
         />
       </Section>
 
-      {/* ===== SECURITY ===== */}
+      {/* SECURITY */}
       <Section title="Security">
-        <Checkbox
+        <CheckboxField
           label="Enable Email Notifications"
           name="notifications"
           checked={form.notifications}
           onChange={handleChange}
         />
-
-        <Checkbox
+        <CheckboxField
           label="Enable Two Factor Authentication"
           name="twoFactor"
           checked={form.twoFactor}
@@ -113,11 +148,11 @@ export default function AccountPage() {
         />
       </Section>
 
-      {/* ===== ACTIONS ===== */}
+      {/* ACTIONS */}
       <div className="flex justify-between border-t pt-6">
         <button
-          onClick={logout}
-          className="px-5 py-2 rounded-lg text-red-600 border border-red-200 hover:bg-red-50"
+          onClick={handleLogout}
+          className="px-5 py-2 rounded-lg text-red-600 border border-red-200 hover:bg-red-50 transition"
         >
           Logout
         </button>
@@ -125,69 +160,64 @@ export default function AccountPage() {
         <div className="flex gap-3">
           <button
             onClick={handleCancel}
-            className="px-5 py-2 rounded-lg border hover:bg-gray-100"
+            className="px-5 py-2 rounded-lg border hover:bg-gray-100 transition"
           >
             Cancel
           </button>
-
           <button
             onClick={handleSave}
-            className="px-6 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600"
+            disabled={saving}
+            className="px-6 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:bg-orange-300 transition font-medium"
           >
-            Save Changes
+            {saving ? "Saving..." : "Save Changes"}
           </button>
         </div>
       </div>
+
     </div>
   );
 }
 
-/* ===== SECTION ===== */
 function Section({ title, children }: any) {
   return (
     <div>
-      <h3 className="font-semibold mb-4">{title}</h3>
+      <h3 className="font-semibold text-gray-700 mb-4 pb-2 border-b">{title}</h3>
       <div className="grid md:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 }
 
-/* ===== INPUT ===== */
-function Input({ label, ...props }: any) {
+function Field({ label, ...props }: any) {
   return (
     <div>
-      <label className="text-sm text-gray-500">{label}</label>
+      <label className="text-sm text-gray-500 font-medium">{label}</label>
       <input
         {...props}
-        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
+        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none disabled:bg-gray-50 disabled:text-gray-400"
       />
     </div>
   );
 }
 
-/* ===== SELECT ===== */
-function Select({ label, options, ...props }: any) {
+function SelectField({ label, options, ...props }: any) {
   return (
     <div>
-      <label className="text-sm text-gray-500">{label}</label>
+      <label className="text-sm text-gray-500 font-medium">{label}</label>
       <select
         {...props}
-        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
+        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none bg-white"
       >
-        {options.map((o: string) => (
-          <option key={o}>{o}</option>
-        ))}
+        {options.map((o: string) => <option key={o}>{o}</option>)}
       </select>
     </div>
   );
 }
 
-/* ===== CHECKBOX ===== */
-function Checkbox({ label, ...props }: any) {
+function CheckboxField({ label, ...props }: any) {
   return (
-    <label className="flex items-center gap-2 mt-2">
-      <input type="checkbox" {...props} />
-      <span className="text-sm">{label}</span>
+    <label className="flex items-center gap-2 mt-2 cursor-pointer">
+      <input type="checkbox" {...props} className="accent-orange-500 w-4 h-4" />
+      <span className="text-sm text-gray-600">{label}</span>
     </label>
   );
 }

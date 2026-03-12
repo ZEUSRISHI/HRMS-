@@ -3,21 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "../ui/table";
 import { DollarSign, FileText, Trash, Download } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { mockPayroll, mockUsers } from "../../data/mockData";
+import { payrollApi } from "@/services/api";
 import { format } from "date-fns";
 
-type PayrollRecord = {
-  id: string;
-  userId: string;
+interface PayrollRecord {
+  _id: string;
+  userId: any;
   month: string;
   basicSalary: number;
   allowances: number;
@@ -25,48 +20,38 @@ type PayrollRecord = {
   netSalary: number;
   status: "pending" | "processed";
   paymentDate?: string;
-};
-
-const STORAGE_KEY = "startup_payroll_records";
+}
 
 export function PayrollModule() {
-  const auth = useAuth();
-  const currentUser = auth?.currentUser ?? null;
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin";
+  const isHR    = currentUser?.role === "hr";
 
-  const [records, setRecords] = useState<PayrollRecord[]>([]);
+  const [records, setRecords]   = useState<PayrollRecord[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [toast, setToast]       = useState("");
 
-  // ================= LOAD =================
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setRecords(JSON.parse(saved));
-    } else {
-      setRecords(mockPayroll);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mockPayroll));
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  };
+
+  const loadPayroll = async () => {
+    try {
+      setLoading(true);
+      const data = isAdmin || isHR
+        ? await payrollApi.getAll()
+        : await payrollApi.getMy();
+      setRecords(data.records || []);
+    } catch (err: any) {
+      console.error(err.message);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
 
-  // ================= SAVE =================
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  }, [records]);
+  useEffect(() => { loadPayroll(); }, []);
 
-  if (!currentUser) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Loading payroll module...
-      </div>
-    );
-  }
-
-  const isAdmin = currentUser.role === "admin";
-
-  // ================= FILTER =================
-  const payrollRecords = isAdmin
-    ? records
-    : records.filter((p) => p.userId === currentUser.id);
-
-  // ================= TOTALS =================
   const totalProcessed = records
     .filter((p) => p.status === "processed")
     .reduce((sum, p) => sum + p.netSalary, 0);
@@ -75,144 +60,95 @@ export function PayrollModule() {
     .filter((p) => p.status === "pending")
     .reduce((sum, p) => sum + p.netSalary, 0);
 
-  // ================= CRUD =================
-  function addPayroll(userId: string) {
-    if (!isAdmin) return;
+  const handleProcessPayroll = async () => {
+    try {
+      await payrollApi.process();
+      showToast("✅ All pending payrolls processed successfully");
+      await loadPayroll();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
 
-    const basicSalary = 5000;
-    const allowances = 500;
-    const deductions = 300;
+  const handleUpdatePayroll = async (id: string, allowances: number) => {
+    try {
+      await payrollApi.update(id, { allowances });
+      showToast("✅ Payroll updated");
+      await loadPayroll();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
 
-    const newRecord: PayrollRecord = {
-      id: crypto.randomUUID(),
-      userId,
-      month: new Date().toISOString(),
-      basicSalary,
-      allowances,
-      deductions,
-      netSalary: basicSalary + allowances - deductions,
-      status: "pending",
-    };
+  const handleDeletePayroll = async (id: string) => {
+    if (!window.confirm("Delete this payroll record?")) return;
+    try {
+      await payrollApi.delete(id);
+      showToast("✅ Payroll record deleted");
+      await loadPayroll();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
 
-    setRecords((prev) => [...prev, newRecord]);
-  }
-
-  function updatePayroll(id: string) {
-    if (!isAdmin) return;
-
-    const updated = records.map((p) =>
-      p.id === id
-        ? {
-            ...p,
-            allowances: p.allowances + 100,
-            netSalary: p.basicSalary + (p.allowances + 100) - p.deductions,
-          }
-        : p
-    );
-
-    setRecords(updated);
-  }
-
-  function deletePayroll(id: string) {
-    if (!isAdmin) return;
-    setRecords(records.filter((p) => p.id !== id));
-  }
-
-  function processPayroll() {
-    if (!isAdmin) return;
-
-    const updated = records.map((p) =>
-      p.status === "pending"
-        ? {
-            ...p,
-            status: "processed" as const,
-            paymentDate: new Date().toISOString(),
-          }
-        : p
-    );
-
-    setRecords(updated);
-    alert("Payroll processed successfully and saved locally.");
-  }
-
-  // ================= DOWNLOAD REPORT =================
-  function downloadReport() {
+  const downloadReport = () => {
     if (!records.length) return alert("No payroll records to download.");
-
-    const headers = [
-      "Employee",
-      "Month",
-      "Basic Salary",
-      "Allowances",
-      "Deductions",
-      "Net Salary",
-      "Status",
-      "Payment Date",
-    ];
-
-    const rows = records.map((r) => {
-      const user = mockUsers.find((u) => u.id === r.userId);
-      return [
-        user?.name ?? "-",
-        format(new Date(r.month), "MMMM yyyy"),
-        r.basicSalary,
-        r.allowances,
-        r.deductions,
-        r.netSalary,
-        r.status,
-        r.paymentDate ? format(new Date(r.paymentDate), "MMM d, yyyy") : "-",
-      ];
-    });
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
+    const headers = ["Employee","Month","Basic","Allowances","Deductions","Net","Status","Payment Date"];
+    const rows = records.map((r) => [
+      r.userId?.name || "-",
+      r.month,
+      r.basicSalary,
+      r.allowances,
+      r.deductions,
+      r.netSalary,
+      r.status,
+      r.paymentDate ? format(new Date(r.paymentDate), "MMM d, yyyy") : "-",
+    ]);
+    const csv = "data:text/csv;charset=utf-8," +
       [headers, ...rows].map((r) => r.join(",")).join("\n");
-
     const link = document.createElement("a");
-    link.href = encodeURI(csvContent);
+    link.href = encodeURI(csv);
     link.download = `payroll_report_${format(new Date(), "yyyyMMdd")}.csv`;
     link.click();
-  }
+  };
 
-  // ================= UI =================
+  if (!currentUser) return null;
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
   return (
     <div className="space-y-6">
 
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+          {toast}
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-
         <div>
-          <h1 className="font-semibold text-lg mb-1">Payroll Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Track salary, payslips, and payment status
-          </p>
+          <h1 className="font-semibold text-lg">Payroll Management</h1>
+          <p className="text-sm text-gray-500">Track salary, payslips and payment status</p>
         </div>
-
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          {isAdmin && (
-            <>
-              <Button className="gap-2 w-full md:w-auto" onClick={processPayroll}>
-                <FileText className="h-4 w-4" />
-                Process Payroll
-              </Button>
-
-              <Button
-                className="gap-2 w-full md:w-auto"
-                variant="outline"
-                onClick={downloadReport}
-              >
-                <Download className="h-4 w-4" />
-                Download Report
-              </Button>
-            </>
-          )}
-        </div>
-
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button className="gap-2" onClick={handleProcessPayroll}>
+              <FileText className="h-4 w-4" /> Process Payroll
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={downloadReport}>
+              <Download className="h-4 w-4" /> Download Report
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* ===== SUMMARY ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-
+      {/* SUMMARY */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex justify-between pb-2">
             <CardTitle className="text-sm">Total Processed</CardTitle>
@@ -220,7 +156,7 @@ export function PayrollModule() {
           </CardHeader>
           <CardContent>
             <div className="font-semibold text-green-600 text-lg">
-              ${totalProcessed.toLocaleString()}
+              ₹{totalProcessed.toLocaleString()}
             </div>
           </CardContent>
         </Card>
@@ -232,94 +168,85 @@ export function PayrollModule() {
           </CardHeader>
           <CardContent>
             <div className="font-semibold text-orange-600 text-lg">
-              ${totalPending.toLocaleString()}
+              ₹{totalPending.toLocaleString()}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex justify-between pb-2">
-            <CardTitle className="text-sm">Employees</CardTitle>
+            <CardTitle className="text-sm">Total Records</CardTitle>
             <FileText className="h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="font-semibold text-lg">
-              {mockUsers.filter((u) => u.status === "active").length}
-            </div>
+            <div className="font-semibold text-lg">{records.length}</div>
           </CardContent>
         </Card>
-
       </div>
 
-      {/* ===== TABLE ===== */}
+      {/* TABLE */}
       <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <CardHeader>
           <CardTitle>Payroll Records</CardTitle>
-          {isAdmin && (
-            <Button variant="outline" size="sm" onClick={() => addPayroll(mockUsers[0].id)}>
-              Add Payroll
-            </Button>
-          )}
         </CardHeader>
-
         <CardContent>
           <div className="w-full overflow-x-auto">
             <Table className="min-w-[900px]">
               <TableHeader>
                 <TableRow>
-                  {isAdmin && <TableHead>Employee</TableHead>}
+                  {(isAdmin || isHR) && <TableHead>Employee</TableHead>}
                   <TableHead>Month</TableHead>
                   <TableHead>Basic</TableHead>
                   <TableHead>Allowances</TableHead>
                   <TableHead>Deductions</TableHead>
-                  <TableHead>Net</TableHead>
+                  <TableHead>Net Salary</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Payment Date</TableHead>
                   {isAdmin && <TableHead>Actions</TableHead>}
                 </TableRow>
               </TableHeader>
-
               <TableBody>
-                {payrollRecords.map((record) => {
-                  const user = mockUsers.find((u) => u.id === record.userId);
-                  return (
-                    <TableRow key={record.id}>
-                      {isAdmin && <TableCell>{user?.name ?? "-"}</TableCell>}
-                      <TableCell>{format(new Date(record.month), "MMMM yyyy")}</TableCell>
-                      <TableCell>${record.basicSalary}</TableCell>
-                      <TableCell className="text-green-600">+${record.allowances}</TableCell>
-                      <TableCell className="text-red-600">-${record.deductions}</TableCell>
-                      <TableCell className="font-semibold">${record.netSalary}</TableCell>
+                {records.map((record) => (
+                  <TableRow key={record._id}>
+                    {(isAdmin || isHR) && (
+                      <TableCell>{record.userId?.name || "-"}</TableCell>
+                    )}
+                    <TableCell>{record.month}</TableCell>
+                    <TableCell>₹{record.basicSalary?.toLocaleString()}</TableCell>
+                    <TableCell className="text-green-600">+₹{record.allowances?.toLocaleString()}</TableCell>
+                    <TableCell className="text-red-600">-₹{record.deductions?.toLocaleString()}</TableCell>
+                    <TableCell className="font-semibold">₹{record.netSalary?.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <Badge variant={record.status === "processed" ? "default" : "secondary"}>
+                        {record.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {record.paymentDate
+                        ? format(new Date(record.paymentDate), "MMM d, yyyy")
+                        : "-"}
+                    </TableCell>
+                    {isAdmin && (
                       <TableCell>
-                        <Badge variant={record.status === "processed" ? "default" : "secondary"}>
-                          {record.status}
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline"
+                            onClick={() => handleUpdatePayroll(record._id, record.allowances + 100)}>
+                            +Allowance
+                          </Button>
+                          <Button size="sm" variant="destructive"
+                            onClick={() => handleDeletePayroll(record._id)}>
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
-                      <TableCell>
-                        {record.paymentDate ? format(new Date(record.paymentDate), "MMM d, yyyy") : "-"}
-                      </TableCell>
-                      {isAdmin && (
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={() => updatePayroll(record.id)}>
-                              Update
-                            </Button>
-                            <Button size="sm" variant="destructive" onClick={() => deletePayroll(record.id)}>
-                              <Trash className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  );
-                })}
+                    )}
+                  </TableRow>
+                ))}
               </TableBody>
-
             </Table>
           </div>
         </CardContent>
       </Card>
-
     </div>
   );
 }

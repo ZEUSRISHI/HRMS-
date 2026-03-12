@@ -1,6 +1,4 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
-
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -20,424 +18,363 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Label } from "../ui/label";
+import { Plus, Pencil, Trash } from "lucide-react";
+import { useAuth } from "../../contexts/AuthContext";
+import { taskApi } from "@/services/api";
 
-import {
-  Plus,
-  User,
-  Trash,
-  Pencil,
-  ClipboardList,
-  Download,
-} from "lucide-react";
+type TaskStatus = "pending" | "in-progress" | "completed";
+type Priority = "low" | "medium" | "high";
 
-import { format } from "date-fns";
-import { Task, TaskStatus } from "../../types";
-
-/* ================= TYPES ================= */
-
-type FormTask = {
+interface Task {
+  _id: string;
   title: string;
   description: string;
-  assignedRole: "" | "manager" | "hr" | "employee";
-  priority: "" | "low" | "medium" | "high";
-  category: string;
-  startDate: string;
+  assignedTo: any;
+  assignedBy: any;
+  priority: Priority;
   dueDate: string;
-  estimatedHours: string;
-  frequency: "daily" | "weekly" | "monthly" | "one-time";
-  notes: string;
-};
+  status: TaskStatus;
+  updates: any[];
+}
 
 export function TaskManagement() {
   const { currentUser } = useAuth();
-  if (!currentUser) return null;
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [toast, setToast] = useState("");
 
-  const isAdmin = currentUser.role === "admin";
-  const isManager = currentUser.role === "manager";
-  const isHR = currentUser.role === "hr";
-  const isEmployee = currentUser.role === "employee";
-
-  /* ================= STORAGE ================= */
-
-  const [tasks, setTasks] = useState<Task[]>(() => {
-    const stored = localStorage.getItem("tasks");
-    return stored ? JSON.parse(stored) : [];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
-
-  /* ================= REPORT DOWNLOAD ================= */
-
-  const downloadReport = () => {
-    const headers = [
-      "Title",
-      "Assigned To",
-      "Priority",
-      "Status",
-      "Start Date",
-      "Due Date",
-      "Estimated Hours",
-    ];
-
-    const rows = tasks.map((t) => [
-      t.title,
-      t.assignedTo,
-      t.priority,
-      t.status,
-      t.startDate || "-",
-      t.dueDate,
-      t.estimatedHours || "-",
-    ]);
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers, ...rows].map((r) => r.join(",")).join("\n");
-
-    const link = document.createElement("a");
-    link.href = encodeURI(csvContent);
-    link.download = "task_report.csv";
-    link.click();
-  };
-
-  /* ================= FILTERS ================= */
-
-  const myTasks = tasks.filter((t) => t.assignedTo === currentUser.role);
-
-  const assignedByMe = tasks.filter((t) => t.assignedBy === currentUser.id);
-
-  /* ================= FORM ================= */
-
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-
-  const [form, setForm] = useState<FormTask>({
+  const [form, setForm] = useState({
     title: "",
     description: "",
-    assignedRole: "",
-    priority: "",
-    category: "",
-    startDate: "",
+    assignedTo: "",
+    priority: "medium" as Priority,
     dueDate: "",
-    estimatedHours: "",
-    frequency: "one-time",
-    notes: "",
+    status: "pending" as TaskStatus,
   });
 
+  const isAdmin   = currentUser?.role === "admin";
+  const isManager = currentUser?.role === "manager";
+  const canCreate = isAdmin || isManager;
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  };
+
+  /* ===== LOAD TASKS FROM API ===== */
+  const loadTasks = async () => {
+    try {
+      setLoading(true);
+      let data;
+      if (canCreate) {
+        data = await taskApi.getAll();
+        setTasks(data.tasks || []);
+      } else {
+        data = await taskApi.getMy();
+        setTasks(data.tasks || []);
+      }
+    } catch (err: any) {
+      console.error("Load tasks error:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  /* ===== CREATE / UPDATE TASK ===== */
+  const handleSubmit = async () => {
+    if (!form.title) return showToast("Title is required");
+
+    try {
+      if (editId) {
+        await taskApi.update(editId, form);
+        showToast("✅ Task updated successfully");
+      } else {
+        await taskApi.create(form);
+        showToast("✅ Task created successfully");
+      }
+
+      await loadTasks();
+      resetForm();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
+
+  /* ===== DELETE TASK ===== */
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this task?")) return;
+    try {
+      await taskApi.delete(id);
+      showToast("✅ Task deleted");
+      await loadTasks();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
+
+  /* ===== EDIT TASK ===== */
+  const handleEdit = (task: Task) => {
+    setEditId(task._id);
+    setForm({
+      title:       task.title,
+      description: task.description,
+      assignedTo:  task.assignedTo?._id || task.assignedTo || "",
+      priority:    task.priority,
+      dueDate:     task.dueDate || "",
+      status:      task.status,
+    });
+    setOpen(true);
+  };
+
+  /* ===== UPDATE STATUS ===== */
+  const handleStatusChange = async (id: string, status: TaskStatus) => {
+    try {
+      await taskApi.update(id, { status });
+      showToast("✅ Status updated");
+      await loadTasks();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
+
   const resetForm = () => {
+    setEditId(null);
     setForm({
       title: "",
       description: "",
-      assignedRole: "",
-      priority: "",
-      category: "",
-      startDate: "",
+      assignedTo: "",
+      priority: "medium",
       dueDate: "",
-      estimatedHours: "",
-      frequency: "one-time",
-      notes: "",
-    });
-    setEditingTaskId(null);
-  };
-
-  const handleSave = () => {
-    if (!isAdmin && !isManager) return;
-    if (!form.title || !form.assignedRole || !form.priority || !form.dueDate)
-      return;
-
-    const baseTask: Omit<Task, "id" | "createdAt"> = {
-      title: form.title,
-      description: form.description,
-      assignedTo: form.assignedRole,
-      assignedBy: currentUser.id,
-      priority: form.priority as any,
       status: "pending",
-      dueDate: form.dueDate,
-      frequency: form.frequency,
-      comments: [],
-      category: form.category || undefined,
-      startDate: form.startDate || undefined,
-      estimatedHours: form.estimatedHours
-        ? Number(form.estimatedHours)
-        : undefined,
-      notes: form.notes || undefined,
-    };
-
-    if (editingTaskId) {
-      setTasks((prev) =>
-        prev.map((t) =>
-          t.id === editingTaskId ? { ...t, ...baseTask } : t
-        )
-      );
-    } else {
-      const newTask: Task = {
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        ...baseTask,
-      };
-
-      setTasks((prev) => [...prev, newTask]);
-    }
-
-    resetForm();
+    });
+    setOpen(false);
   };
 
-  const advanceStatus = (task: Task) => {
-    const next: Record<TaskStatus, TaskStatus> = {
-      pending: "in-progress",
-      "in-progress": "completed",
-      completed: "completed",
-    };
+  const priorityColor = (p: string) => {
+    if (p === "high")   return "bg-red-100 text-red-700";
+    if (p === "medium") return "bg-yellow-100 text-yellow-700";
+    return "bg-green-100 text-green-700";
+  };
 
-    setTasks((prev) =>
-      prev.map((t) =>
-        t.id === task.id ? { ...t, status: next[t.status] } : t
-      )
+  const statusColor = (s: string) => {
+    if (s === "completed")  return "bg-green-500 text-white";
+    if (s === "in-progress") return "bg-blue-500 text-white";
+    return "bg-gray-400 text-white";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
     );
-  };
-
-  const handleDelete = (id: string) => {
-    if (!isAdmin && !isManager) return;
-    setTasks((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  /* ================= TASK CARD ================= */
-
-  const TaskCard = ({ task }: { task: Task }) => (
-    <Card className="shadow-sm hover:shadow-lg transition rounded-xl">
-      <CardHeader className="pb-2">
-        <div className="flex justify-between">
-          <CardTitle className="text-sm sm:text-base">
-            {task.title}
-          </CardTitle>
-          <Badge variant="outline">{task.status}</Badge>
-        </div>
-      </CardHeader>
-
-      <CardContent className="space-y-3 text-sm">
-        <p className="text-muted-foreground line-clamp-2">
-          {task.description}
-        </p>
-
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <User className="h-3 w-3" />
-            {task.assignedTo.toUpperCase()}
-          </span>
-
-          <span>{format(new Date(task.dueDate), "MMM d")}</span>
-        </div>
-
-        {task.status !== "completed" && (
-          <Button
-            size="sm"
-            className="w-full"
-            onClick={() => advanceStatus(task)}
-          >
-            Move to Next Stage
-          </Button>
-        )}
-
-        {(isAdmin || isManager) && (
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => {
-                setForm({
-                  title: task.title,
-                  description: task.description,
-                  assignedRole: task.assignedTo as any,
-                  priority: task.priority,
-                  category: task.category || "",
-                  startDate: task.startDate || "",
-                  dueDate: task.dueDate,
-                  estimatedHours: String(task.estimatedHours || ""),
-                  frequency: task.frequency,
-                  notes: task.notes || "",
-                });
-
-                setEditingTaskId(task.id);
-              }}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => handleDelete(task.id)}
-            >
-              <Trash className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
-  /* ================= TAB CONTROL ================= */
-
-  const defaultTab = isAdmin ? "assigned" : "my";
+  }
 
   return (
-    <div className="space-y-6 p-2 sm:p-4">
+    <div className="space-y-6">
+
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+          {toast}
+        </div>
+      )}
 
       {/* HEADER */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Task Management</h1>
+          <p className="text-sm text-gray-500">
+            {tasks.length} task{tasks.length !== 1 ? "s" : ""} total
+          </p>
+        </div>
 
-      <div className="flex flex-col sm:flex-row justify-between gap-3 sm:items-center">
-        <h1 className="text-lg sm:text-xl font-bold flex items-center gap-2">
-          <ClipboardList className="h-5 w-5" />
-          Task Management
-        </h1>
+        {canCreate && (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => resetForm()} className="gap-2">
+                <Plus className="h-4 w-4" />
+                New Task
+              </Button>
+            </DialogTrigger>
 
-        <div className="flex gap-2 flex-wrap">
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>
+                  {editId ? "Edit Task" : "Create New Task"}
+                </DialogTitle>
+              </DialogHeader>
 
-          {isAdmin && (
-            <Button variant="outline" onClick={downloadReport}>
-              <Download className="h-4 w-4 mr-2" />
-              Download Report
-            </Button>
-          )}
-
-          {(isAdmin || isManager) && (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  {editingTaskId ? "Edit Task" : "Create Task"}
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingTaskId ? "Update Task" : "Create Task"}
-                  </DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-4">
-
+              <div className="space-y-4 mt-2">
+                <div>
+                  <Label>Title *</Label>
                   <Input
-                    placeholder="Task Title"
                     value={form.title}
-                    onChange={(e) =>
-                      setForm({ ...form, title: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    placeholder="Task title"
                   />
+                </div>
 
+                <div>
+                  <Label>Description</Label>
                   <Textarea
-                    placeholder="Task Description"
+                    rows={3}
                     value={form.description}
-                    onChange={(e) =>
-                      setForm({ ...form, description: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    placeholder="Task description"
                   />
+                </div>
 
-                  <Select
-                    value={form.assignedRole}
-                    onValueChange={(v) =>
-                      setForm({ ...form, assignedRole: v as any })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Assign Role" />
-                    </SelectTrigger>
+                <div>
+                  <Label>Assign To (User ID)</Label>
+                  <Input
+                    value={form.assignedTo}
+                    onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+                    placeholder="Paste user ID"
+                  />
+                </div>
 
-                    <SelectContent>
-                      {isAdmin && (
-                        <SelectItem value="manager">
-                          Manager
-                        </SelectItem>
-                      )}
-
-                      {isManager && (
-                        <>
-                          <SelectItem value="hr">HR</SelectItem>
-                          <SelectItem value="employee">
-                            Employee
-                          </SelectItem>
-                          <SelectItem value="manager">
-                            Manager
-                          </SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-
+                <div>
+                  <Label>Priority</Label>
                   <Select
                     value={form.priority}
-                    onValueChange={(v) =>
-                      setForm({ ...form, priority: v as any })
-                    }
+                    onValueChange={(v: Priority) => setForm({ ...form, priority: v })}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Priority" />
-                    </SelectTrigger>
-
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="high">High</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
 
+                <div>
+                  <Label>Due Date</Label>
                   <Input
                     type="date"
                     value={form.dueDate}
-                    onChange={(e) =>
-                      setForm({ ...form, dueDate: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
                   />
-
-                  <Button className="w-full" onClick={handleSave}>
-                    {editingTaskId ? "Update Task" : "Save Task"}
-                  </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-          )}
-        </div>
+
+                <div>
+                  <Label>Status</Label>
+                  <Select
+                    value={form.status}
+                    onValueChange={(v: TaskStatus) => setForm({ ...form, status: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button className="w-full" onClick={handleSubmit}>
+                  {editId ? "Update Task" : "Create Task"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
-      {/* TABS */}
+      {/* TASK LIST */}
+      {tasks.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12 text-gray-400">
+            No tasks found. {canCreate && "Create your first task!"}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {tasks.map((task) => (
+            <Card key={task._id} className="hover:shadow-md transition">
+              <CardHeader className="flex flex-row items-start justify-between pb-2">
+                <div className="space-y-1">
+                  <CardTitle className="text-base">{task.title}</CardTitle>
+                  <p className="text-sm text-gray-500">{task.description}</p>
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${priorityColor(task.priority)}`}>
+                    {task.priority}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(task.status)}`}>
+                    {task.status}
+                  </span>
+                </div>
+              </CardHeader>
 
-      <Tabs defaultValue={defaultTab}>
-        <TabsList className="grid grid-cols-2 w-full">
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                  {task.assignedTo?.name && (
+                    <span>👤 {task.assignedTo.name}</span>
+                  )}
+                  {task.dueDate && (
+                    <span>📅 Due: {task.dueDate}</span>
+                  )}
+                  {task.updates?.length > 0 && (
+                    <span>📝 {task.updates.length} update(s)</span>
+                  )}
+                </div>
 
-          {(isManager || isHR || isEmployee) && (
-            <TabsTrigger value="my">My Tasks</TabsTrigger>
-          )}
+                <div className="flex flex-wrap gap-2">
+                  {/* Status change for employee */}
+                  {!canCreate && (
+                    <Select
+                      value={task.status}
+                      onValueChange={(v: TaskStatus) => handleStatusChange(task._id, v)}
+                    >
+                      <SelectTrigger className="w-36 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in-progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
 
-          {(isAdmin || isManager) && (
-            <TabsTrigger value="assigned">
-              Assigned By Me
-            </TabsTrigger>
-          )}
-
-        </TabsList>
-
-        {(isManager || isHR || isEmployee) && (
-          <TabsContent value="my">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {myTasks.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
-          </TabsContent>
-        )}
-
-        {(isAdmin || isManager) && (
-          <TabsContent value="assigned">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {assignedByMe.map((task) => (
-                <TaskCard key={task.id} task={task} />
-              ))}
-            </div>
-          </TabsContent>
-        )}
-      </Tabs>
+                  {/* Admin / Manager actions */}
+                  {canCreate && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(task)}
+                        className="h-8"
+                      >
+                        <Pencil className="h-3 w-3 mr-1" /> Edit
+                      </Button>
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDelete(task._id)}
+                          className="h-8"
+                        >
+                          <Trash className="h-3 w-3 mr-1" /> Delete
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

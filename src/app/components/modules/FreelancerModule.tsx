@@ -1,369 +1,224 @@
-import { useState } from "react";
-import { Freelancer, useWorkforce } from "../../contexts/WorkforceContext";
+import { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-
-/**
- * Strict Form Type (No any)
- */
-type FreelancerForm = Omit<Freelancer, "id" | "createdAt">;
+import { freelancerApi } from "@/services/api";
 
 export default function FreelancerModule() {
-  const {
-    freelancers,
-    addFreelancer,
-    updateFreelancer,
-    deleteFreelancer,
-  } = useWorkforce();
-
   const { currentUser } = useAuth();
   if (!currentUser) return null;
 
-  const isAdmin = currentUser.role === "admin";
+  const isAdmin   = currentUser.role === "admin";
   const isManager = currentUser.role === "manager";
-  const isHR = currentUser.role === "hr";
+  const isHR      = currentUser.role === "hr";
 
-  const canView = isAdmin || isManager || isHR;
-  if (!canView) return null;
+  if (!isAdmin && !isManager && !isHR) return null;
 
-  const [editId, setEditId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [freelancers, setFreelancers] = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [saving, setSaving]     = useState(false);
+  const [toast, setToast]       = useState("");
+  const [editId, setEditId]     = useState<string | null>(null);
 
-  const emptyForm: FreelancerForm = {
-    name: "",
-    email: "",
-    phone: "",
-    skill: "",
-    rate: "",
-    contractStart: "",
-    contractEnd: "",
-    status: "active",
+  const emptyForm = {
+    name: "", email: "", phone: "", skill: "",
+    rate: "", contractStart: "", contractEnd: "", status: "active" as "active" | "expired",
+  };
+  const [form, setForm] = useState(emptyForm);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
   };
 
-  const [form, setForm] = useState<FreelancerForm>(emptyForm);
-
-  const handleChange = (key: keyof FreelancerForm, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const validate = () => {
-    if (!form.name || !form.email || !form.skill) {
-      alert("Please fill required fields (Name, Email, Skill)");
-      return false;
+  const loadFreelancers = async () => {
+    try {
+      setLoading(true);
+      const data = await freelancerApi.getAll();
+      setFreelancers(data.freelancers || []);
+    } catch (err: any) {
+      console.error(err.message);
+    } finally {
+      setLoading(false);
     }
-    return true;
   };
 
-  const saveFreelancer = () => {
-    if (!isAdmin) return;
-    if (!validate()) return;
+  useEffect(() => { loadFreelancers(); }, []);
 
-    setLoading(true);
-
-    const payload: Freelancer = {
-      id: editId ?? crypto.randomUUID(),
-      createdAt: editId
-        ? freelancers.find((f) => f.id === editId)?.createdAt ||
-          new Date().toISOString()
-        : new Date().toISOString(),
-      ...form,
-    };
-
-    editId ? updateFreelancer(payload) : addFreelancer(payload);
-
-    setTimeout(() => {
+  const handleSave = async () => {
+    if (!form.name || !form.email || !form.skill) {
+      showToast("Please fill required fields (Name, Email, Skill)");
+      return;
+    }
+    try {
+      setSaving(true);
+      if (editId) {
+        await freelancerApi.update(editId, form);
+        showToast("✅ Freelancer updated");
+      } else {
+        await freelancerApi.create(form);
+        showToast("✅ Freelancer added");
+      }
       setEditId(null);
       setForm(emptyForm);
-      setLoading(false);
-    }, 300);
+      await loadFreelancers();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const startEdit = (f: Freelancer) => {
-    if (!isAdmin) return;
-
-    setEditId(f.id);
-
+  const handleEdit = (f: any) => {
+    setEditId(f._id);
     setForm({
-      name: f.name,
-      email: f.email,
-      phone: f.phone,
-      skill: f.skill,
-      rate: f.rate,
+      name:          f.name,
+      email:         f.email,
+      phone:         f.phone,
+      skill:         f.skill,
+      rate:          f.rate,
       contractStart: f.contractStart,
-      contractEnd: f.contractEnd,
-      status: f.status,
+      contractEnd:   f.contractEnd,
+      status:        f.status,
     });
   };
 
-  /* ================= DOWNLOAD REPORT ================= */
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete freelancer?")) return;
+    try {
+      await freelancerApi.delete(id);
+      showToast("✅ Freelancer deleted");
+      await loadFreelancers();
+    } catch (err: any) {
+      showToast("❌ " + err.message);
+    }
+  };
+
   const downloadReport = () => {
-    if (!isAdmin) return;
-
-    const rows: string[] = [];
-    rows.push("Name,Email,Phone,Skill,Rate,Contract Start,Contract End,Status,Created At");
+    const rows = ["Name,Email,Phone,Skill,Rate,Contract Start,Contract End,Status"];
     freelancers.forEach((f) => {
-      rows.push(
-        `${f.name},${f.email},${f.phone},${f.skill},${f.rate},${f.contractStart},${f.contractEnd},${f.status},${f.createdAt}`
-      );
+      rows.push(`${f.name},${f.email},${f.phone},${f.skill},${f.rate},${f.contractStart},${f.contractEnd},${f.status}`);
     });
-
     const blob = new Blob([rows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `freelancers_${Date.now()}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
   };
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   return (
     <div className="p-4 md:p-6 space-y-6">
 
-      {/* HEADER */}
+      {toast && (
+        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+          {toast}
+        </div>
+      )}
 
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-semibold">
-            Freelancer Management
-          </h1>
-
-          <p className="text-gray-500 text-sm">
-            {isAdmin
-              ? "Manage freelancer profiles and contracts"
-              : "View freelancer information"}
-          </p>
+          <h1 className="text-xl font-semibold">Freelancer Management</h1>
+          <p className="text-gray-500 text-sm">{freelancers.length} freelancers registered</p>
         </div>
-
-        {/* DOWNLOAD BUTTON */}
         {isAdmin && (
-          <button
-            onClick={downloadReport}
-            className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
-          >
+          <button onClick={downloadReport}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
             Download Report
           </button>
         )}
       </div>
 
-      {/* ================= ADMIN FORM ================= */}
-
+      {/* FORM */}
       {isAdmin && (
-        <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-5">
-
+        <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-4">
           <h2 className="font-semibold text-lg">
             {editId ? "Edit Freelancer" : "Add New Freelancer"}
           </h2>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-            <Input
-              label="Name *"
-              value={form.name}
-              onChange={(v) => handleChange("name", v)}
-            />
-
-            <Input
-              label="Email *"
-              value={form.email}
-              onChange={(v) => handleChange("email", v)}
-            />
-
-            <Input
-              label="Phone"
-              value={form.phone}
-              onChange={(v) => handleChange("phone", v)}
-            />
-
-            <Input
-              label="Primary Skill *"
-              value={form.skill}
-              onChange={(v) => handleChange("skill", v)}
-            />
-
-            <Input
-              label="Rate"
-              value={form.rate}
-              onChange={(v) => handleChange("rate", v)}
-            />
-
-            <DateInput
-              label="Contract Start"
-              value={form.contractStart}
-              onChange={(v) => handleChange("contractStart", v)}
-            />
-
-            <DateInput
-              label="Contract End"
-              value={form.contractEnd}
-              onChange={(v) => handleChange("contractEnd", v)}
-            />
-
+            {[
+              { label: "Name *", key: "name" },
+              { label: "Email *", key: "email" },
+              { label: "Phone", key: "phone" },
+              { label: "Primary Skill *", key: "skill" },
+              { label: "Rate (e.g. ₹3000/hr)", key: "rate" },
+            ].map(({ label, key }) => (
+              <div key={key} className="flex flex-col space-y-1">
+                <label className="text-sm text-gray-600">{label}</label>
+                <input
+                  className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={(form as any)[key]}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                />
+              </div>
+            ))}
+            {[
+              { label: "Contract Start", key: "contractStart" },
+              { label: "Contract End", key: "contractEnd" },
+            ].map(({ label, key }) => (
+              <div key={key} className="flex flex-col space-y-1">
+                <label className="text-sm text-gray-600">{label}</label>
+                <input type="date"
+                  className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
+                  value={(form as any)[key]}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                />
+              </div>
+            ))}
             <div className="flex flex-col space-y-1">
-              <label className="text-sm text-gray-600">
-                Status
-              </label>
-
+              <label className="text-sm text-gray-600">Status</label>
               <select
                 className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
                 value={form.status}
-                onChange={(e) =>
-                  handleChange(
-                    "status",
-                    e.target.value as "active" | "expired"
-                  )
-                }
-              >
+                onChange={(e) => setForm({ ...form, status: e.target.value as "active" | "expired" })}>
                 <option value="active">Active</option>
                 <option value="expired">Expired</option>
               </select>
             </div>
-
           </div>
-
-          <button
-            onClick={saveFreelancer}
-            disabled={loading}
-            className="bg-green-600 hover:bg-green-700 transition text-white px-4 py-2 rounded-lg w-full md:w-auto"
-          >
-            {loading
-              ? "Saving..."
-              : editId
-              ? "Update Freelancer"
-              : "Add Freelancer"}
+          <button onClick={handleSave} disabled={saving}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+            {saving ? "Saving..." : editId ? "Update Freelancer" : "Add Freelancer"}
           </button>
-
         </div>
       )}
 
-      {/* ================= FREELANCER LIST ================= */}
-
-      <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-4">
-
-        <h2 className="font-semibold text-lg">
-          Freelancer List
-        </h2>
-
+      {/* LIST */}
+      <div className="bg-white p-4 md:p-6 rounded-xl border shadow-sm space-y-3">
+        <h2 className="font-semibold text-lg">Freelancer List</h2>
         {freelancers.length === 0 && (
-          <p className="text-gray-500 text-sm">
-            No freelancers added yet
-          </p>
+          <p className="text-gray-500 text-sm">No freelancers added yet</p>
         )}
-
-        <div className="space-y-3">
-
-          {freelancers.map((f) => (
-            <div
-              key={f.id}
-              className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-lg p-4 hover:bg-gray-50 transition"
-            >
-
-              {/* INFO */}
-
-              <div className="space-y-1">
-
-                <p className="font-semibold">
-                  {f.name}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  {f.skill}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  {f.email}
-                </p>
-
-                <p className="text-sm text-gray-500">
-                  Status: {f.status}
-                </p>
-
-              </div>
-
-              {/* ACTIONS */}
-
-              {isAdmin && (
-                <div className="flex gap-4 mt-3 md:mt-0">
-
-                  <button
-                    onClick={() => startEdit(f)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    onClick={() => deleteFreelancer(f.id)}
-                    className="text-red-600 hover:text-red-800 text-sm font-medium"
-                  >
-                    Delete
-                  </button>
-
-                </div>
-              )}
-
+        {freelancers.map((f) => (
+          <div key={f._id}
+            className="flex flex-col md:flex-row md:items-center md:justify-between border rounded-lg p-4 hover:bg-gray-50">
+            <div className="space-y-1">
+              <p className="font-semibold">{f.name}</p>
+              <p className="text-sm text-gray-500">{f.skill} • {f.rate}</p>
+              <p className="text-sm text-gray-500">{f.email} • {f.phone}</p>
+              <p className="text-xs text-gray-400">
+                {f.contractStart} → {f.contractEnd} •{" "}
+                <span className={f.status === "active" ? "text-green-600" : "text-red-500"}>
+                  {f.status}
+                </span>
+              </p>
             </div>
-          ))}
-
-        </div>
-
+            {isAdmin && (
+              <div className="flex gap-4 mt-3 md:mt-0">
+                <button onClick={() => handleEdit(f)}
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium">Edit</button>
+                <button onClick={() => handleDelete(f._id)}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium">Delete</button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-
-    </div>
-  );
-}
-
-/* ================= INPUT ================= */
-
-function Input({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col space-y-1">
-
-      <label className="text-sm text-gray-600">
-        {label}
-      </label>
-
-      <input
-        className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-
-    </div>
-  );
-}
-
-/* ================= DATE INPUT ================= */
-
-function DateInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col space-y-1">
-
-      <label className="text-sm text-gray-600">
-        {label}
-      </label>
-
-      <input
-        type="date"
-        className="border p-2 rounded-md focus:ring-2 focus:ring-green-500 outline-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-
     </div>
   );
 }

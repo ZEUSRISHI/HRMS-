@@ -11,6 +11,9 @@ import { AdminUsersProvider } from "./contexts/AdminUsersContext";
 
 import MainLayout from "../layouts/MainLayout";
 
+/* NEW USERS PAGE */
+import Users from "../pages/Users";
+
 /* PERMISSIONS */
 import { canManageVendors } from "../utils/permissions";
 
@@ -33,7 +36,7 @@ import {
   Timer,
   BarChart3,
   Briefcase,
-  Users,
+  Users as UsersIcon,
   Shield,
   LucideIcon,
 } from "lucide-react";
@@ -87,6 +90,7 @@ export type ModuleType =
   | "hr-employees"
   | "hr-attendance-leave"
   | "admin-users"
+  | "users"   // NEW
   | "profile"
   | "account";
 
@@ -107,8 +111,6 @@ function AppContent() {
     useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
-
-  /* Permission Example */
 
   if (canManageVendors(currentUser.role)) {
     console.log("Vendor management allowed");
@@ -144,12 +146,13 @@ function AppContent() {
 
     { id: "workforce-overview", name: "Workforce", icon: Briefcase, roles: ["admin","manager","hr"] },
 
-    { id: "hr-employees", name: "Employee Records", icon: Users, roles: ["hr"] },
+    { id: "hr-employees", name: "Employee Records", icon: UsersIcon, roles: ["hr"] },
 
     { id: "hr-attendance-leave", name: "Attendance & Leave", icon: Clock, roles: ["hr"] },
 
     { id: "admin-users", name: "User Management", icon: Shield, roles: ["admin"] },
 
+    { id: "users", name: "Users Page", icon: UsersIcon, roles: ["admin","hr"] }, // NEW
   ];
 
   const visibleMenuItems =
@@ -192,6 +195,9 @@ function AppContent() {
       case "hr-employees": return <EmployeeRecordsModule />;
       case "hr-attendance-leave": return <AttendanceLeaveModule />;
       case "admin-users": return <AdminUserManagement />;
+
+      case "users": return <Users />; // NEW PAGE
+
       case "profile": return <ProfilePage />;
       case "account": return <AccountPage />;
 

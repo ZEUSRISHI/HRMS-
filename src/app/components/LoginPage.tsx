@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useAuth, Role } from "../contexts/AuthContext";
-import loginImage from "../assets/hrms-login1.png"
 
 interface Props {
   onSignup: () => void;
@@ -10,31 +9,43 @@ interface Props {
 export default function LoginPage({ onSignup, onReset }: Props) {
   const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("employee");
+  const [role, setRole]         = useState<Role>("employee");
   const [remember, setRemember] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
       setError("Please fill all fields");
       return;
     }
 
-    const success = login(email.trim(), password.trim(), role);
+    setLoading(true);
+    setError("");
+
+    const success = await login(email.trim(), password.trim(), role);
+
+    setLoading(false);
 
     if (!success) {
-      setError("Invalid credentials");
+      setError("Invalid email, password or role. Please try again.");
     }
+  };
+
+  /* Press Enter to login */
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleLogin();
   };
 
   return (
     <div className="min-h-screen flex bg-gray-100">
 
-      {/* LEFT HERO SECTION */}
+      {/* ===== LEFT HERO ===== */}
       <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-orange-500 to-orange-700 text-white p-12 items-center justify-center">
         <div className="max-w-md space-y-6">
+
           <h1 className="text-4xl font-bold leading-snug">
             Empowering people through seamless HR management
           </h1>
@@ -43,29 +54,36 @@ export default function LoginPage({ onSignup, onReset }: Props) {
             Manage employees, attendance, payroll and performance in one place.
           </p>
 
-          <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl">
-            <p className="text-sm">
-              ✔ Smart workforce tracking  
-              <br />
-              ✔ Easy leave management  
-              <br />
-              ✔ Real-time analytics
-            </p>
+          <div className="bg-white/10 backdrop-blur-md p-6 rounded-xl space-y-2">
+            <p className="text-sm">✔ Smart workforce tracking</p>
+            <p className="text-sm">✔ Easy leave management</p>
+            <p className="text-sm">✔ Real-time analytics</p>
           </div>
+
+          {/* DEFAULT CREDENTIALS HINT */}
+          <div className="bg-white/10 p-4 rounded-xl text-xs space-y-1">
+            <p className="font-semibold mb-2">Default Credentials:</p>
+            <p>Admin: admin@quibotech.com / admin123</p>
+            <p>HR: hr@quibotech.com / hr123456</p>
+            <p>Manager: manager@quibotech.com / manager123</p>
+            <p>Employee: employee@quibotech.com / employee123</p>
+          </div>
+
         </div>
       </div>
 
-      {/* RIGHT LOGIN SECTION */}
+      {/* ===== RIGHT LOGIN FORM ===== */}
       <div className="flex w-full lg:w-1/2 items-center justify-center p-6">
         <div className="bg-white w-full max-w-md p-8 rounded-2xl shadow-xl space-y-5">
 
           {/* LOGO */}
-          <h2 className="text-center text-2xl font-bold text-gray-800">
-            SmartHR
-          </h2>
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-orange-500">SmartHR</h2>
+            <p className="text-gray-400 text-xs mt-1">Quibo Tech HRMS</p>
+          </div>
 
           <div className="text-center">
-            <p className="text-lg font-semibold">Sign In</p>
+            <p className="text-lg font-semibold text-gray-800">Sign In</p>
             <p className="text-gray-500 text-sm">
               Enter your details to access your account
             </p>
@@ -73,31 +91,41 @@ export default function LoginPage({ onSignup, onReset }: Props) {
 
           {/* EMAIL */}
           <div>
-            <label className="text-sm text-gray-600">Email Address</label>
+            <label className="text-sm text-gray-600 font-medium">
+              Email Address
+            </label>
             <input
               type="email"
-              className="w-full mt-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full mt-1 p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               value={email}
+              placeholder="admin@quibotech.com"
               onChange={(e) => setEmail(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           </div>
 
           {/* PASSWORD */}
           <div>
-            <label className="text-sm text-gray-600">Password</label>
+            <label className="text-sm text-gray-600 font-medium">
+              Password
+            </label>
             <input
               type="password"
-              className="w-full mt-1 p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+              className="w-full mt-1 p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
               value={password}
+              placeholder="••••••••"
               onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
           </div>
 
           {/* ROLE */}
           <div>
-            <label className="text-sm text-gray-600">Login As</label>
+            <label className="text-sm text-gray-600 font-medium">
+              Login As
+            </label>
             <select
-              className="w-full mt-1 p-2 border rounded-lg"
+              className="w-full mt-1 p-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
             >
@@ -110,18 +138,18 @@ export default function LoginPage({ onSignup, onReset }: Props) {
 
           {/* REMEMBER + FORGOT */}
           <div className="flex justify-between items-center text-sm">
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 cursor-pointer text-gray-600">
               <input
                 type="checkbox"
                 checked={remember}
                 onChange={() => setRemember(!remember)}
+                className="accent-orange-500"
               />
               Remember Me
             </label>
-
             <button
               onClick={onReset}
-              className="text-orange-600 hover:underline"
+              className="text-orange-600 hover:underline font-medium"
             >
               Forgot Password?
             </button>
@@ -129,34 +157,47 @@ export default function LoginPage({ onSignup, onReset }: Props) {
 
           {/* ERROR */}
           {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
+            <div className="bg-red-50 border border-red-200 text-red-600 text-sm text-center p-3 rounded-lg">
+              {error}
+            </div>
           )}
 
           {/* LOGIN BUTTON */}
           <button
             onClick={handleLogin}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white p-2 rounded-lg transition"
+            disabled={loading}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 disabled:cursor-not-allowed text-white p-2.5 rounded-lg transition font-semibold"
           >
-            Sign In
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Signing in...
+              </span>
+            ) : (
+              "Sign In"
+            )}
           </button>
 
-          {/* SIGNUP */}
-          <p className="text-center text-sm">
-            Don’t have an account?{" "}
+          {/* SIGNUP LINK */}
+          <p className="text-center text-sm text-gray-600">
+            Don't have an account?{" "}
             <button
               onClick={onSignup}
-              className="text-orange-600 font-medium hover:underline"
+              className="text-orange-600 font-semibold hover:underline"
             >
               Create Account
             </button>
           </p>
 
-          {/* SOCIAL LOGIN UI (DESIGN ONLY) */}
-          <div className="pt-4 border-t text-center text-sm text-gray-400">
-            Or continue with
-            <div className="flex gap-3 mt-3">
-              <button className="flex-1 border p-2 rounded-lg">Google</button>
-            </div>
+          {/* SOCIAL */}
+          <div className="pt-2 border-t text-center">
+            <p className="text-sm text-gray-400 mb-3">Or continue with</p>
+            <button className="w-full border p-2.5 rounded-lg hover:bg-gray-50 text-sm text-gray-600 transition">
+              🔵 Google
+            </button>
           </div>
 
         </div>

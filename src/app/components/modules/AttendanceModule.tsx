@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
-import { Table, TableBody, TableCell, TableRow } from "../ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Badge } from "../ui/badge";
 import {
   Dialog,
@@ -12,9 +12,9 @@ import {
 } from "../ui/dialog";
 import { Textarea } from "../ui/textarea";
 import { useAuth } from "../../contexts/AuthContext";
-import { mockAttendance, mockLeaveRequests, mockUsers } from "../../data/mockData";
+import { mockAttendance, mockUsers } from "../../data/mockData";
 import { format } from "date-fns";
-import { LogIn, LogOut, Download, Users } from "lucide-react";
+import { LogIn, LogOut, Download, Users, Calendar, Clock } from "lucide-react";
 
 /* ================= TYPES ================= */
 
@@ -23,12 +23,14 @@ type LeaveStatus =
   | "pending_hr"
   | "pending_admin"
   | "approved"
-  | "rejected";
+  | "rejected"
+  | "emergency_approved";
 
 type LeaveRecord = {
   id: string;
   userId: string;
   type: string;
+  isEmergency: boolean;
   priority: "low" | "medium" | "high";
   startDate: string;
   endDate: string;
@@ -36,7 +38,6 @@ type LeaveRecord = {
   reason: string;
   description?: string;
   emergencyContact?: string;
-  attachmentUrl?: string;
   status: LeaveStatus;
   appliedAt: string;
 };
@@ -50,10 +51,23 @@ type AttendanceRecord = {
   status: string;
 };
 
-/* STORAGE */
+/* ================= STORAGE KEYS ================= */
 
-const ATT_KEY = "startup_attendance_records";
+const ATT_KEY   = "startup_attendance_records";
 const LEAVE_KEY = "startup_leave_records";
+
+/* ================= HELPERS ================= */
+
+const initForm = {
+  type: "",
+  isEmergency: false,
+  priority: "medium" as "low" | "medium" | "high",
+  startDate: "",
+  endDate: "",
+  reason: "",
+  description: "",
+  emergencyContact: "",
+};
 
 /* ================= COMPONENT ================= */
 
@@ -62,515 +76,592 @@ export function AttendanceModule() {
   const { currentUser } = useAuth();
   const role = currentUser?.role;
 
-  const isManager = role === "manager";
-  const isHR = role === "hr";
-  const isAdmin = role === "admin";
+  const isEmployee = role === "employee";
+  const isManager  = role === "manager";
+  const isHR       = role === "hr";
+  const isAdmin    = role === "admin";
 
-  const [attendanceData,setAttendanceData] = useState<AttendanceRecord[]>([]);
-  const [leaveData,setLeaveData] = useState<LeaveRecord[]>([]);
-  const [checkInTime,setCheckInTime] = useState<string | null>(null);
-  const [toast,setToast] = useState<string | null>(null);
+  /* ---- state ---- */
+  const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);
+  const [leaveData,      setLeaveData]      = useState<LeaveRecord[]>([]);
+  const [toast,          setToast]          = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [form,           setForm]           = useState(initForm);
+  const [dialogOpen,     setDialogOpen]     = useState(false);
 
-  const [reportStart,setReportStart] = useState("");
-  const [reportEnd,setReportEnd] = useState("");
+  const [reportStart, setReportStart] = useState("");
+  const [reportEnd,   setReportEnd]   = useState("");
 
-  const [leaveType,setLeaveType] = useState("");
-  const [priority,setPriority] = useState<"low"|"medium"|"high">("medium");
-  const [startDate,setStartDate] = useState("");
-  const [endDate,setEndDate] = useState("");
-  const [reason,setReason] = useState("");
-  const [description,setDescription] = useState("");
-
-  const showToast=(msg:string)=>{
-    setToast(msg);
-    setTimeout(()=>setToast(null),2500);
+  /* ---- toast ---- */
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
   };
 
-  /* ================= LOAD ================= */
+  const setF = (k: keyof typeof initForm, v: any) =>
+    setForm(f => ({ ...f, [k]: v }));
 
-  useEffect(()=>{
-    const a=localStorage.getItem(ATT_KEY);
-    const l=localStorage.getItem(LEAVE_KEY);
+  /* ---- load ---- */
+  useEffect(() => {
+    const a = localStorage.getItem(ATT_KEY);
+    const l = localStorage.getItem(LEAVE_KEY);
+    setAttendanceData(a ? JSON.parse(a) : mockAttendance);
+    setLeaveData(l ? JSON.parse(l) : []);
+  }, []);
 
-    setAttendanceData(a?JSON.parse(a):mockAttendance);
-    setLeaveData(l?JSON.parse(l):mockLeaveRequests);
+  useEffect(() => {
+    localStorage.setItem(ATT_KEY,   JSON.stringify(attendanceData));
+  }, [attendanceData]);
 
-  },[]);
+  useEffect(() => {
+    localStorage.setItem(LEAVE_KEY, JSON.stringify(leaveData));
+  }, [leaveData]);
 
-  useEffect(()=>{
-    localStorage.setItem(ATT_KEY,JSON.stringify(attendanceData));
-  },[attendanceData]);
+  if (!currentUser) return null;
 
-  useEffect(()=>{
-    localStorage.setItem(LEAVE_KEY,JSON.stringify(leaveData));
-  },[leaveData]);
-
-  if(!currentUser) return null;
-
-  const todayDate=format(new Date(),"yyyy-MM-dd");
-
-  const todayAttendance=attendanceData.find(
-    (a)=>a.userId===currentUser.id && a.date===todayDate
+  const todayDate       = format(new Date(), "yyyy-MM-dd");
+  const todayAttendance = attendanceData.find(
+    a => a.userId === currentUser.id && a.date === todayDate
   );
 
   /* ================= CHECK IN ================= */
-
-  const handleCheckIn=()=>{
-
-    if(todayAttendance) return;
-
-    const now=format(new Date(),"HH:mm");
-
-    const rec:AttendanceRecord={
-      id:crypto.randomUUID(),
-      userId:currentUser.id,
-      date:todayDate,
-      checkIn:now,
-      status:"present"
+  const handleCheckIn = () => {
+    if (todayAttendance) return;
+    const now = format(new Date(), "HH:mm");
+    const rec: AttendanceRecord = {
+      id: crypto.randomUUID(),
+      userId: currentUser.id,
+      date: todayDate,
+      checkIn: now,
+      status: "present",
     };
-
-    setAttendanceData((prev)=>[rec,...prev]);
-    setCheckInTime(now);
-    showToast("Checked in");
-
+    setAttendanceData(prev => [rec, ...prev]);
+    showToast("Checked in successfully");
   };
 
   /* ================= CHECK OUT ================= */
-
-  const handleCheckOut=()=>{
-
-    const now=format(new Date(),"HH:mm");
-
-    const updated=attendanceData.map((r)=>
-      r.userId===currentUser.id && r.date===todayDate
-        ? {...r,checkOut:now}
-        : r
+  const handleCheckOut = () => {
+    const now = format(new Date(), "HH:mm");
+    setAttendanceData(prev =>
+      prev.map(r =>
+        r.userId === currentUser.id && r.date === todayDate
+          ? { ...r, checkOut: now }
+          : r
+      )
     );
-
-    setAttendanceData(updated);
-    showToast("Checked out");
-
+    showToast("Checked out successfully");
   };
 
   /* ================= SUBMIT LEAVE ================= */
+  const submitLeave = () => {
+    if (!form.type || !form.startDate || !form.endDate || !form.reason) {
+      showToast("Please fill all required fields", "error");
+      return;
+    }
 
-  const submitLeave=()=>{
-
-    const days=
+    const days =
       Math.ceil(
-        (new Date(endDate).getTime()-
-        new Date(startDate).getTime())/(1000*60*60*24)
-      )+1;
+        (new Date(form.endDate).getTime() - new Date(form.startDate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      ) + 1;
 
-    const rec:LeaveRecord={
-      id:crypto.randomUUID(),
-      userId:currentUser.id,
-      type:leaveType,
-      priority,
-      startDate,
-      endDate,
+    /*
+      Routing logic:
+      - Emergency leave  → pending_manager (manager approves directly, done)
+      - Employee         → pending_manager → pending_hr → pending_admin
+      - Manager / HR     → pending_admin   (straight to admin)
+    */
+    let initialStatus: LeaveStatus;
+    if (form.isEmergency) {
+      initialStatus = "pending_manager";
+    } else if (isEmployee) {
+      initialStatus = "pending_manager";
+    } else {
+      // manager or hr applying → goes straight to admin
+      initialStatus = "pending_admin";
+    }
+
+    const rec: LeaveRecord = {
+      id:               crypto.randomUUID(),
+      userId:           currentUser.id,
+      type:             form.type,
+      isEmergency:      form.isEmergency,
+      priority:         form.priority,
+      startDate:        form.startDate,
+      endDate:          form.endDate,
       days,
-      reason,
-      description,
-      status:"pending_manager",
-      appliedAt:new Date().toISOString()
+      reason:           form.reason,
+      description:      form.description,
+      emergencyContact: form.emergencyContact,
+      status:           initialStatus,
+      appliedAt:        new Date().toISOString(),
     };
 
-    setLeaveData((prev)=>[rec,...prev]);
-
-    showToast("Leave submitted");
-
-    setLeaveType("");
-    setStartDate("");
-    setEndDate("");
-    setReason("");
-    setDescription("");
-
+    setLeaveData(prev => [rec, ...prev]);
+    showToast("Leave request submitted");
+    setForm(initForm);
+    setDialogOpen(false);
   };
 
-  /* ================= APPROVAL ================= */
+  /* ================= APPROVE ================= */
+  const approveLeave = (id: string) => {
+    setLeaveData(prev =>
+      prev.map(l => {
+        if (l.id !== id) return l;
 
-  const approveLeave=(id:string)=>{
+        // Emergency leave: manager approves → done (no further escalation)
+        if (l.isEmergency && isManager) {
+          return { ...l, status: "emergency_approved" };
+        }
 
-    setLeaveData((prev)=>
-      prev.map((l)=>{
-        if(l.id!==id) return l;
-
-        if(isManager) return {...l,status:"pending_hr"};
-        if(isHR) return {...l,status:"pending_admin"};
-        if(isAdmin) return {...l,status:"approved"};
+        // Normal flow
+        if (isManager) return { ...l, status: "pending_hr" };
+        if (isHR)      return { ...l, status: "pending_admin" };
+        if (isAdmin)   return { ...l, status: "approved" };
 
         return l;
       })
     );
-
     showToast("Leave approved");
-
   };
 
-  const rejectLeave=(id:string)=>{
-
-    setLeaveData((prev)=>
-      prev.map((l)=>
-        l.id===id ? {...l,status:"rejected"} : l
-      )
+  /* ================= REJECT ================= */
+  const rejectLeave = (id: string) => {
+    setLeaveData(prev =>
+      prev.map(l => l.id === id ? { ...l, status: "rejected" } : l)
     );
-
-    showToast("Leave rejected");
-
+    showToast("Leave rejected", "error");
   };
 
-  /* ================= FILTER ================= */
-
-  const visibleLeaves=leaveData.filter((l)=>{
-    if(isAdmin) return true;
-    if(isManager) return l.status==="pending_manager";
-    if(isHR) return l.status==="pending_hr";
-    return l.userId===currentUser.id;
+  /* ================= VISIBLE LEAVES per role ================= */
+  const visibleLeaves = leaveData.filter(l => {
+    if (isAdmin) {
+      // Admin sees everything EXCEPT emergency leaves that are still only at manager stage
+      if (l.isEmergency && l.status === "pending_manager") return false;
+      return true;
+    }
+    if (isManager) return l.status === "pending_manager";
+    if (isHR)      return l.status === "pending_hr";
+    // employee: own leaves only
+    return l.userId === currentUser.id;
   });
 
-  /* ================= ADMIN REPORT ================= */
+  /* ================= DOWNLOAD CSV ================= */
+  const downloadAttendance = () => {
+    let rows = attendanceData;
+    if (reportStart) rows = rows.filter(r => r.date >= reportStart);
+    if (reportEnd)   rows = rows.filter(r => r.date <= reportEnd);
 
-  const downloadAttendance=()=>{
-
-    const rows=attendanceData.map((r)=>{
-
-      const user=mockUsers.find((u)=>u.id===r.userId);
-
-      return `${user?.name},${user?.role},${r.date},${r.checkIn},${r.checkOut}`;
-
-    });
-
-    const csv=[
+    const csv = [
       "Name,Role,Date,CheckIn,CheckOut",
-      ...rows
+      ...rows.map(r => {
+        const user = mockUsers.find(u => u.id === r.userId);
+        return `${user?.name ?? "Unknown"},${user?.role ?? ""},${r.date},${r.checkIn},${r.checkOut ?? ""}`;
+      }),
     ].join("\n");
 
-    const blob=new Blob([csv],{type:"text/csv"});
-    const url=URL.createObjectURL(blob);
-
-    const a=document.createElement("a");
-    a.href=url;
-    a.download="attendance_report.csv";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = "attendance_report.csv";
     a.click();
-
+    URL.revokeObjectURL(url);
   };
 
-  /* ================= ROLE COLOR ================= */
-
-  const roleColor=(role:string)=>{
-
-    if(role==="admin") return "bg-red-500 text-white";
-    if(role==="hr") return "bg-blue-500 text-white";
-    if(role==="manager") return "bg-purple-500 text-white";
-
+  /* ================= COLORS ================= */
+  const roleColor = (r: string) => {
+    if (r === "admin")   return "bg-red-500 text-white";
+    if (r === "hr")      return "bg-blue-500 text-white";
+    if (r === "manager") return "bg-purple-500 text-white";
     return "bg-gray-500 text-white";
-
   };
 
-  /* ================= STATUS COLOR ================= */
-
-  const statusColor=(status:string)=>{
-
-    if(status==="approved") return "bg-green-500 text-white";
-    if(status==="rejected") return "bg-red-500 text-white";
-    if(status.includes("pending")) return "bg-yellow-400 text-black";
-
+  const statusColor = (s: string) => {
+    if (s === "approved" || s === "emergency_approved") return "bg-green-500 text-white";
+    if (s === "rejected")    return "bg-red-500 text-white";
+    if (s.includes("pending")) return "bg-yellow-400 text-black";
     return "bg-gray-200";
+  };
 
+  const statusLabel = (s: string) =>
+    s === "emergency_approved"
+      ? "Emergency Approved"
+      : s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+  const priorityColor = (p: string) => {
+    if (p === "high")   return "bg-red-100 text-red-700";
+    if (p === "medium") return "bg-yellow-100 text-yellow-700";
+    return "bg-green-100 text-green-700";
   };
 
   /* ================= UI ================= */
 
   return (
-
-<div className="space-y-8 max-w-7xl mx-auto px-3">
-
-{/* TOAST */}
-
-{toast &&(
-<div className="fixed top-6 right-6 bg-black text-white px-5 py-3 rounded-xl shadow-lg z-50">
-{toast}
-</div>
-)}
-
-{/* ATTENDANCE */}
-
-<Card>
-
-<CardHeader>
-<CardTitle>Today's Attendance</CardTitle>
-</CardHeader>
-
-<CardContent className="flex flex-col md:flex-row justify-between gap-6">
-
-<div>
-<p>Check In : {todayAttendance?.checkIn || checkInTime || "-"}</p>
-<p>Check Out : {todayAttendance?.checkOut || "-"}</p>
-</div>
-
-<div className="flex gap-3 flex-wrap">
-
-{!todayAttendance &&(
-
-<Button onClick={handleCheckIn} className="bg-blue-600 text-white">
-<LogIn size={16}/> Check In
-</Button>
-
-)}
-
-{(todayAttendance || checkInTime) &&
-!todayAttendance?.checkOut &&(
-
-<Button onClick={handleCheckOut} className="bg-red-500 text-white">
-<LogOut size={16}/> Check Out
-</Button>
-
-)}
-
-</div>
-
-</CardContent>
-
-</Card>
-
-{/* ================= ADMIN USER LIST ================= */}
-
-{isAdmin &&(
-
-<Card>
-
-<CardHeader className="flex flex-row items-center gap-2">
-<Users size={18}/>
-<CardTitle>All Registered Users</CardTitle>
-</CardHeader>
-
-<CardContent className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-
-{mockUsers.map((user)=>(
-<div
-key={user.id}
-className="border rounded-lg p-4 bg-white shadow-sm flex justify-between items-center"
->
-
-<div>
-<p className="font-semibold">{user.name}</p>
-<p className="text-sm text-gray-500">{user.email}</p>
-</div>
-
-<Badge className={roleColor(user.role)}>
-{user.role}
-</Badge>
-
-</div>
-))}
-
-</CardContent>
-
-</Card>
-
-)}
-
-{/* ================= ADMIN REPORT ================= */}
-
-{isAdmin &&(
-
-<Card>
-
-<CardHeader>
-<CardTitle>Attendance Report</CardTitle>
-</CardHeader>
-
-<CardContent className="flex flex-col md:flex-row gap-4">
-
-<input
-type="date"
-value={reportStart}
-onChange={(e)=>setReportStart(e.target.value)}
-className="border p-2 rounded"
-/>
-
-<input
-type="date"
-value={reportEnd}
-onChange={(e)=>setReportEnd(e.target.value)}
-className="border p-2 rounded"
-/>
-
-<Button
-onClick={downloadAttendance}
-className="bg-black text-white flex items-center gap-2"
->
-<Download size={16}/>
-Download CSV
-</Button>
-
-</CardContent>
-
-</Card>
-
-)}
-
-{/* ================= LEAVE REQUEST ================= */}
-
-{!isAdmin &&(
-
-<Dialog>
-
-<DialogTrigger asChild>
-
-<Button className="bg-indigo-600 text-white">
-Request Leave
-</Button>
-
-</DialogTrigger>
-
-<DialogContent>
-
-<DialogHeader>
-<DialogTitle>Submit Leave</DialogTitle>
-</DialogHeader>
-
-<div className="space-y-4">
-
-<input
-className="border p-2 rounded w-full"
-placeholder="Leave Type"
-value={leaveType}
-onChange={(e)=>setLeaveType(e.target.value)}
-/>
-
-<input
-type="date"
-className="border p-2 rounded w-full"
-value={startDate}
-onChange={(e)=>setStartDate(e.target.value)}
-/>
-
-<input
-type="date"
-className="border p-2 rounded w-full"
-value={endDate}
-onChange={(e)=>setEndDate(e.target.value)}
-/>
-
-<input
-className="border p-2 rounded w-full"
-placeholder="Reason"
-value={reason}
-onChange={(e)=>setReason(e.target.value)}
-/>
-
-<Textarea
-placeholder="Description"
-value={description}
-onChange={(e)=>setDescription(e.target.value)}
-/>
-
-<Button
-onClick={submitLeave}
-className="w-full bg-indigo-600 text-white"
->
-Submit Leave
-</Button>
-
-</div>
-
-</DialogContent>
-
-</Dialog>
-
-)}
-
-{/* ================= LEAVE TABLE ================= */}
-
-<Card>
-
-<CardHeader>
-<CardTitle>Leave Requests</CardTitle>
-</CardHeader>
-
-<CardContent className="overflow-x-auto">
-
-<Table className="min-w-[700px]">
-
-<TableBody>
-
-{visibleLeaves.map((l)=>{
-
-const user=mockUsers.find((u)=>u.id===l.userId);
-
-return(
-
-<TableRow key={l.id}>
-
-{(isManager||isHR||isAdmin)&&(
-<TableCell className="font-medium">
-{user?.name}
-</TableCell>
-)}
-
-<TableCell>{l.type}</TableCell>
-
-<TableCell>
-{l.startDate} — {l.endDate}
-</TableCell>
-
-<TableCell>
-
-<Badge className={statusColor(l.status)}>
-{l.status.replace("_"," ")}
-</Badge>
-
-</TableCell>
-
-<TableCell>{l.reason}</TableCell>
-
-{(isManager||isHR||isAdmin)&&
-l.status!=="approved" &&
-l.status!=="rejected" &&(
-
-<TableCell>
-
-<div className="flex gap-2">
-
-<Button
-size="sm"
-className="bg-green-600 text-white"
-onClick={()=>approveLeave(l.id)}
->
-Approve
-</Button>
-
-<Button
-size="sm"
-className="bg-red-600 text-white"
-onClick={()=>rejectLeave(l.id)}
->
-Reject
-</Button>
-
-</div>
-
-</TableCell>
-
-)}
-
-</TableRow>
-
-);
-
-})}
-
-</TableBody>
-
-</Table>
-
-</CardContent>
-
-</Card>
-
-</div>
-
-);
+    <div className="space-y-8 max-w-7xl mx-auto px-3 py-4">
+
+      {/* TOAST */}
+      {toast && (
+        <div className={`fixed top-6 right-6 px-5 py-3 rounded-xl shadow-lg z-50 text-white text-sm font-medium ${toast.type === "error" ? "bg-red-600" : "bg-gray-900"}`}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ── TODAY'S ATTENDANCE ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock size={18} /> Today's Attendance
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col md:flex-row justify-between gap-6">
+          <div className="space-y-1 text-sm">
+            <p><span className="text-gray-500">Date:</span> {todayDate}</p>
+            <p><span className="text-gray-500">Check In:</span> {todayAttendance?.checkIn ?? "—"}</p>
+            <p><span className="text-gray-500">Check Out:</span> {todayAttendance?.checkOut ?? "—"}</p>
+          </div>
+          <div className="flex gap-3 flex-wrap items-start">
+            {!todayAttendance && (
+              <Button onClick={handleCheckIn} className="bg-blue-600 text-white hover:bg-blue-700">
+                <LogIn size={16} className="mr-1" /> Check In
+              </Button>
+            )}
+            {(todayAttendance || false) && !todayAttendance?.checkOut && (
+              <Button onClick={handleCheckOut} className="bg-red-500 text-white hover:bg-red-600">
+                <LogOut size={16} className="mr-1" /> Check Out
+              </Button>
+            )}
+            {todayAttendance?.checkOut && (
+              <span className="text-green-600 font-medium text-sm mt-2">✓ Done for today</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── ADMIN: USER LIST ── */}
+      {isAdmin && (
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <Users size={18} />
+            <CardTitle>All Registered Users</CardTitle>
+          </CardHeader>
+          <CardContent className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {mockUsers.map(user => (
+              <div
+                key={user.id}
+                className="border rounded-lg p-4 bg-white shadow-sm flex justify-between items-center"
+              >
+                <div>
+                  <p className="font-semibold text-sm">{user.name}</p>
+                  <p className="text-xs text-gray-500">{user.email}</p>
+                </div>
+                <Badge className={roleColor(user.role)}>{user.role}</Badge>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── ADMIN: ATTENDANCE REPORT ── */}
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar size={18} /> Attendance Report
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500">From</label>
+              <input
+                type="date"
+                value={reportStart}
+                onChange={e => setReportStart(e.target.value)}
+                className="border p-2 rounded text-sm"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-gray-500">To</label>
+              <input
+                type="date"
+                value={reportEnd}
+                onChange={e => setReportEnd(e.target.value)}
+                className="border p-2 rounded text-sm"
+              />
+            </div>
+            <Button onClick={downloadAttendance} className="bg-black text-white flex items-center gap-2">
+              <Download size={16} /> Download CSV
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── LEAVE REQUEST BUTTON (non-admin) ── */}
+      {!isAdmin && (
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-indigo-600 text-white hover:bg-indigo-700">
+              + Request Leave
+            </Button>
+          </DialogTrigger>
+
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Submit Leave Request</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 mt-2">
+
+              {/* Emergency toggle */}
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
+                <input
+                  type="checkbox"
+                  id="emergency"
+                  checked={form.isEmergency}
+                  onChange={e => setF("isEmergency", e.target.checked)}
+                  className="w-4 h-4 accent-orange-500"
+                />
+                <div>
+                  <label htmlFor="emergency" className="font-medium text-sm text-orange-700 cursor-pointer">
+                    Emergency Leave
+                  </label>
+                  <p className="text-xs text-orange-500">
+                    Approved directly by Manager — no further escalation needed.
+                  </p>
+                </div>
+              </div>
+
+              {/* Leave type */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  Leave Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  className="border p-2 rounded w-full text-sm"
+                  value={form.type}
+                  onChange={e => setF("type", e.target.value)}
+                >
+                  <option value="">— Select type —</option>
+                  <option value="Casual Leave">Casual Leave</option>
+                  <option value="Sick Leave">Sick Leave</option>
+                  <option value="Earned Leave">Earned Leave</option>
+                  <option value="Maternity Leave">Maternity Leave</option>
+                  <option value="Paternity Leave">Paternity Leave</option>
+                  <option value="Emergency Leave">Emergency Leave</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              {/* Priority */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Priority</label>
+                <select
+                  className="border p-2 rounded w-full text-sm"
+                  value={form.priority}
+                  onChange={e => setF("priority", e.target.value as any)}
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                    Start Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="border p-2 rounded w-full text-sm"
+                    value={form.startDate}
+                    onChange={e => setF("startDate", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                    End Date <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className="border p-2 rounded w-full text-sm"
+                    value={form.endDate}
+                    onChange={e => setF("endDate", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <input
+                  className="border p-2 rounded w-full text-sm"
+                  placeholder="Brief reason"
+                  value={form.reason}
+                  onChange={e => setF("reason", e.target.value)}
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">Description</label>
+                <Textarea
+                  placeholder="Additional details (optional)"
+                  value={form.description}
+                  onChange={e => setF("description", e.target.value)}
+                  rows={3}
+                />
+              </div>
+
+              {/* Emergency contact — only if emergency */}
+              {form.isEmergency && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">
+                    Emergency Contact Number
+                  </label>
+                  <input
+                    className="border p-2 rounded w-full text-sm"
+                    placeholder="+91 9XXXXXXXXX"
+                    value={form.emergencyContact}
+                    onChange={e => setF("emergencyContact", e.target.value)}
+                  />
+                </div>
+              )}
+
+              <Button
+                onClick={submitLeave}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                Submit Leave
+              </Button>
+
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ── LEAVE TABLE ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle>Leave Requests</CardTitle>
+            <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+              {visibleLeaves.length} record{visibleLeaves.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </CardHeader>
+
+        <CardContent className="overflow-x-auto">
+          {visibleLeaves.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">No leave requests found.</p>
+          ) : (
+            <Table className="min-w-[750px] text-sm">
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  {(isManager || isHR || isAdmin) && (
+                    <TableHead className="font-semibold">Employee</TableHead>
+                  )}
+                  <TableHead className="font-semibold">Type</TableHead>
+                  <TableHead className="font-semibold">Dates</TableHead>
+                  <TableHead className="font-semibold">Days</TableHead>
+                  <TableHead className="font-semibold">Priority</TableHead>
+                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Reason</TableHead>
+                  {(isManager || isHR || isAdmin) && (
+                    <TableHead className="font-semibold">Action</TableHead>
+                  )}
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {visibleLeaves.map(l => {
+                  const user = mockUsers.find(u => u.id === l.userId);
+                  const canAct =
+                    (isManager && l.status === "pending_manager") ||
+                    (isHR      && l.status === "pending_hr")      ||
+                    (isAdmin   && l.status === "pending_admin");
+
+                  return (
+                    <TableRow key={l.id} className="hover:bg-gray-50">
+
+                      {(isManager || isHR || isAdmin) && (
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{user?.name ?? "Unknown"}</p>
+                            <p className="text-xs text-gray-400">{user?.role}</p>
+                          </div>
+                        </TableCell>
+                      )}
+
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span>{l.type}</span>
+                          {l.isEmergency && (
+                            <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full w-fit">
+                              🚨 Emergency
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="whitespace-nowrap">
+                        {l.startDate} — {l.endDate}
+                      </TableCell>
+
+                      <TableCell>{l.days}d</TableCell>
+
+                      <TableCell>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor(l.priority)}`}>
+                          {l.priority}
+                        </span>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge className={statusColor(l.status)}>
+                          {statusLabel(l.status)}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="max-w-[160px] truncate" title={l.reason}>
+                        {l.reason}
+                      </TableCell>
+
+                      {(isManager || isHR || isAdmin) && (
+                        <TableCell>
+                          {canAct ? (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                                onClick={() => approveLeave(l.id)}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                                onClick={() => rejectLeave(l.id)}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
+                          )}
+                        </TableCell>
+                      )}
+
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+    </div>
+  );
 }
