@@ -207,15 +207,35 @@ export const attendanceApi = {
    LEAVE API
    ============================================================ */
 export const leaveApi = {
-  apply: (data: any) =>
-    apiFetch("/leaves/apply", { method: "POST", body: JSON.stringify(data) }),
+  apply: (data: {
+    type: string;
+    isEmergency: boolean;
+    priority: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+    description?: string;
+    emergencyContact?: string;
+  }) =>
+    apiFetch("/leaves/apply", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   getMy: () => apiFetch("/leaves/my"),
+
   getPending: () => apiFetch("/leaves/pending"),
+
   getAll: () => apiFetch("/leaves/all"),
+
   approve: (id: string) =>
     apiFetch(`/leaves/${id}/approve`, { method: "PUT" }),
-  reject: (id: string) =>
-    apiFetch(`/leaves/${id}/reject`, { method: "PUT" }),
+
+  reject: (id: string, reason?: string) =>
+    apiFetch(`/leaves/${id}/reject`, {
+      method: "PUT",
+      body: JSON.stringify({ reason: reason || "" }),
+    }),
 };
 
 /* ============================================================
@@ -224,13 +244,21 @@ export const leaveApi = {
 export const taskApi = {
   create: (data: any) =>
     apiFetch("/tasks", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/tasks/all"),
+
   getMy: () => apiFetch("/tasks/my"),
+
   update: (id: string, data: any) =>
     apiFetch(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/tasks/${id}`, { method: "DELETE" }),
+
   addUpdate: (id: string, data: any) =>
-    apiFetch(`/tasks/${id}/update`, { method: "POST", body: JSON.stringify(data) }),
+    apiFetch(`/tasks/${id}/update`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 /* ============================================================
@@ -239,10 +267,14 @@ export const taskApi = {
 export const projectApi = {
   create: (data: any) =>
     apiFetch("/projects", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/projects/all"),
+
   getMy: () => apiFetch("/projects/my"),
+
   update: (id: string, data: any) =>
     apiFetch(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/projects/${id}`, { method: "DELETE" }),
 };
 
@@ -252,11 +284,16 @@ export const projectApi = {
 export const payrollApi = {
   create: (data: any) =>
     apiFetch("/payroll", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/payroll/all"),
+
   getMy: () => apiFetch("/payroll/my"),
+
   process: () => apiFetch("/payroll/process", { method: "POST" }),
+
   update: (id: string, data: any) =>
     apiFetch(`/payroll/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/payroll/${id}`, { method: "DELETE" }),
 };
 
@@ -266,12 +303,20 @@ export const payrollApi = {
 export const clientApi = {
   create: (data: any) =>
     apiFetch("/clients", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/clients"),
+
   update: (id: string, data: any) =>
     apiFetch(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/clients/${id}`, { method: "DELETE" }),
+
   createInvoice: (data: any) =>
-    apiFetch("/clients/invoices", { method: "POST", body: JSON.stringify(data) }),
+    apiFetch("/clients/invoices", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
   getInvoices: () => apiFetch("/clients/invoices"),
 };
 
@@ -281,10 +326,14 @@ export const clientApi = {
 export const calendarApi = {
   create: (data: any) =>
     apiFetch("/calendar", { method: "POST", body: JSON.stringify(data) }),
+
   getEvents: () => apiFetch("/calendar"),
+
   getAll: () => apiFetch("/calendar/all"),
+
   update: (id: string, data: any) =>
     apiFetch(`/calendar/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/calendar/${id}`, { method: "DELETE" }),
 };
 
@@ -294,8 +343,11 @@ export const calendarApi = {
 export const dailyStatusApi = {
   submit: (data: any) =>
     apiFetch("/daily-status", { method: "POST", body: JSON.stringify(data) }),
+
   getMy: () => apiFetch("/daily-status/my"),
+
   getAll: () => apiFetch("/daily-status/all"),
+
   addComment: (id: string, comment: string) =>
     apiFetch(`/daily-status/${id}/comment`, {
       method: "POST",
@@ -309,10 +361,14 @@ export const dailyStatusApi = {
 export const timesheetApi = {
   add: (data: any) =>
     apiFetch("/timesheets", { method: "POST", body: JSON.stringify(data) }),
+
   getMy: () => apiFetch("/timesheets/my"),
+
   getAll: () => apiFetch("/timesheets/all"),
+
   approve: (id: string) =>
     apiFetch(`/timesheets/${id}/approve`, { method: "PUT" }),
+
   reject: (id: string) =>
     apiFetch(`/timesheets/${id}/reject`, { method: "PUT" }),
 };
@@ -323,9 +379,12 @@ export const timesheetApi = {
 export const vendorApi = {
   create: (data: any) =>
     apiFetch("/vendors", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/vendors"),
+
   update: (id: string, data: any) =>
     apiFetch(`/vendors/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
   delete: (id: string) => apiFetch(`/vendors/${id}`, { method: "DELETE" }),
 };
 
@@ -335,8 +394,14 @@ export const vendorApi = {
 export const freelancerApi = {
   create: (data: any) =>
     apiFetch("/freelancers", { method: "POST", body: JSON.stringify(data) }),
+
   getAll: () => apiFetch("/freelancers"),
+
   update: (id: string, data: any) =>
-    apiFetch(`/freelancers/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+    apiFetch(`/freelancers/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
   delete: (id: string) => apiFetch(`/freelancers/${id}`, { method: "DELETE" }),
 };
