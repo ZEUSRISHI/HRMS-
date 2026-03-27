@@ -18,7 +18,7 @@ const Users: React.FC = () => {
   const token = localStorage.getItem("token"); // Login token
 
   const fetchUsers = () => {
-    axios.get<User[]>("http://localhost:5000/api/users", {
+    axios.get<User[]>(`${import.meta.env.VITE_API_URL}/api/users`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => setUsers(res.data))
@@ -26,7 +26,7 @@ const Users: React.FC = () => {
   };
 
   const addUser = () => {
-    axios.post("http://localhost:5000/api/users", { name, email, password, role }, {
+    axios.post(`${import.meta.env.VITE_API_URL}/api/users`, { name, email, password, role }, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => {
