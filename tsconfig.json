@@ -4,12 +4,12 @@
     "lib": ["DOM", "ES2017"],
 
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+
     "jsx": "react-jsx",
 
-    "baseUrl": "./src",
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./src/*"]
     },
 
     "strict": true,
