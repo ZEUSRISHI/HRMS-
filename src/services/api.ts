@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL as string;
+const BASE_URL = import.meta.env.VITE_API_URL;
 console.log("🔥 BASE_URL:", BASE_URL);
 console.log("🔥 ENV FULL:", import.meta.env);
 
