@@ -16,8 +16,8 @@ import { LogIn, LogOut, Download, Users, Calendar, Clock } from "lucide-react";
    TYPES
    ============================================================ */
 type LeaveStatus =
-  | "pending_manager"
   | "pending_hr"
+  | "pending_manager"
   | "pending_admin"
   | "approved"
   | "rejected"
@@ -35,6 +35,33 @@ const initForm = {
 };
 
 /* ============================================================
+   APPROVAL FLOW HELPERS (UI only — mirrors backend)
+   ============================================================ */
+const flowSteps = (applicantRole: string, isEmergency: boolean): string[] => {
+  if (applicantRole === "hr" || applicantRole === "manager")
+    return ["Submitted", "Admin Approval", "Done"];
+  if (isEmergency)
+    return ["Submitted", "Manager Approval", "Done"];
+  return ["Submitted", "HR Approval", "Manager Approval", "Admin Approval", "Done"];
+};
+
+const currentStepIndex = (
+  status: LeaveStatus,
+  isEmergency: boolean,
+  applicantRole: string,
+): number => {
+  if (status === "pending_hr")      return 1;
+  if (status === "pending_manager") return isEmergency ? 1 : 2;
+  if (status === "pending_admin") {
+    if (applicantRole === "hr" || applicantRole === "manager") return 1;
+    return 3;
+  }
+  if (status === "approved" || status === "emergency_approved")
+    return flowSteps(applicantRole, isEmergency).length - 1;
+  return 0;
+};
+
+/* ============================================================
    COMPONENT
    ============================================================ */
 export function AttendanceModule() {
@@ -47,15 +74,16 @@ export function AttendanceModule() {
   const isAdmin    = role === "admin";
 
   /* ── state ── */
-  const [todayRecord,    setTodayRecord]    = useState<any>(null);
-  const [allAttendance,  setAllAttendance]  = useState<any[]>([]);
-  const [leaves,         setLeaves]         = useState<any[]>([]);
-  const [loading,        setLoading]        = useState(true);
-  const [toast,          setToast]          = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [form,           setForm]           = useState(initForm);
-  const [dialogOpen,     setDialogOpen]     = useState(false);
-  const [reportStart,    setReportStart]    = useState("");
-  const [reportEnd,      setReportEnd]      = useState("");
+  const [todayRecord,   setTodayRecord]   = useState<any>(null);
+  const [allAttendance, setAllAttendance] = useState<any[]>([]);
+  const [leaves,        setLeaves]        = useState<any>(null);
+  const [loading,       setLoading]       = useState(true);
+  const [toast,         setToast]         = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [form,          setForm]          = useState(initForm);
+  const [dialogOpen,    setDialogOpen]    = useState(false);
+  const [reportStart,   setReportStart]   = useState("");
+  const [reportEnd,     setReportEnd]     = useState("");
+  const [activeTab,     setActiveTab]     = useState<"pending" | "all">("pending");
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -66,32 +94,33 @@ export function AttendanceModule() {
     setForm((f) => ({ ...f, [k]: v }));
 
   /* ============================================================
-     LOAD DATA FROM API
+     LOAD DATA
      ============================================================ */
   const loadData = async () => {
     try {
       setLoading(true);
 
-      // Today's attendance for current user
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
-      // All attendance (admin/hr/manager)
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
       }
 
-      // Leaves based on role
-      let leavesRes;
-      if (isAdmin || isHR) {
-        leavesRes = await leaveApi.getAll();
-      } else if (isManager) {
-        leavesRes = await leaveApi.getPending();
+      if (isAdmin) {
+        const [allRes, pendingRes] = await Promise.all([
+          leaveApi.getAll(),
+          leaveApi.getPending(),
+        ]);
+        setLeaves({ all: allRes.leaves || [], pending: pendingRes.leaves || [] });
+      } else if (isHR || isManager) {
+        const pendingRes = await leaveApi.getPending();
+        setLeaves(pendingRes.leaves || []);
       } else {
-        leavesRes = await leaveApi.getMy();
+        const myRes = await leaveApi.getMy();
+        setLeaves(myRes.leaves || []);
       }
-      setLeaves(leavesRes.leaves || []);
     } catch (err: any) {
       console.error("loadData error:", err.message);
     } finally {
@@ -99,14 +128,17 @@ export function AttendanceModule() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, []);
 
   if (!currentUser) return null;
 
+  /* ─── leaves to display ─── */
+  const displayLeaves: any[] = isAdmin
+    ? (activeTab === "pending" ? leaves?.pending ?? [] : leaves?.all ?? [])
+    : (leaves ?? []);
+
   /* ============================================================
-     CHECK IN
+     CHECK IN / OUT
      ============================================================ */
   const handleCheckIn = async () => {
     try {
@@ -118,9 +150,6 @@ export function AttendanceModule() {
     }
   };
 
-  /* ============================================================
-     CHECK OUT
-     ============================================================ */
   const handleCheckOut = async () => {
     try {
       await attendanceApi.checkOut();
@@ -132,14 +161,13 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     SUBMIT LEAVE — saves to MongoDB via API
+     SUBMIT LEAVE
      ============================================================ */
   const submitLeave = async () => {
     if (!form.type || !form.startDate || !form.endDate || !form.reason) {
       showToast("Please fill all required fields", "error");
       return;
     }
-
     try {
       await leaveApi.apply({
         type:             form.type,
@@ -151,7 +179,6 @@ export function AttendanceModule() {
         description:      form.description,
         emergencyContact: form.emergencyContact,
       });
-
       showToast("✅ Leave request submitted successfully");
       setForm(initForm);
       setDialogOpen(false);
@@ -162,7 +189,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     APPROVE LEAVE
+     APPROVE / REJECT
      ============================================================ */
   const approveLeave = async (id: string) => {
     try {
@@ -174,9 +201,6 @@ export function AttendanceModule() {
     }
   };
 
-  /* ============================================================
-     REJECT LEAVE
-     ============================================================ */
   const rejectLeave = async (id: string) => {
     try {
       await leaveApi.reject(id);
@@ -188,7 +212,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     DOWNLOAD ATTENDANCE CSV
+     DOWNLOAD CSV
      ============================================================ */
   const downloadAttendance = () => {
     let rows = allAttendance;
@@ -213,18 +237,27 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     HELPER COLORS
+     HELPER COLORS / LABELS
      ============================================================ */
   const statusColor = (s: string) => {
     if (s === "approved" || s === "emergency_approved") return "bg-green-500 text-white";
     if (s === "rejected")        return "bg-red-500 text-white";
-    if (s?.includes("pending"))  return "bg-yellow-400 text-black";
+    if (s === "pending_hr")      return "bg-blue-400 text-white";
+    if (s === "pending_manager") return "bg-purple-400 text-white";
+    if (s === "pending_admin")   return "bg-orange-400 text-white";
     return "bg-gray-200 text-gray-700";
   };
 
   const statusLabel = (s: string) => {
-    if (s === "emergency_approved") return "Emergency Approved";
-    return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    const map: Record<string, string> = {
+      pending_hr:         "Pending HR",
+      pending_manager:    "Pending Manager",
+      pending_admin:      "Pending Admin",
+      approved:           "Approved",
+      rejected:           "Rejected",
+      emergency_approved: "Emergency Approved",
+    };
+    return map[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   const priorityColor = (p: string) => {
@@ -240,14 +273,55 @@ export function AttendanceModule() {
     return "bg-gray-500 text-white";
   };
 
-  /* ============================================================
-     DETERMINE WHO CAN ACT ON A LEAVE
-     ============================================================ */
   const canActOnLeave = (leave: any): boolean => {
-    if (isManager && leave.status === "pending_manager") return true;
     if (isHR      && leave.status === "pending_hr")      return true;
-    if (isAdmin   && leave.status === "pending_admin" && !leave.isEmergency) return true;
+    if (isManager && leave.status === "pending_manager") return true;
+    if (isAdmin   && leave.status === "pending_admin")   return true;
     return false;
+  };
+
+  /* ============================================================
+     FLOW TRACKER
+     ============================================================ */
+  const FlowTracker = ({ leave }: { leave: any }) => {
+    const applicantRole = leave.userId?.role ?? "employee";
+    const steps = flowSteps(applicantRole, leave.isEmergency);
+    const currentIdx = currentStepIndex(
+      leave.status as LeaveStatus,
+      leave.isEmergency,
+      applicantRole,
+    );
+    const isRejected = leave.status === "rejected";
+
+    return (
+      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+        {steps.map((step, i) => {
+          const done    = !isRejected && i < currentIdx;
+          const current = !isRejected && i === currentIdx;
+          return (
+            <div key={step} className="flex items-center gap-1">
+              <span
+                className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap
+                  ${done    ? "bg-green-100 text-green-700" : ""}
+                  ${current ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" : ""}
+                  ${!done && !current ? "bg-gray-100 text-gray-400" : ""}
+                `}
+              >
+                {done ? "✓ " : ""}{step}
+              </span>
+              {i < steps.length - 1 && (
+                <span className="text-gray-300 text-xs">→</span>
+              )}
+            </div>
+          );
+        })}
+        {isRejected && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">
+            ✕ Rejected
+          </span>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -296,34 +370,25 @@ export function AttendanceModule() {
               <strong className="capitalize">{todayRecord?.status ?? "Absent"}</strong>
             </p>
           </div>
-
           <div className="flex gap-3 flex-wrap items-start">
             {!todayRecord && (
-              <Button
-                onClick={handleCheckIn}
-                className="bg-blue-600 text-white hover:bg-blue-700"
-              >
+              <Button onClick={handleCheckIn} className="bg-blue-600 text-white hover:bg-blue-700">
                 <LogIn size={16} className="mr-1" /> Check In
               </Button>
             )}
             {todayRecord && !todayRecord.checkOut && (
-              <Button
-                onClick={handleCheckOut}
-                className="bg-red-500 text-white hover:bg-red-600"
-              >
+              <Button onClick={handleCheckOut} className="bg-red-500 text-white hover:bg-red-600">
                 <LogOut size={16} className="mr-1" /> Check Out
               </Button>
             )}
             {todayRecord?.checkOut && (
-              <span className="text-green-600 font-medium text-sm mt-2">
-                ✓ Done for today
-              </span>
+              <span className="text-green-600 font-medium text-sm mt-2">✓ Done for today</span>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* ── ADMIN: ALL USERS LIST ── */}
+      {/* ── ADMIN: ALL USERS TODAY ── */}
       {isAdmin && allAttendance.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
@@ -344,9 +409,7 @@ export function AttendanceModule() {
                       In: {r.checkIn} | Out: {r.checkOut ?? "—"}
                     </p>
                   </div>
-                  <Badge className={roleColor(r.userId?.role)}>
-                    {r.userId?.role}
-                  </Badge>
+                  <Badge className={roleColor(r.userId?.role)}>{r.userId?.role}</Badge>
                 </div>
               ))}
           </CardContent>
@@ -364,26 +427,15 @@ export function AttendanceModule() {
           <CardContent className="flex flex-col md:flex-row gap-4 items-end">
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">From</label>
-              <input
-                type="date"
-                value={reportStart}
-                onChange={(e) => setReportStart(e.target.value)}
-                className="border p-2 rounded text-sm"
-              />
+              <input type="date" value={reportStart} onChange={(e) => setReportStart(e.target.value)}
+                className="border p-2 rounded text-sm" />
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs text-gray-500">To</label>
-              <input
-                type="date"
-                value={reportEnd}
-                onChange={(e) => setReportEnd(e.target.value)}
-                className="border p-2 rounded text-sm"
-              />
+              <input type="date" value={reportEnd} onChange={(e) => setReportEnd(e.target.value)}
+                className="border p-2 rounded text-sm" />
             </div>
-            <Button
-              onClick={downloadAttendance}
-              className="bg-black text-white flex items-center gap-2"
-            >
+            <Button onClick={downloadAttendance} className="bg-black text-white flex items-center gap-2">
               <Download size={16} /> Download CSV
             </Button>
           </CardContent>
@@ -395,7 +447,7 @@ export function AttendanceModule() {
         <div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-indigo-600 text-white hover:bg-indigo-700">
+              <Button className="bg-indigo-600 text-white hover:bg-indigo-700 w-fit">
                 + Request Leave
               </Button>
             </DialogTrigger>
@@ -405,29 +457,38 @@ export function AttendanceModule() {
                 <DialogTitle>Submit Leave Request</DialogTitle>
               </DialogHeader>
 
+              {/* Flow hint inside dialog */}
+              <div className="text-xs bg-gray-50 border rounded-lg p-3 text-gray-600 space-y-0.5">
+                {isEmployee && (
+                  <>
+                    <p>📋 <strong>Normal leave</strong> requires HR → Manager → Admin approval</p>
+                    <p>🚨 <strong>Emergency leave</strong> is approved by Manager only</p>
+                  </>
+                )}
+                {(isHR || isManager) && (
+                  <p>📋 Your leave goes directly to <strong>Admin</strong> for approval</p>
+                )}
+              </div>
+
               <div className="space-y-4 mt-2">
 
-                {/* EMERGENCY TOGGLE */}
-                <div className="flex items-center gap-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
-                  <input
-                    type="checkbox"
-                    id="emergency"
-                    checked={form.isEmergency}
-                    onChange={(e) => setF("isEmergency", e.target.checked)}
-                    className="w-4 h-4 accent-orange-500"
-                  />
-                  <div>
-                    <label
-                      htmlFor="emergency"
-                      className="font-medium text-sm text-orange-700 cursor-pointer"
-                    >
-                      🚨 Emergency Leave
-                    </label>
-                    <p className="text-xs text-orange-500 mt-0.5">
-                      Approved directly by Manager only — not escalated to Admin.
-                    </p>
+                {/* EMERGENCY TOGGLE — employees only */}
+                {isEmployee && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
+                    <input
+                      type="checkbox"
+                      id="emergency"
+                      checked={form.isEmergency}
+                      onChange={(e) => setF("isEmergency", e.target.checked)}
+                      className="w-4 h-4 accent-orange-500"
+                    />
+                    <div>
+                      <label htmlFor="emergency" className="font-medium text-sm text-orange-700 cursor-pointer">
+                        🚨 Emergency Leave
+                      </label>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* LEAVE TYPE */}
                 <div>
@@ -452,9 +513,7 @@ export function AttendanceModule() {
 
                 {/* PRIORITY */}
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    Priority
-                  </label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Priority</label>
                   <select
                     className="border p-2 rounded w-full text-sm bg-white"
                     value={form.priority}
@@ -472,23 +531,15 @@ export function AttendanceModule() {
                     <label className="text-xs font-medium text-gray-600 mb-1 block">
                       Start Date <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      className="border p-2 rounded w-full text-sm"
-                      value={form.startDate}
-                      onChange={(e) => setF("startDate", e.target.value)}
-                    />
+                    <input type="date" className="border p-2 rounded w-full text-sm"
+                      value={form.startDate} onChange={(e) => setF("startDate", e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">
                       End Date <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="date"
-                      className="border p-2 rounded w-full text-sm"
-                      value={form.endDate}
-                      onChange={(e) => setF("endDate", e.target.value)}
-                    />
+                    <input type="date" className="border p-2 rounded w-full text-sm"
+                      value={form.endDate} onChange={(e) => setF("endDate", e.target.value)} />
                   </div>
                 </div>
 
@@ -518,7 +569,7 @@ export function AttendanceModule() {
                   />
                 </div>
 
-                {/* EMERGENCY CONTACT — only if emergency checked */}
+                {/* EMERGENCY CONTACT */}
                 {form.isEmergency && (
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">
@@ -548,24 +599,73 @@ export function AttendanceModule() {
       {/* ── LEAVE TABLE ── */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle>
-              {isAdmin ? "All Leave Requests" :
+              {isAdmin   ? "Leave Requests"              :
                isManager ? "Pending Approvals (Manager)" :
-               isHR ? "Pending Approvals (HR)" :
+               isHR      ? "Pending Approvals (HR)"      :
                "My Leave Requests"}
             </CardTitle>
-            <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-              {leaves.length} record{leaves.length !== 1 ? "s" : ""}
-            </span>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Admin tab switcher */}
+              {isAdmin && (
+                <div className="flex rounded-lg border overflow-hidden text-sm">
+                  <button
+                    onClick={() => setActiveTab("pending")}
+                    className={`px-3 py-1.5 font-medium transition-colors ${
+                      activeTab === "pending"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Pending
+                    {(leaves?.pending ?? []).length > 0 && (
+                      <span className="ml-1.5 bg-orange-400 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                        {leaves.pending.length}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("all")}
+                    className={`px-3 py-1.5 font-medium transition-colors ${
+                      activeTab === "all"
+                        ? "bg-indigo-600 text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    All Requests
+                  </button>
+                </div>
+              )}
+
+              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                {displayLeaves.length} record{displayLeaves.length !== 1 ? "s" : ""}
+              </span>
+            </div>
           </div>
+
+          {/* Status legend for admin */}
+          {isAdmin && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {[
+                { label: "Pending HR",      cls: "bg-blue-400 text-white" },
+                { label: "Pending Manager", cls: "bg-purple-400 text-white" },
+                { label: "Pending Admin",   cls: "bg-orange-400 text-white" },
+                { label: "Approved",        cls: "bg-green-500 text-white" },
+                { label: "Rejected",        cls: "bg-red-500 text-white" },
+              ].map((b) => (
+                <span key={b.label} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${b.cls}`}>
+                  {b.label}
+                </span>
+              ))}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="overflow-x-auto">
-          {leaves.length === 0 ? (
-            <p className="text-center text-gray-400 text-sm py-10">
-              No leave requests found.
-            </p>
+          {displayLeaves.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-10">No leave requests found.</p>
           ) : (
             <Table className="min-w-[750px] text-sm">
               <TableHeader>
@@ -577,7 +677,7 @@ export function AttendanceModule() {
                   <TableHead className="font-semibold">Dates</TableHead>
                   <TableHead className="font-semibold">Days</TableHead>
                   <TableHead className="font-semibold">Priority</TableHead>
-                  <TableHead className="font-semibold">Status</TableHead>
+                  <TableHead className="font-semibold">Status / Flow</TableHead>
                   <TableHead className="font-semibold">Reason</TableHead>
                   {(isManager || isHR || isAdmin) && (
                     <TableHead className="font-semibold">Action</TableHead>
@@ -586,16 +686,16 @@ export function AttendanceModule() {
               </TableHeader>
 
               <TableBody>
-                {leaves.map((l: any) => (
-                  <TableRow key={l._id} className="hover:bg-gray-50">
+                {displayLeaves.map((l: any) => (
+                  <TableRow key={l._id} className="hover:bg-gray-50 align-top">
 
-                    {/* EMPLOYEE NAME (for manager/hr/admin view) */}
+                    {/* EMPLOYEE NAME */}
                     {(isManager || isHR || isAdmin) && (
                       <TableCell>
-                        <div>
-                          <p className="font-medium">{l.userId?.name ?? "Unknown"}</p>
-                          <p className="text-xs text-gray-400 capitalize">{l.userId?.role}</p>
-                        </div>
+                        <p className="font-medium">{l.userId?.name ?? "Unknown"}</p>
+                        <Badge className={`${roleColor(l.userId?.role)} text-[10px] mt-1`}>
+                          {l.userId?.role}
+                        </Badge>
                       </TableCell>
                     )}
 
@@ -626,18 +726,18 @@ export function AttendanceModule() {
                       </span>
                     </TableCell>
 
-                    {/* STATUS */}
-                    <TableCell>
+                    {/* STATUS + FLOW TRACKER */}
+                    <TableCell className="min-w-[180px]">
                       <Badge className={statusColor(l.status)}>
                         {statusLabel(l.status)}
                       </Badge>
+                      {(isEmployee || (isAdmin && activeTab === "all")) && (
+                        <FlowTracker leave={l} />
+                      )}
                     </TableCell>
 
                     {/* REASON */}
-                    <TableCell
-                      className="max-w-[160px] truncate"
-                      title={l.reason}
-                    >
+                    <TableCell className="max-w-[160px] truncate" title={l.reason}>
                       {l.reason}
                     </TableCell>
 
@@ -645,19 +745,13 @@ export function AttendanceModule() {
                     {(isManager || isHR || isAdmin) && (
                       <TableCell>
                         {canActOnLeave(l) ? (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                              onClick={() => approveLeave(l._id)}
-                            >
+                          <div className="flex gap-2 flex-wrap">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => approveLeave(l._id)}>
                               Approve
                             </Button>
-                            <Button
-                              size="sm"
-                              className="bg-red-600 hover:bg-red-700 text-white"
-                              onClick={() => rejectLeave(l._id)}
-                            >
+                            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white"
+                              onClick={() => rejectLeave(l._id)}>
                               Reject
                             </Button>
                           </div>
