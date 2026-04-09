@@ -225,9 +225,7 @@ export const leaveApi = {
     }),
 
   getMy: () => apiFetch("/leaves/my"),
-
   getPending: () => apiFetch("/leaves/pending"),
-
   getAll: () => apiFetch("/leaves/all"),
 
   approve: (id: string) =>
@@ -251,6 +249,8 @@ export const taskApi = {
 
   getMy: () => apiFetch("/tasks/my"),
 
+  getAssignable: () => apiFetch("/tasks/assignable"),
+
   update: (id: string, data: any) =>
     apiFetch(`/tasks/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 
@@ -273,6 +273,10 @@ export const projectApi = {
   getAll: () => apiFetch("/projects/all"),
 
   getMy: () => apiFetch("/projects/my"),
+
+  getManagers: () => apiFetch("/projects/managers"),
+
+  getMembers: () => apiFetch("/projects/members"),
 
   update: (id: string, data: any) =>
     apiFetch(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -406,4 +410,57 @@ export const freelancerApi = {
     }),
 
   delete: (id: string) => apiFetch(`/freelancers/${id}`, { method: "DELETE" }),
+};
+
+/* ============================================================
+   ONBOARDING API
+   ============================================================ */
+export const onboardingApi = {
+  /* ── Onboarding ── */
+
+  create: (data: {
+    name: string;
+    email: string;
+    password: string;
+    phone?: string;
+    role: string;
+    startDate: string;
+  }) =>
+    apiFetch("/onboarding", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getAll: () => apiFetch("/onboarding"),
+
+  toggleTask: (onboardingId: string, taskId: string) =>
+    apiFetch(`/onboarding/${onboardingId}/tasks/${taskId}`, {
+      method: "PATCH",
+    }),
+
+  deleteOnboarding: (id: string) =>
+    apiFetch(`/onboarding/${id}`, { method: "DELETE" }),
+
+  /* ── Offboarding ── */
+
+  createOffboarding: (data: {
+    userId: string;
+    lastWorkingDay: string;
+    reason: string;
+  }) =>
+    apiFetch("/onboarding/offboarding", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getAllOffboarding: () => apiFetch("/onboarding/offboarding"),
+
+  toggleClearance: (offboardingId: string, key: string) =>
+    apiFetch(`/onboarding/offboarding/${offboardingId}/clear`, {
+      method: "PATCH",
+      body: JSON.stringify({ key }),
+    }),
+
+  deleteOffboarding: (id: string) =>
+    apiFetch(`/onboarding/offboarding/${id}`, { method: "DELETE" }),
 };
