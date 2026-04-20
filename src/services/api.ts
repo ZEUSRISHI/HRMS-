@@ -209,16 +209,7 @@ export const attendanceApi = {
    LEAVE API
    ============================================================ */
 export const leaveApi = {
-  apply: (data: {
-    type: string;
-    isEmergency: boolean;
-    priority: string;
-    startDate: string;
-    endDate: string;
-    reason: string;
-    description?: string;
-    emergencyContact?: string;
-  }) =>
+  apply: (data: any) =>
     apiFetch("/leaves/apply", {
       method: "POST",
       body: JSON.stringify(data),
@@ -246,9 +237,7 @@ export const taskApi = {
     apiFetch("/tasks", { method: "POST", body: JSON.stringify(data) }),
 
   getAll: () => apiFetch("/tasks/all"),
-
   getMy: () => apiFetch("/tasks/my"),
-
   getAssignable: () => apiFetch("/tasks/assignable"),
 
   update: (id: string, data: any) =>
@@ -271,11 +260,8 @@ export const projectApi = {
     apiFetch("/projects", { method: "POST", body: JSON.stringify(data) }),
 
   getAll: () => apiFetch("/projects/all"),
-
   getMy: () => apiFetch("/projects/my"),
-
   getManagers: () => apiFetch("/projects/managers"),
-
   getMembers: () => apiFetch("/projects/members"),
 
   update: (id: string, data: any) =>
@@ -292,9 +278,7 @@ export const payrollApi = {
     apiFetch("/payroll", { method: "POST", body: JSON.stringify(data) }),
 
   getAll: () => apiFetch("/payroll/all"),
-
   getMy: () => apiFetch("/payroll/my"),
-
   process: () => apiFetch("/payroll/process", { method: "POST" }),
 
   update: (id: string, data: any) =>
@@ -334,7 +318,6 @@ export const calendarApi = {
     apiFetch("/calendar", { method: "POST", body: JSON.stringify(data) }),
 
   getEvents: () => apiFetch("/calendar"),
-
   getAll: () => apiFetch("/calendar/all"),
 
   update: (id: string, data: any) =>
@@ -351,7 +334,6 @@ export const dailyStatusApi = {
     apiFetch("/daily-status", { method: "POST", body: JSON.stringify(data) }),
 
   getMy: () => apiFetch("/daily-status/my"),
-
   getAll: () => apiFetch("/daily-status/all"),
 
   addComment: (id: string, comment: string) =>
@@ -369,7 +351,6 @@ export const timesheetApi = {
     apiFetch("/timesheets", { method: "POST", body: JSON.stringify(data) }),
 
   getMy: () => apiFetch("/timesheets/my"),
-
   getAll: () => apiFetch("/timesheets/all"),
 
   approve: (id: string) =>
@@ -416,16 +397,7 @@ export const freelancerApi = {
    ONBOARDING API
    ============================================================ */
 export const onboardingApi = {
-  /* ── Onboarding ── */
-
-  create: (data: {
-    name: string;
-    email: string;
-    password: string;
-    phone?: string;
-    role: string;
-    startDate: string;
-  }) =>
+  create: (data: any) =>
     apiFetch("/onboarding", {
       method: "POST",
       body: JSON.stringify(data),
@@ -441,13 +413,7 @@ export const onboardingApi = {
   deleteOnboarding: (id: string) =>
     apiFetch(`/onboarding/${id}`, { method: "DELETE" }),
 
-  /* ── Offboarding ── */
-
-  createOffboarding: (data: {
-    userId: string;
-    lastWorkingDay: string;
-    reason: string;
-  }) =>
+  createOffboarding: (data: any) =>
     apiFetch("/onboarding/offboarding", {
       method: "POST",
       body: JSON.stringify(data),
@@ -463,4 +429,64 @@ export const onboardingApi = {
 
   deleteOffboarding: (id: string) =>
     apiFetch(`/onboarding/offboarding/${id}`, { method: "DELETE" }),
+};
+
+/* ============================================================
+   🎫 HELPDESK API (✅ ADDED)
+   ============================================================ */
+export const helpdeskApi = {
+  create: (data: {
+    title: string;
+    description: string;
+    category: string;
+    priority: string;
+  }) =>
+    apiFetch("/helpdesk", { method: "POST", body: JSON.stringify(data) }),
+
+  getMy: () => apiFetch("/helpdesk/my"),
+
+  getAll: (params?: { status?: string; category?: string; priority?: string }) => {
+    const query = new URLSearchParams(
+      Object.entries(params || {})
+        .filter(([, v]) => v !== undefined && v !== "")
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return apiFetch(`/helpdesk/all${query ? `?${query}` : ""}`);
+  },
+
+  getStats: () => apiFetch("/helpdesk/stats"),
+
+  getById: (id: string) => apiFetch(`/helpdesk/${id}`),
+
+  update: (id: string, data: {
+    status?: string;
+    priority?: string;
+    assignedTo?: string;
+    resolutionNote?: string;
+  }) =>
+    apiFetch(`/helpdesk/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+
+  editMine: (id: string, data: {
+    title?: string;
+    description?: string;
+    category?: string;
+    priority?: string;
+  }) =>
+    apiFetch(`/helpdesk/${id}/edit`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => apiFetch(`/helpdesk/${id}`, { method: "DELETE" }),
+
+  addComment: (id: string, text: string) =>
+    apiFetch(`/helpdesk/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  deleteComment: (ticketId: string, commentId: string) =>
+    apiFetch(`/helpdesk/${ticketId}/comments/${commentId}`, {
+      method: "DELETE",
+    }),
 };
