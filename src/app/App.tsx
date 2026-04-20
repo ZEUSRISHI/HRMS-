@@ -34,6 +34,7 @@ import {
   BarChart3,
   Briefcase,
   Users as UsersIcon,
+  TicketCheck, // ✅ ADDED
   LucideIcon,
 } from "lucide-react";
 
@@ -51,6 +52,9 @@ import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
+
+/* ✅ HELPDESK MODULE */
+import { HelpdeskModule } from "./components/modules/HelpdeskModule";
 
 /* HR */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
@@ -82,6 +86,7 @@ export type ModuleType =
   | "workforce-overview"
   | "hr-employees"
   | "hr-attendance-leave"
+  | "helpdesk" // ✅ ADDED
   | "profile"
   | "account";
 
@@ -141,6 +146,9 @@ function AppContent() {
 
     { id: "hr-attendance-leave",  name: "Attendance & Leave", icon: Clock,           roles: ["hr"] },
 
+    // ✅ HELPDESK MENU
+    { id: "helpdesk", name: "Helpdesk", icon: TicketCheck, roles: ["admin", "manager", "employee", "hr"] },
+
   ];
 
   const visibleMenuItems =
@@ -170,6 +178,8 @@ function AppContent() {
       case "onboarding":           return <OnboardingModule />;
       case "time-tracking":        return <TimeTracking />;
       case "analytics":            return <AnalyticsReports />;
+
+      case "helpdesk":             return <HelpdeskModule />; // ✅ ADDED
 
       case "workforce-overview":
         return (
