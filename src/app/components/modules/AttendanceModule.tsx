@@ -9,7 +9,7 @@ import {
 import { Textarea } from "../ui/textarea";
 import { useAuth } from "../../contexts/AuthContext";
 import { attendanceApi, leaveApi } from "@/services/api";
-import { format } from "date-fns";
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns";
 import { LogIn, LogOut, Download, Users, Calendar, Clock } from "lucide-react";
 
 /* ============================================================
@@ -81,9 +81,14 @@ export function AttendanceModule() {
   const [toast,         setToast]         = useState<{ msg: string; type: "success" | "error" } | null>(null);
   const [form,          setForm]          = useState(initForm);
   const [dialogOpen,    setDialogOpen]    = useState(false);
-  const [reportStart,   setReportStart]   = useState("");
-  const [reportEnd,     setReportEnd]     = useState("");
   const [activeTab,     setActiveTab]     = useState<"pending" | "all">("pending");
+
+  /* ── report filter state ── */
+  const [reportFilter,    setReportFilter]    = useState<"custom" | "this_week" | "last_week" | "this_month" | "last_month">("custom");
+  const [reportStart,     setReportStart]     = useState("");
+  const [reportEnd,       setReportEnd]       = useState("");
+  const [reportRole,      setReportRole]      = useState("all");
+  const [reportName,      setReportName]      = useState("");
 
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
@@ -212,12 +217,59 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     DOWNLOAD CSV
+     DOWNLOAD CSV — with filters
      ============================================================ */
+  const getReportDateRange = (): { start: string; end: string } => {
+    const today = new Date();
+    switch (reportFilter) {
+      case "this_week":
+        return {
+          start: format(startOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+          end:   format(endOfWeek(today,   { weekStartsOn: 1 }), "yyyy-MM-dd"),
+        };
+      case "last_week": {
+        const lw = subWeeks(today, 1);
+        return {
+          start: format(startOfWeek(lw, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+          end:   format(endOfWeek(lw,   { weekStartsOn: 1 }), "yyyy-MM-dd"),
+        };
+      }
+      case "this_month":
+        return {
+          start: format(startOfMonth(today), "yyyy-MM-dd"),
+          end:   format(endOfMonth(today),   "yyyy-MM-dd"),
+        };
+      case "last_month": {
+        const lm = subMonths(today, 1);
+        return {
+          start: format(startOfMonth(lm), "yyyy-MM-dd"),
+          end:   format(endOfMonth(lm),   "yyyy-MM-dd"),
+        };
+      }
+      default:
+        return { start: reportStart, end: reportEnd };
+    }
+  };
+
   const downloadAttendance = () => {
+    const { start, end } = getReportDateRange();
     let rows = allAttendance;
-    if (reportStart) rows = rows.filter((r) => r.date >= reportStart);
-    if (reportEnd)   rows = rows.filter((r) => r.date <= reportEnd);
+
+    if (start) rows = rows.filter((r) => r.date >= start);
+    if (end)   rows = rows.filter((r) => r.date <= end);
+
+    if (reportRole !== "all")
+      rows = rows.filter((r) => r.userId?.role === reportRole);
+
+    if (reportName.trim())
+      rows = rows.filter((r) =>
+        r.userId?.name?.toLowerCase().includes(reportName.trim().toLowerCase())
+      );
+
+    if (rows.length === 0) {
+      showToast("No records match the selected filters", "error");
+      return;
+    }
 
     const csv = [
       "Name,Role,Date,CheckIn,CheckOut",
@@ -231,10 +283,24 @@ export function AttendanceModule() {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;
-    a.download = "attendance_report.csv";
+    a.download = `attendance_report_${start || "all"}_to_${end || "all"}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  /* ── preview count ── */
+  const previewCount = (() => {
+    const { start, end } = getReportDateRange();
+    let rows = allAttendance;
+    if (start) rows = rows.filter((r) => r.date >= start);
+    if (end)   rows = rows.filter((r) => r.date <= end);
+    if (reportRole !== "all") rows = rows.filter((r) => r.userId?.role === reportRole);
+    if (reportName.trim())
+      rows = rows.filter((r) =>
+        r.userId?.name?.toLowerCase().includes(reportName.trim().toLowerCase())
+      );
+    return rows.length;
+  })();
 
   /* ============================================================
      HELPER COLORS / LABELS
@@ -416,28 +482,108 @@ export function AttendanceModule() {
         </Card>
       )}
 
-      {/* ── ADMIN: ATTENDANCE REPORT DOWNLOAD ── */}
-      {isAdmin && (
+      {/* ── ADMIN + MANAGER: ATTENDANCE REPORT DOWNLOAD ── */}
+      {(isAdmin || isManager) && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Calendar size={18} /> Attendance Report
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">From</label>
-              <input type="date" value={reportStart} onChange={(e) => setReportStart(e.target.value)}
-                className="border p-2 rounded text-sm" />
+          <CardContent className="space-y-5">
+
+            {/* ── Quick range pills ── */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">Date Range</p>
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { value: "this_week",   label: "This Week"   },
+                  { value: "last_week",   label: "Last Week"   },
+                  { value: "this_month",  label: "This Month"  },
+                  { value: "last_month",  label: "Last Month"  },
+                  { value: "custom",      label: "Custom"      },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setReportFilter(opt.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      reportFilter === opt.value
+                        ? "bg-black text-white border-black"
+                        : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-gray-500">To</label>
-              <input type="date" value={reportEnd} onChange={(e) => setReportEnd(e.target.value)}
-                className="border p-2 rounded text-sm" />
+
+            {/* ── Custom date pickers (only when custom selected) ── */}
+            {reportFilter === "custom" && (
+              <div className="flex flex-wrap gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-500">From</label>
+                  <input
+                    type="date"
+                    value={reportStart}
+                    onChange={(e) => setReportStart(e.target.value)}
+                    className="border p-2 rounded text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-gray-500">To</label>
+                  <input
+                    type="date"
+                    value={reportEnd}
+                    onChange={(e) => setReportEnd(e.target.value)}
+                    className="border p-2 rounded text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* ── Role & Name filters ── */}
+            <div className="flex flex-wrap gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-500">Filter by Role</label>
+                <select
+                  value={reportRole}
+                  onChange={(e) => setReportRole(e.target.value)}
+                  className="border p-2 rounded text-sm bg-white min-w-[140px]"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="employee">Employee</option>
+                  <option value="manager">Manager</option>
+                  <option value="hr">HR</option>
+                  {isAdmin && <option value="admin">Admin</option>}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-500">Filter by Name</label>
+                <input
+                  type="text"
+                  placeholder="Search name…"
+                  value={reportName}
+                  onChange={(e) => setReportName(e.target.value)}
+                  className="border p-2 rounded text-sm min-w-[180px]"
+                />
+              </div>
             </div>
-            <Button onClick={downloadAttendance} className="bg-black text-white flex items-center gap-2">
-              <Download size={16} /> Download CSV
-            </Button>
+
+            {/* ── Preview count + download ── */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+                {previewCount} record{previewCount !== 1 ? "s" : ""} matched
+              </span>
+              <Button
+                onClick={downloadAttendance}
+                className="bg-black text-white flex items-center gap-2"
+              >
+                <Download size={16} /> Download CSV
+              </Button>
+            </div>
+
           </CardContent>
         </Card>
       )}
