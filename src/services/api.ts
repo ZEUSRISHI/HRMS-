@@ -271,20 +271,72 @@ export const projectApi = {
 };
 
 /* ============================================================
-   PAYROLL API
+   PAYROLL API  ✅ UPDATED — bulk + process now accept month param
    ============================================================ */
 export const payrollApi = {
-  create: (data: any) =>
-    apiFetch("/payroll", { method: "POST", body: JSON.stringify(data) }),
+  create: (data: {
+    userId: string;
+    month: string;
+    basicSalary: number;
+    paidLeaveDays?: number;
+    paymentMode?: string;
+    remarks?: string;
+    extraAllowances?: { special?: number; other?: number };
+    extraDeductions?: { tds?: number; other?: number };
+  }) =>
+    apiFetch("/payroll", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
-  getAll: () => apiFetch("/payroll/all"),
+  bulk: (data: {
+    month: string;
+    paidLeaveDays?: number;
+  }) =>
+    apiFetch("/payroll/bulk", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getAll: (params?: {
+    month?: string;
+    status?: string;
+    role?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => {
+    const query = new URLSearchParams(
+      Object.entries(params || {})
+        .filter(([, v]) => v !== undefined && v !== "")
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+    return apiFetch(`/payroll/all${query ? `?${query}` : ""}`);
+  },
+
   getMy: () => apiFetch("/payroll/my"),
-  process: () => apiFetch("/payroll/process", { method: "POST" }),
 
-  update: (id: string, data: any) =>
-    apiFetch(`/payroll/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  process: (data?: { month?: string }) =>
+    apiFetch("/payroll/process", {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }),
 
-  delete: (id: string) => apiFetch(`/payroll/${id}`, { method: "DELETE" }),
+  update: (id: string, data: {
+    presentDays?: number;
+    leaveDays?: number;
+    status?: string;
+    paymentMode?: string;
+    remarks?: string;
+    allowances?: { special?: number; other?: number };
+    deductions?: { tds?: number; other?: number };
+  }) =>
+    apiFetch(`/payroll/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) =>
+    apiFetch(`/payroll/${id}`, { method: "DELETE" }),
 };
 
 /* ============================================================
@@ -432,7 +484,7 @@ export const onboardingApi = {
 };
 
 /* ============================================================
-   🎫 HELPDESK API (✅ ADDED)
+   HELPDESK API
    ============================================================ */
 export const helpdeskApi = {
   create: (data: {
