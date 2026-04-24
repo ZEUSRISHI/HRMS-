@@ -6,7 +6,7 @@ console.log("🔥 ENV FULL:", import.meta.env);
    TOKEN STORAGE
    ============================================================ */
 export const tokenStorage = {
-  getAccess: () => localStorage.getItem("hrms_access_token"),
+  getAccess:  () => localStorage.getItem("hrms_access_token"),
   getRefresh: () => localStorage.getItem("hrms_refresh_token"),
   set: (access: string, refresh: string) => {
     localStorage.setItem("hrms_access_token", access);
@@ -27,9 +27,9 @@ export class ApiError extends Error {
   data: any;
   constructor(message: string, status: number, data?: any) {
     super(message);
-    this.name = "ApiError";
+    this.name   = "ApiError";
     this.status = status;
-    this.data = data;
+    this.data   = data;
   }
 }
 
@@ -123,23 +123,19 @@ export const authApi = {
     }
   },
 
-  resetPassword: async (email: string, newPassword: string) => {
-    return apiFetch("/auth/reset-password", {
+  resetPassword: async (email: string, newPassword: string) =>
+    apiFetch("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify({ email, newPassword }),
-    });
-  },
+    }),
 
-  changePassword: async (oldPassword: string, newPassword: string) => {
-    return apiFetch("/auth/change-password", {
+  changePassword: async (oldPassword: string, newPassword: string) =>
+    apiFetch("/auth/change-password", {
       method: "PUT",
       body: JSON.stringify({ oldPassword, newPassword }),
-    });
-  },
+    }),
 
-  getMe: async () => {
-    return apiFetch("/auth/me");
-  },
+  getMe: async () => apiFetch("/auth/me"),
 };
 
 /* ============================================================
@@ -149,16 +145,15 @@ export const profileApi = {
   get: async () => apiFetch("/profile"),
 
   update: async (updates: {
-    name?: string;
-    phone?: string;
+    name?:       string;
+    phone?:      string;
     department?: string;
-    avatar?: string;
-  }) => {
-    return apiFetch("/profile", {
+    avatar?:     string;
+  }) =>
+    apiFetch("/profile", {
       method: "PUT",
       body: JSON.stringify(updates),
-    });
-  },
+    }),
 
   deleteAccount: async () => apiFetch("/profile", { method: "DELETE" }),
 };
@@ -170,10 +165,10 @@ export const dashboardApi = {
   getStats: async () => apiFetch("/dashboard/stats"),
 
   getUsers: async (params?: {
-    role?: string;
+    role?:   string;
     search?: string;
-    page?: number;
-    limit?: number;
+    page?:   number;
+    limit?:  number;
   }) => {
     const query = new URLSearchParams(
       Object.entries(params || {})
@@ -183,12 +178,11 @@ export const dashboardApi = {
     return apiFetch(`/dashboard/users${query ? `?${query}` : ""}`);
   },
 
-  updateUser: async (id: string, updates: any) => {
-    return apiFetch(`/dashboard/users/${id}`, {
+  updateUser: async (id: string, updates: any) =>
+    apiFetch(`/dashboard/users/${id}`, {
       method: "PUT",
       body: JSON.stringify(updates),
-    });
-  },
+    }),
 
   deleteUser: async (id: string) =>
     apiFetch(`/dashboard/users/${id}`, { method: "DELETE" }),
@@ -198,27 +192,63 @@ export const dashboardApi = {
    ATTENDANCE API
    ============================================================ */
 export const attendanceApi = {
-  checkIn: () => apiFetch("/attendance/checkin", { method: "POST" }),
+  // Current user check-in / check-out
+  checkIn:  () => apiFetch("/attendance/checkin",  { method: "POST" }),
   checkOut: () => apiFetch("/attendance/checkout", { method: "POST" }),
+
+  // Current user's today record
   getToday: () => apiFetch("/attendance/today"),
+
+  // Current user's full history
   getMy: () => apiFetch("/attendance/my"),
+
+  // All records — used for CSV report (admin / hr / manager)
   getAll: () => apiFetch("/attendance/all"),
+
+  // Today's live overview for ALL users — admin / hr / manager dashboard card
+  getTodayAll: () => apiFetch("/attendance/today-all"),
+
+  // Admin: manual bulk entry — saves to MongoDB
+  addManual: (data: {
+    employeeName: string;
+    employeeRole: string;
+    startDate:    string;
+    endDate:      string;
+    checkIn:      string;
+    checkOut?:    string;
+  }) =>
+    apiFetch("/attendance/manual", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 /* ============================================================
    LEAVE API
    ============================================================ */
 export const leaveApi = {
-  apply: (data: any) =>
+  // Employee / HR / Manager: submit a new leave request
+  apply: (data: {
+    type:              string;
+    isEmergency?:      boolean;
+    priority?:         string;
+    startDate:         string;
+    endDate:           string;
+    reason:            string;
+    description?:      string;
+    emergencyContact?: string;
+  }) =>
     apiFetch("/leaves/apply", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
-  getMy: () => apiFetch("/leaves/my"),
+  // Fetch leaves
+  getMy:     () => apiFetch("/leaves/my"),
   getPending: () => apiFetch("/leaves/pending"),
-  getAll: () => apiFetch("/leaves/all"),
+  getAll:    () => apiFetch("/leaves/all"),
 
+  // Approve / reject
   approve: (id: string) =>
     apiFetch(`/leaves/${id}/approve`, { method: "PUT" }),
 
@@ -226,6 +256,21 @@ export const leaveApi = {
     apiFetch(`/leaves/${id}/reject`, {
       method: "PUT",
       body: JSON.stringify({ reason: reason || "" }),
+    }),
+
+  // Admin: manual past-date leave entry — saves to MongoDB
+  addManual: (data: {
+    employeeName: string;
+    type:         string;
+    startDate:    string;
+    endDate:      string;
+    reason:       string;
+    status?:      string;
+    priority?:    string;
+  }) =>
+    apiFetch("/leaves/manual", {
+      method: "POST",
+      body: JSON.stringify(data),
     }),
 };
 
@@ -236,8 +281,8 @@ export const taskApi = {
   create: (data: any) =>
     apiFetch("/tasks", { method: "POST", body: JSON.stringify(data) }),
 
-  getAll: () => apiFetch("/tasks/all"),
-  getMy: () => apiFetch("/tasks/my"),
+  getAll:       () => apiFetch("/tasks/all"),
+  getMy:        () => apiFetch("/tasks/my"),
   getAssignable: () => apiFetch("/tasks/assignable"),
 
   update: (id: string, data: any) =>
@@ -259,10 +304,10 @@ export const projectApi = {
   create: (data: any) =>
     apiFetch("/projects", { method: "POST", body: JSON.stringify(data) }),
 
-  getAll: () => apiFetch("/projects/all"),
-  getMy: () => apiFetch("/projects/my"),
+  getAll:      () => apiFetch("/projects/all"),
+  getMy:       () => apiFetch("/projects/my"),
   getManagers: () => apiFetch("/projects/managers"),
-  getMembers: () => apiFetch("/projects/members"),
+  getMembers:  () => apiFetch("/projects/members"),
 
   update: (id: string, data: any) =>
     apiFetch(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -271,16 +316,16 @@ export const projectApi = {
 };
 
 /* ============================================================
-   PAYROLL API  ✅ UPDATED — bulk + process now accept month param
+   PAYROLL API
    ============================================================ */
 export const payrollApi = {
   create: (data: {
-    userId: string;
-    month: string;
-    basicSalary: number;
-    paidLeaveDays?: number;
-    paymentMode?: string;
-    remarks?: string;
+    userId:          string;
+    month:           string;
+    basicSalary:     number;
+    paidLeaveDays?:  number;
+    paymentMode?:    string;
+    remarks?:        string;
     extraAllowances?: { special?: number; other?: number };
     extraDeductions?: { tds?: number; other?: number };
   }) =>
@@ -289,21 +334,18 @@ export const payrollApi = {
       body: JSON.stringify(data),
     }),
 
-  bulk: (data: {
-    month: string;
-    paidLeaveDays?: number;
-  }) =>
+  bulk: (data: { month: string; paidLeaveDays?: number }) =>
     apiFetch("/payroll/bulk", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   getAll: (params?: {
-    month?: string;
-    status?: string;
-    role?: string;
+    month?:     string;
+    status?:    string;
+    role?:      string;
     startDate?: string;
-    endDate?: string;
+    endDate?:   string;
   }) => {
     const query = new URLSearchParams(
       Object.entries(params || {})
@@ -322,21 +364,20 @@ export const payrollApi = {
     }),
 
   update: (id: string, data: {
-    presentDays?: number;
-    leaveDays?: number;
-    status?: string;
-    paymentMode?: string;
-    remarks?: string;
-    allowances?: { special?: number; other?: number };
-    deductions?: { tds?: number; other?: number };
+    presentDays?:  number;
+    leaveDays?:    number;
+    status?:       string;
+    paymentMode?:  string;
+    remarks?:      string;
+    allowances?:   { special?: number; other?: number };
+    deductions?:   { tds?: number; other?: number };
   }) =>
     apiFetch(`/payroll/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
-  delete: (id: string) =>
-    apiFetch(`/payroll/${id}`, { method: "DELETE" }),
+  delete: (id: string) => apiFetch(`/payroll/${id}`, { method: "DELETE" }),
 };
 
 /* ============================================================
@@ -370,7 +411,7 @@ export const calendarApi = {
     apiFetch("/calendar", { method: "POST", body: JSON.stringify(data) }),
 
   getEvents: () => apiFetch("/calendar"),
-  getAll: () => apiFetch("/calendar/all"),
+  getAll:    () => apiFetch("/calendar/all"),
 
   update: (id: string, data: any) =>
     apiFetch(`/calendar/${id}`, { method: "PUT", body: JSON.stringify(data) }),
@@ -385,7 +426,7 @@ export const dailyStatusApi = {
   submit: (data: any) =>
     apiFetch("/daily-status", { method: "POST", body: JSON.stringify(data) }),
 
-  getMy: () => apiFetch("/daily-status/my"),
+  getMy:  () => apiFetch("/daily-status/my"),
   getAll: () => apiFetch("/daily-status/all"),
 
   addComment: (id: string, comment: string) =>
@@ -402,7 +443,7 @@ export const timesheetApi = {
   add: (data: any) =>
     apiFetch("/timesheets", { method: "POST", body: JSON.stringify(data) }),
 
-  getMy: () => apiFetch("/timesheets/my"),
+  getMy:  () => apiFetch("/timesheets/my"),
   getAll: () => apiFetch("/timesheets/all"),
 
   approve: (id: string) =>
@@ -488,10 +529,10 @@ export const onboardingApi = {
    ============================================================ */
 export const helpdeskApi = {
   create: (data: {
-    title: string;
+    title:       string;
     description: string;
-    category: string;
-    priority: string;
+    category:    string;
+    priority:    string;
   }) =>
     apiFetch("/helpdesk", { method: "POST", body: JSON.stringify(data) }),
 
@@ -507,22 +548,21 @@ export const helpdeskApi = {
   },
 
   getStats: () => apiFetch("/helpdesk/stats"),
-
-  getById: (id: string) => apiFetch(`/helpdesk/${id}`),
+  getById:  (id: string) => apiFetch(`/helpdesk/${id}`),
 
   update: (id: string, data: {
-    status?: string;
-    priority?: string;
-    assignedTo?: string;
+    status?:         string;
+    priority?:       string;
+    assignedTo?:     string;
     resolutionNote?: string;
   }) =>
     apiFetch(`/helpdesk/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 
   editMine: (id: string, data: {
-    title?: string;
+    title?:       string;
     description?: string;
-    category?: string;
-    priority?: string;
+    category?:    string;
+    priority?:    string;
   }) =>
     apiFetch(`/helpdesk/${id}/edit`, {
       method: "PATCH",
