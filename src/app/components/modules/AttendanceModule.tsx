@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
@@ -9,8 +9,14 @@ import {
 import { Textarea } from "../ui/textarea";
 import { useAuth } from "../../contexts/AuthContext";
 import { attendanceApi, leaveApi } from "@/services/api";
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths, eachDayOfInterval, parseISO } from "date-fns";
-import { LogIn, LogOut, Download, Users, Calendar, Clock, PlusCircle } from "lucide-react";
+import {
+  format, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
+  subWeeks, subMonths, eachDayOfInterval, parseISO,
+} from "date-fns";
+import {
+  LogIn, LogOut, Download, Users, Calendar, Clock,
+  PlusCircle, RefreshCw, CheckCircle2, XCircle,
+} from "lucide-react";
 
 /* ============================================================
    TYPES
@@ -81,6 +87,22 @@ const currentStepIndex = (
 };
 
 /* ============================================================
+   LIVE CLOCK COMPONENT
+   ============================================================ */
+const LiveClock = () => {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="font-mono text-lg font-semibold text-gray-800 tabular-nums">
+      {format(time, "hh:mm:ss aa")}
+    </span>
+  );
+};
+
+/* ============================================================
    COMPONENT
    ============================================================ */
 export function AttendanceModule() {
@@ -93,19 +115,22 @@ export function AttendanceModule() {
   const isAdmin    = role === "admin";
 
   /* ── state ── */
-  const [todayRecord,   setTodayRecord]   = useState<any>(null);
-  const [allAttendance, setAllAttendance] = useState<any[]>([]);
-  const [leaves,        setLeaves]        = useState<any>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [toast,         setToast]         = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [form,          setForm]          = useState(initForm);
-  const [dialogOpen,    setDialogOpen]    = useState(false);
-  const [activeTab,     setActiveTab]     = useState<"pending" | "all">("pending");
+  const [todayRecord,    setTodayRecord]    = useState<any>(null);
+  const [allAttendance,  setAllAttendance]  = useState<any[]>([]);
+  const [manualDbRecords, setManualDbRecords] = useState<any[]>([]); // from MongoDB
+  const [leaves,         setLeaves]         = useState<any>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkOutLoading,setCheckOutLoading]= useState(false);
+  const [toast,          setToast]          = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [form,           setForm]           = useState(initForm);
+  const [dialogOpen,     setDialogOpen]     = useState(false);
+  const [activeTab,      setActiveTab]      = useState<"pending" | "all">("pending");
 
-  /* ── manual attendance (admin only) ── */
-  const [manualAttendanceOpen,    setManualAttendanceOpen]    = useState(false);
-  const [manualAttendance,        setManualAttendance]        = useState(initManualAttendance);
-  const [manualAttendanceRecords, setManualAttendanceRecords] = useState<any[]>([]);
+  /* ── manual attendance dialog (admin only) ── */
+  const [manualAttendanceOpen, setManualAttendanceOpen] = useState(false);
+  const [manualAttendance,     setManualAttendance]     = useState(initManualAttendance);
+  const [manualSubmitting,     setManualSubmitting]     = useState(false);
 
   /* ── manual leave (admin only) ── */
   const [manualLeaveOpen,    setManualLeaveOpen]    = useState(false);
@@ -113,41 +138,56 @@ export function AttendanceModule() {
   const [manualLeaveRecords, setManualLeaveRecords] = useState<any[]>([]);
 
   /* ── attendance report filters ── */
-  const [reportFilter, setReportFilter] = useState<"custom" | "this_week" | "last_week" | "this_month" | "last_month">("custom");
+  const [reportFilter, setReportFilter] = useState<"custom"|"this_week"|"last_week"|"this_month"|"last_month">("custom");
   const [reportStart,  setReportStart]  = useState("");
   const [reportEnd,    setReportEnd]    = useState("");
   const [reportRole,   setReportRole]   = useState("all");
   const [reportName,   setReportName]   = useState("");
 
   /* ── leave report filters ── */
-  const [leaveReportFilter, setLeaveReportFilter] = useState<"custom" | "this_month" | "last_month" | "this_year" | "last_year">("this_month");
+  const [leaveReportFilter, setLeaveReportFilter] = useState<"custom"|"this_month"|"last_month"|"this_year"|"last_year">("this_month");
   const [leaveReportStart,  setLeaveReportStart]  = useState("");
   const [leaveReportEnd,    setLeaveReportEnd]     = useState("");
+
+  /* ── real-time polling ref ── */
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ── helpers ── */
   const showToast = (msg: string, type: "success" | "error" = "success") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   };
 
-  const setF  = (k: keyof typeof initForm, v: any)             => setForm((f)             => ({ ...f, [k]: v }));
-  const setMA = (k: keyof typeof initManualAttendance, v: any) => setManualAttendance((f) => ({ ...f, [k]: v }));
-  const setML = (k: keyof typeof initManualLeave, v: any)      => setManualLeave((f)      => ({ ...f, [k]: v }));
+  const setF  = (k: keyof typeof initForm, v: any)             => setForm(f => ({ ...f, [k]: v }));
+  const setMA = (k: keyof typeof initManualAttendance, v: any) => setManualAttendance(f => ({ ...f, [k]: v }));
+  const setML = (k: keyof typeof initManualLeave, v: any)      => setManualLeave(f => ({ ...f, [k]: v }));
 
   const triggerDownload = (csv: string, filename: string) => {
     const blob = new Blob([csv], { type: "text/csv" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href     = url;
-    a.download = filename;
-    a.click();
+    a.href = url; a.download = filename; a.click();
     URL.revokeObjectURL(url);
   };
 
   /* ============================================================
      LOAD DATA
      ============================================================ */
-  const loadData = async () => {
+  const loadTodayOnly = useCallback(async () => {
+    try {
+      const todayRes = await attendanceApi.getToday();
+      setTodayRecord(todayRes.record || null);
+
+      if (isAdmin || isHR || isManager) {
+        const allRes = await attendanceApi.getAll();
+        setAllAttendance(allRes.records || []);
+      }
+    } catch (err: any) {
+      console.error("loadTodayOnly error:", err.message);
+    }
+  }, [isAdmin, isHR, isManager]);
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -157,6 +197,12 @@ export function AttendanceModule() {
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
+      }
+
+      // Load manual records from MongoDB (admin only)
+      if (isAdmin) {
+        const manualRes = await attendanceApi.getManual();
+        setManualDbRecords(manualRes.records || []);
       }
 
       if (isAdmin) {
@@ -177,50 +223,74 @@ export function AttendanceModule() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdmin, isHR, isManager]);
 
-  useEffect(() => { loadData(); }, []);
+  /* ── initial load ── */
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  /* ── real-time polling every 30 seconds for today's attendance ── */
+  useEffect(() => {
+    pollingRef.current = setInterval(() => {
+      loadTodayOnly();
+    }, 30000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [loadTodayOnly]);
 
   if (!currentUser) return null;
 
-  /* ── leaves to display in table ── */
+  /* ── leaves to display ── */
   const displayLeaves: any[] = isAdmin
     ? (activeTab === "pending" ? leaves?.pending ?? [] : leaves?.all ?? [])
     : (leaves ?? []);
 
   /* ============================================================
-     CHECK IN / OUT  (today only)
+     CHECK IN / OUT
      ============================================================ */
   const handleCheckIn = async () => {
     try {
-      await attendanceApi.checkIn();
-      showToast("✅ Checked in successfully");
-      await loadData();
+      setCheckInLoading(true);
+      const res = await attendanceApi.checkIn();
+      setTodayRecord(res.record);
+      showToast("✅ Checked in successfully at " + res.record.checkIn);
+      // Refresh all overview if admin/manager/hr
+      if (isAdmin || isHR || isManager) {
+        const allRes = await attendanceApi.getAll();
+        setAllAttendance(allRes.records || []);
+      }
     } catch (err: any) {
       showToast(err.message || "Check-in failed", "error");
+    } finally {
+      setCheckInLoading(false);
     }
   };
 
   const handleCheckOut = async () => {
     try {
-      await attendanceApi.checkOut();
-      showToast("✅ Checked out successfully");
-      await loadData();
+      setCheckOutLoading(true);
+      const res = await attendanceApi.checkOut();
+      setTodayRecord(res.record);
+      showToast("✅ Checked out successfully at " + res.record.checkOut);
+      if (isAdmin || isHR || isManager) {
+        const allRes = await attendanceApi.getAll();
+        setAllAttendance(allRes.records || []);
+      }
     } catch (err: any) {
       showToast(err.message || "Check-out failed", "error");
+    } finally {
+      setCheckOutLoading(false);
     }
   };
 
   /* ============================================================
-     MANUAL ATTENDANCE ENTRY
-     Admin only — generates one record per day in the date range
+     MANUAL ATTENDANCE ENTRY — saves to MongoDB
      ============================================================ */
-  const submitManualAttendance = () => {
+  const submitManualAttendance = async () => {
     if (!manualAttendance.employeeName.trim()) {
       showToast("Employee name is required", "error"); return;
-    }
-    if (!manualAttendance.employeeRole) {
-      showToast("Employee role is required", "error"); return;
     }
     if (!manualAttendance.startDate || !manualAttendance.endDate) {
       showToast("Start date and end date are required", "error"); return;
@@ -237,31 +307,44 @@ export function AttendanceModule() {
       showToast("Start date cannot be after end date", "error"); return;
     }
 
-    // Generate one record per calendar day in the range
-    const days = eachDayOfInterval({
-      start: parseISO(manualAttendance.startDate),
-      end:   parseISO(manualAttendance.endDate),
-    });
+    try {
+      setManualSubmitting(true);
+      const res = await attendanceApi.addManual({
+        employeeName: manualAttendance.employeeName,
+        employeeRole: manualAttendance.employeeRole,
+        startDate:    manualAttendance.startDate,
+        endDate:      manualAttendance.endDate,
+        checkIn:      manualAttendance.checkIn,
+        checkOut:     manualAttendance.checkOut || undefined,
+      });
 
-    const newRecords = days.map((day) => ({
-      id:           Date.now() + Math.random(),
-      employeeName: manualAttendance.employeeName.trim(),
-      employeeRole: manualAttendance.employeeRole,
-      date:         format(day, "yyyy-MM-dd"),
-      checkIn:      manualAttendance.checkIn,
-      checkOut:     manualAttendance.checkOut,
-      enteredBy:    currentUser?.name ?? "Admin",
-      enteredAt:    new Date().toISOString(),
-    }));
+      // Refresh manual records from DB
+      const manualRes = await attendanceApi.getManual();
+      setManualDbRecords(manualRes.records || []);
 
-    setManualAttendanceRecords((prev) => [...prev, ...newRecords]);
-    setManualAttendance(initManualAttendance);
-    setManualAttendanceOpen(false);
-    showToast(`✅ ${newRecords.length} attendance record${newRecords.length > 1 ? "s" : ""} added`);
+      setManualAttendance(initManualAttendance);
+      setManualAttendanceOpen(false);
+      showToast(`✅ ${res.records.length} attendance record(s) saved to database`);
+    } catch (err: any) {
+      showToast(err.message || "Failed to save manual attendance", "error");
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
+
+  /* ── delete a manual record from DB ── */
+  const deleteManualRecord = async (id: string) => {
+    try {
+      await attendanceApi.deleteManual(id);
+      setManualDbRecords(prev => prev.filter(r => r._id !== id));
+      showToast("Record deleted");
+    } catch (err: any) {
+      showToast(err.message || "Delete failed", "error");
+    }
   };
 
   /* ============================================================
-     MANUAL LEAVE ENTRY  — admin only
+     MANUAL LEAVE ENTRY — local state only (same as before)
      ============================================================ */
   const submitManualLeave = () => {
     if (!manualLeave.employeeName.trim()) {
@@ -296,14 +379,14 @@ export function AttendanceModule() {
       enteredAt:    new Date().toISOString(),
     };
 
-    setManualLeaveRecords((prev) => [...prev, newRecord]);
+    setManualLeaveRecords(prev => [...prev, newRecord]);
     setManualLeave(initManualLeave);
     setManualLeaveOpen(false);
     showToast("✅ Manual leave record added");
   };
 
   /* ============================================================
-     SUBMIT LEAVE  (non-admin roles)
+     SUBMIT LEAVE (non-admin)
      ============================================================ */
   const submitLeave = async () => {
     if (!form.type || !form.startDate || !form.endDate || !form.reason) {
@@ -388,35 +471,35 @@ export function AttendanceModule() {
   };
 
   const filterApiAttendance = (rows: any[], start: string, end: string) => {
-    let f = rows;
-    if (start)                f = f.filter((r) => r.date >= start);
-    if (end)                  f = f.filter((r) => r.date <= end);
-    if (reportRole !== "all") f = f.filter((r) => r.userId?.role === reportRole);
-    if (reportName.trim())    f = f.filter((r) =>
+    let f = rows.filter(r => !r.isManual);
+    if (start)                f = f.filter(r => r.date >= start);
+    if (end)                  f = f.filter(r => r.date <= end);
+    if (reportRole !== "all") f = f.filter(r => r.userId?.role === reportRole);
+    if (reportName.trim())    f = f.filter(r =>
       r.userId?.name?.toLowerCase().includes(reportName.trim().toLowerCase()));
     return f;
   };
 
-  const filterManualAttendance = (rows: any[], start: string, end: string) => {
+  const filterManualDbAttendance = (rows: any[], start: string, end: string) => {
     let f = rows;
-    if (start)             f = f.filter((r) => r.date >= start);
-    if (end)               f = f.filter((r) => r.date <= end);
-    if (reportRole !== "all") f = f.filter((r) => r.employeeRole === reportRole);
-    if (reportName.trim()) f = f.filter((r) =>
-      r.employeeName?.toLowerCase().includes(reportName.trim().toLowerCase()));
+    if (start)                f = f.filter(r => r.date >= start);
+    if (end)                  f = f.filter(r => r.date <= end);
+    if (reportRole !== "all") f = f.filter(r => r.manualEmployeeRole === reportRole);
+    if (reportName.trim())    f = f.filter(r =>
+      r.manualEmployeeName?.toLowerCase().includes(reportName.trim().toLowerCase()));
     return f;
   };
 
   const downloadAttendance = () => {
     const { start, end } = getReportDateRange();
     const apiFiltered    = filterApiAttendance(allAttendance, start, end);
-    const manualFiltered = filterManualAttendance(manualAttendanceRecords, start, end);
+    const manualFiltered = filterManualDbAttendance(manualDbRecords, start, end);
 
-    const apiRows = apiFiltered.map(
-      (r) => `${r.userId?.name ?? "Unknown"},${r.userId?.role ?? ""},${r.date},${r.checkIn ?? ""},${r.checkOut ?? ""},API`
+    const apiRows = apiFiltered.map(r =>
+      `${r.userId?.name ?? "Unknown"},${r.userId?.role ?? ""},${r.date},${r.checkIn ?? ""},${r.checkOut ?? ""},API`
     );
-    const manualRows = manualFiltered.map(
-      (r) => `${r.employeeName},${r.employeeRole},${r.date},${r.checkIn},${r.checkOut ?? ""},Manual (by ${r.enteredBy})`
+    const manualRows = manualFiltered.map(r =>
+      `${r.manualEmployeeName},${r.manualEmployeeRole},${r.date},${r.checkIn},${r.checkOut ?? ""},Manual (by ${r.enteredByName})`
     );
 
     const all = [...apiRows, ...manualRows];
@@ -430,7 +513,7 @@ export function AttendanceModule() {
     const { start, end } = getReportDateRange();
     return (
       filterApiAttendance(allAttendance, start, end).length +
-      filterManualAttendance(manualAttendanceRecords, start, end).length
+      filterManualDbAttendance(manualDbRecords, start, end).length
     );
   })();
 
@@ -471,8 +554,8 @@ export function AttendanceModule() {
 
   const filterLeaveRows = (rows: any[], start: string, end: string) => {
     let f = rows;
-    if (start) f = f.filter((l) => l.startDate >= start);
-    if (end)   f = f.filter((l) => l.endDate   <= end);
+    if (start) f = f.filter(l => l.startDate >= start);
+    if (end)   f = f.filter(l => l.endDate   <= end);
     return f;
   };
 
@@ -482,11 +565,11 @@ export function AttendanceModule() {
     const apiFiltered    = filterLeaveRows(allApiLeaves,       start, end);
     const manualFiltered = filterLeaveRows(manualLeaveRecords, start, end);
 
-    const apiRows = apiFiltered.map(
-      (l) => `${l.userId?.name ?? "Unknown"},${l.userId?.role ?? ""},${l.type},${l.startDate},${l.endDate},${l.days ?? ""},${l.status},${l.reason},API`
+    const apiRows    = apiFiltered.map(l =>
+      `${l.userId?.name ?? "Unknown"},${l.userId?.role ?? ""},${l.type},${l.startDate},${l.endDate},${l.days ?? ""},${l.status},${l.reason},API`
     );
-    const manualRows = manualFiltered.map(
-      (l) => `${l.employeeName},Manual,${l.type},${l.startDate},${l.endDate},${l.days},${l.status},${l.reason},Manual (by ${l.enteredBy})`
+    const manualRows = manualFiltered.map(l =>
+      `${l.employeeName},Manual,${l.type},${l.startDate},${l.endDate},${l.days},${l.status},${l.reason},Manual (by ${l.enteredBy})`
     );
 
     const all = [...apiRows, ...manualRows];
@@ -498,7 +581,7 @@ export function AttendanceModule() {
 
   const leavePreviewCount = (() => {
     const { start, end } = getLeaveReportDateRange();
-    const allApiLeaves   = isAdmin ? (leaves?.all ?? []) : (Array.isArray(leaves) ? leaves : []);
+    const allApiLeaves = isAdmin ? (leaves?.all ?? []) : (Array.isArray(leaves) ? leaves : []);
     return (
       filterLeaveRows(allApiLeaves,       start, end).length +
       filterLeaveRows(manualLeaveRecords, start, end).length
@@ -526,7 +609,7 @@ export function AttendanceModule() {
       rejected:           "Rejected",
       emergency_approved: "Emergency Approved",
     };
-    return map[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return map[s] ?? s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   };
 
   const priorityColor = (p: string) => {
@@ -593,6 +676,10 @@ export function AttendanceModule() {
     );
   }
 
+  /* ── today's real-time status helper ── */
+  const checkedIn  = !!todayRecord?.checkIn;
+  const checkedOut = !!todayRecord?.checkOut;
+
   /* ============================================================
      RENDER
      ============================================================ */
@@ -601,7 +688,7 @@ export function AttendanceModule() {
 
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-6 right-6 px-5 py-3 rounded-xl shadow-lg z-50 text-white text-sm font-medium ${
+        <div className={`fixed top-6 right-6 px-5 py-3 rounded-xl shadow-lg z-50 text-white text-sm font-medium transition-all ${
           toast.type === "error" ? "bg-red-600" : "bg-gray-900"
         }`}>
           {toast.msg}
@@ -609,35 +696,126 @@ export function AttendanceModule() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          TODAY'S ATTENDANCE
+          TODAY'S ATTENDANCE — REAL TIME
           ══════════════════════════════════════════════════════ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock size={18} /> Today's Attendance — {format(new Date(), "MMMM d, yyyy")}
+      <Card className="border-2 border-gray-100">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-2">
+              <Clock size={18} />
+              Today's Attendance — {format(new Date(), "MMMM d, yyyy")}
+            </div>
+            {/* Live clock */}
+            <div className="flex items-center gap-2 bg-gray-50 px-4 py-1.5 rounded-xl border">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <LiveClock />
+            </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col md:flex-row justify-between gap-6">
-          <div className="space-y-1 text-sm">
-            <p><span className="text-gray-500">Check In: </span><strong>{todayRecord?.checkIn ?? "Not checked in"}</strong></p>
-            <p><span className="text-gray-500">Check Out: </span><strong>{todayRecord?.checkOut ?? "Not checked out"}</strong></p>
-            <p><span className="text-gray-500">Status: </span><strong className="capitalize">{todayRecord?.status ?? "Absent"}</strong></p>
+
+        <CardContent>
+          <div className="flex flex-col md:flex-row justify-between gap-6 items-start">
+
+            {/* Status tiles */}
+            <div className="flex gap-4 flex-wrap">
+              {/* Check In tile */}
+              <div className={`flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 transition-all ${
+                checkedIn
+                  ? "border-green-400 bg-green-50"
+                  : "border-dashed border-gray-300 bg-gray-50"
+              }`}>
+                <CheckCircle2 size={22} className={checkedIn ? "text-green-500" : "text-gray-300"} />
+                <p className="text-xs text-gray-500 mt-1">Check In</p>
+                <p className={`text-base font-bold mt-0.5 ${checkedIn ? "text-green-700" : "text-gray-400"}`}>
+                  {todayRecord?.checkIn ?? "—"}
+                </p>
+              </div>
+
+              {/* Check Out tile */}
+              <div className={`flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 transition-all ${
+                checkedOut
+                  ? "border-red-400 bg-red-50"
+                  : "border-dashed border-gray-300 bg-gray-50"
+              }`}>
+                <XCircle size={22} className={checkedOut ? "text-red-500" : "text-gray-300"} />
+                <p className="text-xs text-gray-500 mt-1">Check Out</p>
+                <p className={`text-base font-bold mt-0.5 ${checkedOut ? "text-red-700" : "text-gray-400"}`}>
+                  {todayRecord?.checkOut ?? "—"}
+                </p>
+              </div>
+
+              {/* Status tile */}
+              <div className="flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 border-gray-200 bg-white">
+                <span className="text-xs text-gray-500">Status</span>
+                <span className={`mt-1 px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                  checkedOut  ? "bg-blue-100 text-blue-700"  :
+                  checkedIn   ? "bg-green-100 text-green-700" :
+                  "bg-gray-100 text-gray-500"
+                }`}>
+                  {checkedOut ? "Completed" : checkedIn ? "Present" : todayRecord?.status ?? "Absent"}
+                </span>
+                {checkedIn && !checkedOut && (
+                  <span className="text-[10px] text-gray-400 mt-1">Working...</span>
+                )}
+              </div>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3 flex-wrap items-center self-center">
+              {!checkedIn && (
+                <Button
+                  onClick={handleCheckIn}
+                  disabled={checkInLoading}
+                  className="bg-blue-600 text-white hover:bg-blue-700 h-11 px-6"
+                >
+                  {checkInLoading
+                    ? <span className="flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Checking in...</span>
+                    : <span className="flex items-center gap-2"><LogIn size={16} /> Check In</span>
+                  }
+                </Button>
+              )}
+
+              {checkedIn && !checkedOut && (
+                <Button
+                  onClick={handleCheckOut}
+                  disabled={checkOutLoading}
+                  className="bg-red-500 text-white hover:bg-red-600 h-11 px-6"
+                >
+                  {checkOutLoading
+                    ? <span className="flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Checking out...</span>
+                    : <span className="flex items-center gap-2"><LogOut size={16} /> Check Out</span>
+                  }
+                </Button>
+              )}
+
+              {checkedIn && checkedOut && (
+                <div className="flex items-center gap-2 bg-green-50 border border-green-200 px-4 py-2 rounded-xl">
+                  <CheckCircle2 size={18} className="text-green-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-green-700">Day Complete</p>
+                    <p className="text-xs text-green-500">
+                      {todayRecord.checkIn} → {todayRecord.checkOut}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual refresh */}
+              <button
+                onClick={loadTodayOnly}
+                className="p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors"
+                title="Refresh attendance"
+              >
+                <RefreshCw size={16} />
+              </button>
+            </div>
           </div>
-          <div className="flex gap-3 flex-wrap items-start">
-            {!todayRecord && (
-              <Button onClick={handleCheckIn} className="bg-blue-600 text-white hover:bg-blue-700">
-                <LogIn size={16} className="mr-1" /> Check In
-              </Button>
-            )}
-            {todayRecord && !todayRecord.checkOut && (
-              <Button onClick={handleCheckOut} className="bg-red-500 text-white hover:bg-red-600">
-                <LogOut size={16} className="mr-1" /> Check Out
-              </Button>
-            )}
-            {todayRecord?.checkOut && (
-              <span className="text-green-600 font-medium text-sm mt-2">✓ Done for today</span>
-            )}
-          </div>
+
+          {/* Real-time indicator */}
+          <p className="text-[11px] text-gray-400 mt-4 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
+            Auto-refreshes every 30 seconds
+          </p>
         </CardContent>
       </Card>
 
@@ -652,14 +830,34 @@ export function AttendanceModule() {
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
             {allAttendance
-              .filter((r) => r.date === format(new Date(), "yyyy-MM-dd"))
-              .map((r) => (
-                <div key={r._id} className="border rounded-lg p-4 bg-white shadow-sm flex justify-between items-center">
-                  <div>
-                    <p className="font-semibold text-sm">{r.userId?.name}</p>
-                    <p className="text-xs text-gray-500">In: {r.checkIn} | Out: {r.checkOut ?? "—"}</p>
+              .filter(r => r.date === format(new Date(), "yyyy-MM-dd") && !r.isManual)
+              .map(r => (
+                <div key={r._id} className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-sm">{r.userId?.name}</p>
+                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <LogIn size={11} className="text-green-500" />
+                          {r.checkIn ?? "—"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <LogOut size={11} className="text-red-400" />
+                          {r.checkOut ?? "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge className={roleColor(r.userId?.role)}>{r.userId?.role}</Badge>
                   </div>
-                  <Badge className={roleColor(r.userId?.role)}>{r.userId?.role}</Badge>
+                  <div className="mt-2">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                      r.checkOut ? "bg-blue-100 text-blue-700" :
+                      r.checkIn  ? "bg-green-100 text-green-700" :
+                      "bg-gray-100 text-gray-500"
+                    }`}>
+                      {r.checkOut ? "✓ Completed" : r.checkIn ? "● Working" : "Absent"}
+                    </span>
+                  </div>
                 </div>
               ))}
           </CardContent>
@@ -677,9 +875,8 @@ export function AttendanceModule() {
                 <Calendar size={18} /> Attendance Report
               </CardTitle>
 
-              {/* ── Manual Entry — ADMIN ONLY ── */}
               {isAdmin && (
-                <Dialog open={manualAttendanceOpen} onOpenChange={(open) => {
+                <Dialog open={manualAttendanceOpen} onOpenChange={open => {
                   setManualAttendanceOpen(open);
                   if (!open) setManualAttendance(initManualAttendance);
                 }}>
@@ -694,10 +891,7 @@ export function AttendanceModule() {
                       <DialogTitle>Manual Attendance Entry</DialogTitle>
                     </DialogHeader>
 
-
                     <div className="space-y-4 mt-1">
-
-                      {/* ── Employee Name ── */}
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Employee Name <span className="text-red-500">*</span>
@@ -706,11 +900,10 @@ export function AttendanceModule() {
                           className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                           placeholder="e.g. Ravi Kumar"
                           value={manualAttendance.employeeName}
-                          onChange={(e) => setMA("employeeName", e.target.value)}
+                          onChange={e => setMA("employeeName", e.target.value)}
                         />
                       </div>
 
-                      {/* ── Employee Role ── */}
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Role <span className="text-red-500">*</span>
@@ -718,7 +911,7 @@ export function AttendanceModule() {
                         <select
                           className="border p-2 rounded w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-300"
                           value={manualAttendance.employeeRole}
-                          onChange={(e) => setMA("employeeRole", e.target.value)}
+                          onChange={e => setMA("employeeRole", e.target.value)}
                         >
                           <option value="employee">Employee</option>
                           <option value="manager">Manager</option>
@@ -727,7 +920,6 @@ export function AttendanceModule() {
                         </select>
                       </div>
 
-                      {/* ── Date Range ── */}
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Date Range <span className="text-red-500">*</span>
@@ -741,7 +933,7 @@ export function AttendanceModule() {
                               max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                               className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                               value={manualAttendance.startDate}
-                              onChange={(e) => setMA("startDate", e.target.value)}
+                              onChange={e => setMA("startDate", e.target.value)}
                             />
                           </div>
                           <div>
@@ -751,26 +943,21 @@ export function AttendanceModule() {
                               max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                               className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                               value={manualAttendance.endDate}
-                              onChange={(e) => setMA("endDate", e.target.value)}
+                              onChange={e => setMA("endDate", e.target.value)}
                             />
                           </div>
                         </div>
-
-                        {/* Day count preview */}
                         {manualAttendance.startDate && manualAttendance.endDate &&
                           manualAttendance.startDate <= manualAttendance.endDate && (
                           <p className="text-[11px] text-indigo-600 mt-1.5 font-medium">
-                            📅{" "}
-                            {eachDayOfInterval({
+                            📅 {eachDayOfInterval({
                               start: parseISO(manualAttendance.startDate),
                               end:   parseISO(manualAttendance.endDate),
-                            }).length}{" "}
-                            day(s) will be added
+                            }).length} day(s) will be saved to database
                           </p>
                         )}
                       </div>
 
-                      {/* ── Check In / Out ── */}
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Check-In / Check-Out Time
@@ -784,7 +971,7 @@ export function AttendanceModule() {
                               type="time"
                               className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                               value={manualAttendance.checkIn}
-                              onChange={(e) => setMA("checkIn", e.target.value)}
+                              onChange={e => setMA("checkIn", e.target.value)}
                             />
                           </div>
                           <div>
@@ -793,17 +980,25 @@ export function AttendanceModule() {
                               type="time"
                               className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
                               value={manualAttendance.checkOut}
-                              onChange={(e) => setMA("checkOut", e.target.value)}
+                              onChange={e => setMA("checkOut", e.target.value)}
                             />
                           </div>
                         </div>
                       </div>
 
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
+                        ℹ️ This entry will be <strong>permanently saved to MongoDB</strong> and included in all reports.
+                      </div>
+
                       <Button
                         onClick={submitManualAttendance}
+                        disabled={manualSubmitting}
                         className="w-full bg-gray-900 hover:bg-gray-800 text-white"
                       >
-                        Save Attendance Records
+                        {manualSubmitting
+                          ? <span className="flex items-center gap-2 justify-center"><RefreshCw size={14} className="animate-spin" /> Saving...</span>
+                          : "Save to Database"
+                        }
                       </Button>
                     </div>
                   </DialogContent>
@@ -814,19 +1009,13 @@ export function AttendanceModule() {
 
           <CardContent className="space-y-5">
 
-            {/* ── Manual records preview table ── */}
-            {isAdmin && manualAttendanceRecords.length > 0 && (
+            {/* Manual DB records preview */}
+            {isAdmin && manualDbRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-yellow-50 px-4 py-2.5 flex items-center justify-between border-b border-yellow-200">
-                  <span className="text-xs font-semibold text-yellow-800">
-                    📋 Manually Added Records ({manualAttendanceRecords.length})
+                <div className="bg-blue-50 px-4 py-2.5 flex items-center justify-between border-b border-blue-200">
+                  <span className="text-xs font-semibold text-blue-800">
+                    🗄️ MongoDB Manual Records ({manualDbRecords.length} total)
                   </span>
-                  <button
-                    onClick={() => setManualAttendanceRecords([])}
-                    className="text-[11px] text-red-500 hover:text-red-700 font-medium"
-                  >
-                    Clear All
-                  </button>
                 </div>
                 <div className="overflow-x-auto max-h-52 overflow-y-auto">
                   <table className="w-full text-xs">
@@ -837,24 +1026,26 @@ export function AttendanceModule() {
                         <th className="text-left px-3 py-2 font-medium">Date</th>
                         <th className="text-left px-3 py-2 font-medium">Check In</th>
                         <th className="text-left px-3 py-2 font-medium">Check Out</th>
-                        <th className="text-left px-3 py-2 font-medium">Action</th>
+                        <th className="text-left px-3 py-2 font-medium">Added By</th>
+                        <th className="text-left px-3 py-2 font-medium">Delete</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {manualAttendanceRecords.map((r) => (
-                        <tr key={r.id} className="border-t hover:bg-gray-50">
-                          <td className="px-3 py-2 font-medium">{r.employeeName}</td>
+                      {manualDbRecords.map(r => (
+                        <tr key={r._id} className="border-t hover:bg-gray-50">
+                          <td className="px-3 py-2 font-medium">{r.manualEmployeeName}</td>
                           <td className="px-3 py-2">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium text-white ${roleColor(r.employeeRole)}`}>
-                              {r.employeeRole}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium text-white ${roleColor(r.manualEmployeeRole)}`}>
+                              {r.manualEmployeeRole}
                             </span>
                           </td>
                           <td className="px-3 py-2">{r.date}</td>
                           <td className="px-3 py-2">{r.checkIn}</td>
                           <td className="px-3 py-2">{r.checkOut || "—"}</td>
+                          <td className="px-3 py-2 text-gray-500">{r.enteredByName}</td>
                           <td className="px-3 py-2">
                             <button
-                              onClick={() => setManualAttendanceRecords((prev) => prev.filter((x) => x.id !== r.id))}
+                              onClick={() => deleteManualRecord(r._id)}
                               className="text-red-500 hover:text-red-700 font-medium"
                             >
                               ✕
@@ -868,7 +1059,7 @@ export function AttendanceModule() {
               </div>
             )}
 
-            {/* ── Date range pills ── */}
+            {/* Date range pills */}
             <div>
               <p className="text-xs font-medium text-gray-500 mb-2">Date Range</p>
               <div className="flex flex-wrap gap-2">
@@ -878,7 +1069,7 @@ export function AttendanceModule() {
                   { value: "this_month", label: "This Month" },
                   { value: "last_month", label: "Last Month" },
                   { value: "custom",     label: "Custom"     },
-                ] as const).map((opt) => (
+                ] as const).map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setReportFilter(opt.value)}
@@ -898,11 +1089,11 @@ export function AttendanceModule() {
               <div className="flex flex-wrap gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-gray-500">From</label>
-                  <input type="date" value={reportStart} onChange={(e) => setReportStart(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={reportStart} onChange={e => setReportStart(e.target.value)} className="border p-2 rounded text-sm" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-gray-500">To</label>
-                  <input type="date" value={reportEnd} onChange={(e) => setReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={reportEnd} onChange={e => setReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
                 </div>
               </div>
             )}
@@ -912,7 +1103,7 @@ export function AttendanceModule() {
                 <label className="text-xs text-gray-500">Filter by Role</label>
                 <select
                   value={reportRole}
-                  onChange={(e) => setReportRole(e.target.value)}
+                  onChange={e => setReportRole(e.target.value)}
                   className="border p-2 rounded text-sm bg-white min-w-[140px]"
                 >
                   <option value="all">All Roles</option>
@@ -928,7 +1119,7 @@ export function AttendanceModule() {
                   type="text"
                   placeholder="Search name…"
                   value={reportName}
-                  onChange={(e) => setReportName(e.target.value)}
+                  onChange={e => setReportName(e.target.value)}
                   className="border p-2 rounded text-sm min-w-[180px]"
                 />
               </div>
@@ -937,9 +1128,9 @@ export function AttendanceModule() {
             <div className="flex items-center gap-4 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {previewCount} record{previewCount !== 1 ? "s" : ""} matched
-                {isAdmin && manualAttendanceRecords.length > 0 && (
-                  <span className="ml-1 text-yellow-600">
-                    (incl. {filterManualAttendance(manualAttendanceRecords, getReportDateRange().start, getReportDateRange().end).length} manual)
+                {isAdmin && manualDbRecords.length > 0 && (
+                  <span className="ml-1 text-blue-600">
+                    (incl. {filterManualDbAttendance(manualDbRecords, getReportDateRange().start, getReportDateRange().end).length} from DB)
                   </span>
                 )}
               </span>
@@ -947,7 +1138,6 @@ export function AttendanceModule() {
                 <Download size={16} /> Download CSV
               </Button>
             </div>
-
           </CardContent>
         </Card>
       )}
@@ -963,9 +1153,8 @@ export function AttendanceModule() {
                 <Download size={18} /> Leave Report
               </CardTitle>
 
-              {/* ── Manual Leave Entry — ADMIN ONLY ── */}
               {isAdmin && (
-                <Dialog open={manualLeaveOpen} onOpenChange={(open) => {
+                <Dialog open={manualLeaveOpen} onOpenChange={open => {
                   setManualLeaveOpen(open);
                   if (!open) setManualLeave(initManualLeave);
                 }}>
@@ -988,7 +1177,7 @@ export function AttendanceModule() {
                           className="border p-2 rounded w-full text-sm"
                           placeholder="Enter employee name"
                           value={manualLeave.employeeName}
-                          onChange={(e) => setML("employeeName", e.target.value)}
+                          onChange={e => setML("employeeName", e.target.value)}
                         />
                       </div>
 
@@ -999,7 +1188,7 @@ export function AttendanceModule() {
                         <select
                           className="border p-2 rounded w-full text-sm bg-white"
                           value={manualLeave.type}
-                          onChange={(e) => setML("type", e.target.value)}
+                          onChange={e => setML("type", e.target.value)}
                         >
                           <option value="">— Select type —</option>
                           <option value="Casual Leave">Casual Leave</option>
@@ -1017,7 +1206,7 @@ export function AttendanceModule() {
                         <select
                           className="border p-2 rounded w-full text-sm bg-white"
                           value={manualLeave.priority}
-                          onChange={(e) => setML("priority", e.target.value)}
+                          onChange={e => setML("priority", e.target.value)}
                         >
                           <option value="low">Low</option>
                           <option value="medium">Medium</option>
@@ -1030,7 +1219,7 @@ export function AttendanceModule() {
                         <select
                           className="border p-2 rounded w-full text-sm bg-white"
                           value={manualLeave.status}
-                          onChange={(e) => setML("status", e.target.value)}
+                          onChange={e => setML("status", e.target.value)}
                         >
                           <option value="approved">Approved</option>
                           <option value="rejected">Rejected</option>
@@ -1048,7 +1237,7 @@ export function AttendanceModule() {
                             max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                             className="border p-2 rounded w-full text-sm"
                             value={manualLeave.startDate}
-                            onChange={(e) => setML("startDate", e.target.value)}
+                            onChange={e => setML("startDate", e.target.value)}
                           />
                         </div>
                         <div>
@@ -1060,7 +1249,7 @@ export function AttendanceModule() {
                             max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                             className="border p-2 rounded w-full text-sm"
                             value={manualLeave.endDate}
-                            onChange={(e) => setML("endDate", e.target.value)}
+                            onChange={e => setML("endDate", e.target.value)}
                           />
                         </div>
                       </div>
@@ -1068,12 +1257,10 @@ export function AttendanceModule() {
                       {manualLeave.startDate && manualLeave.endDate &&
                         manualLeave.startDate <= manualLeave.endDate && (
                         <p className="text-[11px] text-indigo-600 font-medium">
-                          📅{" "}
-                          {Math.ceil(
+                          📅 {Math.ceil(
                             (new Date(manualLeave.endDate).getTime() - new Date(manualLeave.startDate).getTime()) /
                             (1000 * 60 * 60 * 24)
-                          ) + 1}{" "}
-                          day(s)
+                          ) + 1} day(s)
                         </p>
                       )}
 
@@ -1085,7 +1272,7 @@ export function AttendanceModule() {
                           className="border p-2 rounded w-full text-sm"
                           placeholder="Brief reason"
                           value={manualLeave.reason}
-                          onChange={(e) => setML("reason", e.target.value)}
+                          onChange={e => setML("reason", e.target.value)}
                         />
                       </div>
 
@@ -1103,18 +1290,14 @@ export function AttendanceModule() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-
-            {/* ── Manual leave records preview ── */}
             {isAdmin && manualLeaveRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-yellow-50 px-4 py-2.5 flex items-center justify-between border-b border-yellow-200">
                   <span className="text-xs font-semibold text-yellow-800">
                     📋 Manually Added Leave Records ({manualLeaveRecords.length})
                   </span>
-                  <button
-                    onClick={() => setManualLeaveRecords([])}
-                    className="text-[11px] text-red-500 hover:text-red-700 font-medium"
-                  >
+                  <button onClick={() => setManualLeaveRecords([])}
+                    className="text-[11px] text-red-500 hover:text-red-700 font-medium">
                     Clear All
                   </button>
                 </div>
@@ -1132,7 +1315,7 @@ export function AttendanceModule() {
                       </tr>
                     </thead>
                     <tbody>
-                      {manualLeaveRecords.map((l) => (
+                      {manualLeaveRecords.map(l => (
                         <tr key={l.id} className="border-t hover:bg-gray-50">
                           <td className="px-3 py-2 font-medium">{l.employeeName}</td>
                           <td className="px-3 py-2">{l.type}</td>
@@ -1146,11 +1329,9 @@ export function AttendanceModule() {
                           </td>
                           <td className="px-3 py-2">
                             <button
-                              onClick={() => setManualLeaveRecords((prev) => prev.filter((x) => x.id !== l.id))}
+                              onClick={() => setManualLeaveRecords(prev => prev.filter(x => x.id !== l.id))}
                               className="text-red-500 hover:text-red-700 font-medium"
-                            >
-                              ✕
-                            </button>
+                            >✕</button>
                           </td>
                         </tr>
                       ))}
@@ -1160,7 +1341,6 @@ export function AttendanceModule() {
               </div>
             )}
 
-            {/* ── Leave report date range pills ── */}
             <div>
               <p className="text-xs font-medium text-gray-500 mb-2">Date Range</p>
               <div className="flex flex-wrap gap-2">
@@ -1170,7 +1350,7 @@ export function AttendanceModule() {
                   { value: "this_year",  label: "This Year"  },
                   { value: "last_year",  label: "Last Year"  },
                   { value: "custom",     label: "Custom"     },
-                ] as const).map((opt) => (
+                ] as const).map(opt => (
                   <button
                     key={opt.value}
                     onClick={() => setLeaveReportFilter(opt.value)}
@@ -1190,11 +1370,11 @@ export function AttendanceModule() {
               <div className="flex flex-wrap gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-gray-500">From</label>
-                  <input type="date" value={leaveReportStart} onChange={(e) => setLeaveReportStart(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={leaveReportStart} onChange={e => setLeaveReportStart(e.target.value)} className="border p-2 rounded text-sm" />
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs text-gray-500">To</label>
-                  <input type="date" value={leaveReportEnd} onChange={(e) => setLeaveReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={leaveReportEnd} onChange={e => setLeaveReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
                 </div>
               </div>
             )}
@@ -1202,23 +1382,17 @@ export function AttendanceModule() {
             <div className="flex items-center gap-4 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {leavePreviewCount} record{leavePreviewCount !== 1 ? "s" : ""} matched
-                {isAdmin && manualLeaveRecords.length > 0 && (
-                  <span className="ml-1 text-yellow-600">
-                    (incl. {filterLeaveRows(manualLeaveRecords, getLeaveReportDateRange().start, getLeaveReportDateRange().end).length} manual)
-                  </span>
-                )}
               </span>
               <Button onClick={downloadLeaveReport} className="bg-black text-white flex items-center gap-2">
                 <Download size={16} /> Download Leave CSV
               </Button>
             </div>
-
           </CardContent>
         </Card>
       )}
 
       {/* ══════════════════════════════════════════════════════
-          LEAVE REQUEST BUTTON  (non-admin)
+          LEAVE REQUEST BUTTON (non-admin)
           ══════════════════════════════════════════════════════ */}
       {!isAdmin && (
         <div>
@@ -1253,7 +1427,7 @@ export function AttendanceModule() {
                       type="checkbox"
                       id="emergency"
                       checked={form.isEmergency}
-                      onChange={(e) => setF("isEmergency", e.target.checked)}
+                      onChange={e => setF("isEmergency", e.target.checked)}
                       className="w-4 h-4 accent-orange-500"
                     />
                     <label htmlFor="emergency" className="font-medium text-sm text-orange-700 cursor-pointer">
@@ -1269,7 +1443,7 @@ export function AttendanceModule() {
                   <select
                     className="border p-2 rounded w-full text-sm bg-white"
                     value={form.type}
-                    onChange={(e) => setF("type", e.target.value)}
+                    onChange={e => setF("type", e.target.value)}
                   >
                     <option value="">— Select type —</option>
                     <option value="Casual Leave">Casual Leave</option>
@@ -1287,7 +1461,7 @@ export function AttendanceModule() {
                   <select
                     className="border p-2 rounded w-full text-sm bg-white"
                     value={form.priority}
-                    onChange={(e) => setF("priority", e.target.value as any)}
+                    onChange={e => setF("priority", e.target.value as any)}
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -1301,14 +1475,14 @@ export function AttendanceModule() {
                       Start Date <span className="text-red-500">*</span>
                     </label>
                     <input type="date" className="border p-2 rounded w-full text-sm"
-                      value={form.startDate} onChange={(e) => setF("startDate", e.target.value)} />
+                      value={form.startDate} onChange={e => setF("startDate", e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">
                       End Date <span className="text-red-500">*</span>
                     </label>
                     <input type="date" className="border p-2 rounded w-full text-sm"
-                      value={form.endDate} onChange={(e) => setF("endDate", e.target.value)} />
+                      value={form.endDate} onChange={e => setF("endDate", e.target.value)} />
                   </div>
                 </div>
 
@@ -1320,7 +1494,7 @@ export function AttendanceModule() {
                     className="border p-2 rounded w-full text-sm"
                     placeholder="Brief reason"
                     value={form.reason}
-                    onChange={(e) => setF("reason", e.target.value)}
+                    onChange={e => setF("reason", e.target.value)}
                   />
                 </div>
 
@@ -1329,7 +1503,7 @@ export function AttendanceModule() {
                   <Textarea
                     placeholder="Additional details"
                     value={form.description}
-                    onChange={(e) => setF("description", e.target.value)}
+                    onChange={e => setF("description", e.target.value)}
                     rows={3}
                   />
                 </div>
@@ -1341,7 +1515,7 @@ export function AttendanceModule() {
                       className="border p-2 rounded w-full text-sm"
                       placeholder="+91 9XXXXXXXXX"
                       value={form.emergencyContact}
-                      onChange={(e) => setF("emergencyContact", e.target.value)}
+                      onChange={e => setF("emergencyContact", e.target.value)}
                     />
                   </div>
                 )}
@@ -1412,7 +1586,7 @@ export function AttendanceModule() {
                 { label: "Pending Admin",   cls: "bg-orange-400 text-white" },
                 { label: "Approved",        cls: "bg-green-500 text-white"  },
                 { label: "Rejected",        cls: "bg-red-500 text-white"    },
-              ].map((b) => (
+              ].map(b => (
                 <span key={b.label} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${b.cls}`}>
                   {b.label}
                 </span>
