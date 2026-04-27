@@ -34,7 +34,8 @@ import {
   BarChart3,
   Briefcase,
   Users as UsersIcon,
-  TicketCheck, // ✅ ADDED
+  TicketCheck,
+  UserCog,       // ✅ NEW icon for User Management
   LucideIcon,
 } from "lucide-react";
 
@@ -52,9 +53,8 @@ import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
-
-/* ✅ HELPDESK MODULE */
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
+import { UserManagementModule } from "./components/modules/UserManagementModule"; // ✅ NEW
 
 /* HR */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
@@ -86,7 +86,8 @@ export type ModuleType =
   | "workforce-overview"
   | "hr-employees"
   | "hr-attendance-leave"
-  | "helpdesk" // ✅ ADDED
+  | "helpdesk"
+  | "user-management"  // ✅ NEW
   | "profile"
   | "account";
 
@@ -100,11 +101,8 @@ interface MenuItem {
 /* ================= APP CONTENT ================= */
 
 function AppContent() {
-
   const { currentUser } = useAuth();
-
-  const [activeModule, setActiveModule] =
-    useState<ModuleType>("dashboard");
+  const [activeModule, setActiveModule] = useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
 
@@ -113,55 +111,33 @@ function AppContent() {
   }
 
   /* MENU */
-
   const menuItems: MenuItem[] = [
-
     { id: "dashboard",            name: "Dashboard",          icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
-
     { id: "attendance",           name: "Attendance",         icon: Clock,           roles: ["admin","manager","employee","hr"] },
-
     { id: "tasks",                name: "Tasks",              icon: CheckSquare,     roles: ["admin","manager","employee","hr"] },
-
     { id: "employee-task-status", name: "My Task Status",     icon: CheckSquare,     roles: ["employee"] },
-
     { id: "status",               name: "Daily Status",       icon: FileText,        roles: ["admin","manager","employee","hr"] },
-
     { id: "calendar",             name: "Calendar",           icon: Calendar,        roles: ["admin","manager","employee","hr"] },
-
     { id: "payroll",              name: "Payroll",            icon: DollarSign,      roles: ["admin","hr"] },
-
     { id: "clients",              name: "Clients",            icon: Building2,       roles: ["admin","manager"] },
-
     { id: "projects",             name: "Projects",           icon: FolderKanban,    roles: ["admin","manager","employee"] },
-
     { id: "onboarding",           name: "Onboarding",         icon: UserPlus,        roles: ["admin","hr"] },
-
     { id: "time-tracking",        name: "Time Tracking",      icon: Timer,           roles: ["admin","manager","employee"] },
-
     { id: "analytics",            name: "Analytics",          icon: BarChart3,       roles: ["admin","manager"] },
-
     { id: "workforce-overview",   name: "Workforce",          icon: Briefcase,       roles: ["admin","manager","hr"] },
-
     { id: "hr-employees",         name: "Employee Records",   icon: UsersIcon,       roles: ["hr"] },
-
     { id: "hr-attendance-leave",  name: "Attendance & Leave", icon: Clock,           roles: ["hr"] },
-
-    // ✅ HELPDESK MENU
-    { id: "helpdesk", name: "Helpdesk", icon: TicketCheck, roles: ["admin", "manager", "employee", "hr"] },
-
+    { id: "helpdesk",             name: "Helpdesk",           icon: TicketCheck,     roles: ["admin","manager","employee","hr"] },
+    { id: "user-management",      name: "User Management",    icon: UserCog,         roles: ["admin"] }, // ✅ NEW
   ];
 
-  const visibleMenuItems =
-    menuItems.filter(item =>
-      item.roles.includes(currentUser.role)
-    );
+  const visibleMenuItems = menuItems.filter(item =>
+    item.roles.includes(currentUser.role)
+  );
 
   /* MODULE RENDER */
-
   const renderModule = () => {
-
     switch (activeModule) {
-
       case "dashboard":
         return currentUser.role === "employee"
           ? <EmployeeDashboard />
@@ -178,8 +154,8 @@ function AppContent() {
       case "onboarding":           return <OnboardingModule />;
       case "time-tracking":        return <TimeTracking />;
       case "analytics":            return <AnalyticsReports />;
-
-      case "helpdesk":             return <HelpdeskModule />; // ✅ ADDED
+      case "helpdesk":             return <HelpdeskModule />;
+      case "user-management":      return <UserManagementModule />; // ✅ NEW
 
       case "workforce-overview":
         return (
@@ -190,11 +166,10 @@ function AppContent() {
           </div>
         );
 
-      case "hr-employees":         return <EmployeeRecordsModule />;
-      case "hr-attendance-leave":  return <AttendanceLeaveModule />;
-
-      case "profile":              return <ProfilePage />;
-      case "account":              return <AccountPage />;
+      case "hr-employees":        return <EmployeeRecordsModule />;
+      case "hr-attendance-leave": return <AttendanceLeaveModule />;
+      case "profile":             return <ProfilePage />;
+      case "account":             return <AccountPage />;
 
       default:
         return <Dashboard />;
@@ -216,20 +191,14 @@ function AppContent() {
 /* ================= AUTH SWITCH ================= */
 
 function AppWrapper() {
-
   const { isAuthenticated } = useAuth();
-
-  const [view, setView] =
-    useState<"login" | "signup" | "forgot">("login");
+  const [view, setView] = useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
-
     if (view === "signup")
       return <SignupPage onBack={() => setView("login")} />;
-
     if (view === "forgot")
       return <ForgotPassword onBack={() => setView("login")} />;
-
     return (
       <LoginPage
         onSignup={() => setView("signup")}
@@ -244,40 +213,23 @@ function AppWrapper() {
 /* ================= ROOT ================= */
 
 export default function App() {
-
   return (
     <AuthProvider>
-
       <AdminUsersProvider>
-
         <ProjectProvider>
-
           <TimesheetProvider>
-
             <PerformanceProvider>
-
               <TaskProvider>
-
                 <WorkforceProvider>
-
                   <NotificationProvider>
-
                     <AppWrapper />
-
                   </NotificationProvider>
-
                 </WorkforceProvider>
-
               </TaskProvider>
-
             </PerformanceProvider>
-
           </TimesheetProvider>
-
         </ProjectProvider>
-
       </AdminUsersProvider>
-
     </AuthProvider>
   );
 }
