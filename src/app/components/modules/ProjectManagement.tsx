@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
-import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
-import { Progress } from "../ui/progress";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -12,39 +8,188 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "../ui/select";
 import { Label } from "../ui/label";
-import { Plus, Pencil, Trash, Download } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Download, ClipboardList,
+  Building2, Calendar, Wallet, TrendingUp, Users, UserCheck,
+  BarChart3, Flame,
+} from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { projectApi } from "@/services/api";
 
 type ProjectStatus = "planning" | "in-progress" | "completed" | "on-hold";
 
-interface UserOption {
-  _id:   string;
-  name:  string;
-  email: string;
-  role:  string;
-}
+interface UserOption { _id: string; name: string; email: string; role: string; }
 
 interface Project {
-  _id:         string;
-  name:        string;
-  description: string;
-  clientName:  string;
-  deadline:    string;
-  status:      ProjectStatus;
-  budget:      number;
-  spent:       number;
-  progress:    number;
-  managerId:   any;
-  teamMembers: any[];
+  _id: string; name: string; description: string; clientName: string;
+  deadline: string; status: ProjectStatus; budget: number; spent: number;
+  progress: number; managerId: any; teamMembers: any[]; createdAt: string;
 }
 
-const statusColor = (s: string) => {
-  if (s === "completed")   return "bg-green-100 text-green-700";
-  if (s === "in-progress") return "bg-blue-100 text-blue-700";
-  if (s === "on-hold")     return "bg-yellow-100 text-yellow-700";
-  return "bg-gray-100 text-gray-700";
+const STATUS_CONFIG: Record<string, { label: string; dot: string; text: string; bg: string }> = {
+  "planning":    { label: "Planning",    dot: "bg-gray-400",  text: "text-gray-600",  bg: "bg-gray-100"  },
+  "in-progress": { label: "In Progress", dot: "bg-blue-500",  text: "text-blue-700",  bg: "bg-blue-50"   },
+  "completed":   { label: "Completed",   dot: "bg-green-500", text: "text-green-700", bg: "bg-green-50"  },
+  "on-hold":     { label: "On Hold",     dot: "bg-amber-400", text: "text-amber-700", bg: "bg-amber-50"  },
 };
+
+const PROGRESS_COLOR = (p: number) => {
+  if (p >= 80) return "bg-green-500";
+  if (p >= 50) return "bg-blue-500";
+  if (p >= 25) return "bg-amber-400";
+  return "bg-red-400";
+};
+
+function exportToCSV(projects: Project[]) {
+  if (!projects.length) return alert("No projects to export.");
+  const BOM = "\uFEFF";
+  const headers = ["Project Name","Client","Description","Deadline","Status","Budget (₹)","Spent (₹)","Progress (%)","Manager","Team Members","Created At"];
+  const rows = projects.map((p) => [
+    p.name, p.clientName, (p.description||"").replace(/,/g,";"),
+    p.deadline, p.status, p.budget, p.spent, p.progress,
+    p.managerId?.name||"-",
+    Array.isArray(p.teamMembers) ? p.teamMembers.map((m:any)=>m.name||m).join("; ") : "-",
+    new Date(p.createdAt).toLocaleDateString(),
+  ]);
+  const csv = BOM + [headers,...rows].map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
+  const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `projects-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+const EMPTY_FORM = {
+  name:"", description:"", clientName:"", deadline:"",
+  status:"planning" as ProjectStatus, budget:"", spent:"", progress:"", managerId:"", createdAt:"",
+};
+const EMPTY_MANUAL = {
+  name:"", description:"", clientName:"", deadline:"",
+  status:"completed" as ProjectStatus, budget:"", spent:"", progress:"100", managerId:"", createdAt:"",
+};
+
+function MemberPicker({ list, selected, onToggle }: { list: UserOption[]; selected: string[]; onToggle:(id:string)=>void }) {
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden max-h-32 overflow-y-auto">
+      {list.length === 0
+        ? <p className="text-xs text-gray-400 p-3">No members available</p>
+        : list.map((m) => {
+          const sel = selected.includes(m._id);
+          return (
+            <div key={m._id} onClick={() => onToggle(m._id)}
+              className={`flex items-center justify-between px-3 py-2 cursor-pointer text-xs border-b border-gray-100 last:border-0 transition-colors
+                ${sel ? "bg-orange-50 text-orange-700" : "hover:bg-gray-50 text-gray-600"}`}>
+              <span className="font-medium">{m.name}</span>
+              <span className={`px-1.5 py-0.5 rounded text-[10px] ${sel ? "bg-orange-200 text-orange-800" : "bg-gray-100 text-gray-500"}`}>
+                {sel ? "✓" : m.role}
+              </span>
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+function ProjectFormFields({ form, setForm, managers, members, selectedMembers, onToggleMember, isManual = false }: any) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-600">Project Name *</Label>
+          <Input className="h-8 text-sm" placeholder="e.g. HRMS Redesign"
+            value={form.name} onChange={(e:any) => setForm({...form, name: e.target.value})} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-600">Client *</Label>
+          <Input className="h-8 text-sm" placeholder="e.g. Quibo Tech"
+            value={form.clientName} onChange={(e:any) => setForm({...form, clientName: e.target.value})} />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-gray-600">Description</Label>
+        <Textarea className="text-sm resize-none" rows={2} placeholder="Brief project overview..."
+          value={form.description} onChange={(e:any) => setForm({...form, description: e.target.value})} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-600">Deadline</Label>
+          <Input type="date" className="h-8 text-sm"
+            value={form.deadline} onChange={(e:any) => setForm({...form, deadline: e.target.value})} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-600">Status</Label>
+          <Select value={form.status} onValueChange={(v: ProjectStatus) => setForm({...form, status: v})}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="planning">Planning</SelectItem>
+              <SelectItem value="in-progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="on-hold">On Hold</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {isManual ? (
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-600">Budget (₹)</Label>
+            <Input type="number" className="h-8 text-sm" placeholder="500000"
+              value={form.budget} onChange={(e:any) => setForm({...form, budget: e.target.value})} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-600">Spent (₹)</Label>
+            <Input type="number" className="h-8 text-sm" placeholder="0"
+              value={form.spent} onChange={(e:any) => setForm({...form, spent: e.target.value})} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-600">Progress %</Label>
+            <Input type="number" min={0} max={100} className="h-8 text-sm" placeholder="100"
+              value={form.progress} onChange={(e:any) => setForm({...form, progress: e.target.value})} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-600">Budget (₹) *</Label>
+          <Input type="number" className="h-8 text-sm" placeholder="500000"
+            value={form.budget} onChange={(e:any) => setForm({...form, budget: e.target.value})} />
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-gray-600">Record Date {isManual && <span className="text-gray-400">(backdatable)</span>}</Label>
+        <Input type="date" className="h-8 text-sm"
+          value={form.createdAt} onChange={(e:any) => setForm({...form, createdAt: e.target.value})} />
+        {isManual && <p className="text-[10px] text-gray-400">Leave blank to use today</p>}
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-gray-600">Manager {!isManual && "*"}</Label>
+        <Select value={form.managerId || "none"} onValueChange={(v) => setForm({...form, managerId: v === "none" ? "" : v})}>
+          <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select manager..." /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">— Select —</SelectItem>
+            {managers.map((m: UserOption) => (
+              <SelectItem key={m._id} value={m._id}>{m.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-1">
+        <Label className="text-xs font-medium text-gray-600">
+          Team Members
+          {selectedMembers.length > 0 && (
+            <span className="ml-1.5 text-orange-600">({selectedMembers.length} selected)</span>
+          )}
+        </Label>
+        <MemberPicker list={members} selected={selectedMembers} onToggle={onToggleMember} />
+      </div>
+    </div>
+  );
+}
 
 export function ProjectManagement() {
   const { currentUser } = useAuth();
@@ -52,508 +197,379 @@ export function ProjectManagement() {
   const isAdmin   = role === "admin";
   const isManager = role === "manager";
 
-  const [projects,  setProjects]  = useState<Project[]>([]);
-  const [managers,  setManagers]  = useState<UserOption[]>([]);
-  const [members,   setMembers]   = useState<UserOption[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [open,      setOpen]      = useState(false);
-  const [isEdit,    setIsEdit]    = useState(false);
-  const [editId,    setEditId]    = useState<string | null>(null);
-  const [toast,     setToast]     = useState("");
-
-  // selected team members (multi-select via toggle)
+  const [projects,        setProjects]        = useState<Project[]>([]);
+  const [managers,        setManagers]        = useState<UserOption[]>([]);
+  const [members,         setMembers]         = useState<UserOption[]>([]);
+  const [loading,         setLoading]         = useState(true);
+  const [open,            setOpen]            = useState(false);
+  const [manualOpen,      setManualOpen]      = useState(false);
+  const [isEdit,          setIsEdit]          = useState(false);
+  const [editId,          setEditId]          = useState<string | null>(null);
+  const [toast,           setToast]           = useState("");
+  const [submitting,      setSubmitting]      = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [manualMembers,   setManualMembers]   = useState<string[]>([]);
+  const [form,            setForm]            = useState(EMPTY_FORM);
+  const [manualForm,      setManualForm]      = useState(EMPTY_MANUAL);
 
-  const [form, setForm] = useState({
-    name:        "",
-    description: "",
-    clientName:  "",
-    deadline:    "",
-    status:      "planning" as ProjectStatus,
-    budget:      "",
-    managerId:   "",
-  });
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
-  };
-
-  /* ===== LOAD ===== */
   const loadProjects = async () => {
     try {
       setLoading(true);
-      const data = isAdmin || isManager
-        ? await projectApi.getAll()
-        : await projectApi.getMy();
+      const data = isAdmin || isManager ? await projectApi.getAll() : await projectApi.getMy();
       setProjects(data.projects || []);
-    } catch (err: any) {
-      console.error(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err: any) { showToast("❌ " + err.message); }
+    finally { setLoading(false); }
   };
 
   const loadUserOptions = async () => {
     if (!isAdmin) return;
     try {
-      const [mgrData, memData] = await Promise.all([
-        projectApi.getManagers(),
-        projectApi.getMembers(),
-      ]);
-      setManagers(mgrData.users  || []);
-      setMembers(memData.users   || []);
-    } catch (err: any) {
-      console.error("Failed to load user options:", err.message);
-    }
+      const [mgrData, memData] = await Promise.all([projectApi.getManagers(), projectApi.getMembers()]);
+      setManagers(mgrData.users || []);
+      setMembers(memData.users  || []);
+    } catch (err: any) { console.error(err.message); }
   };
 
-  useEffect(() => {
-    if (!currentUser) return;
-    loadProjects();
-    loadUserOptions();
-  }, [currentUser]);
+  useEffect(() => { if (!currentUser) return; loadProjects(); loadUserOptions(); }, [currentUser]);
 
-  /* ===== TEAM MEMBER TOGGLE ===== */
-  const toggleMember = (id: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
-    );
+  const toggleMember = (id: string, manual = false) => {
+    if (manual) setManualMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+    else        setSelectedMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
   };
 
-  /* ===== SUBMIT ===== */
+  const resetForm = () => {
+    setIsEdit(false); setEditId(null); setSelectedMembers([]); setForm(EMPTY_FORM); setOpen(false);
+  };
+
   const handleSubmit = async () => {
-    if (!form.name)       return showToast("❌ Project name is required");
-    if (!form.clientName) return showToast("❌ Client name is required");
-    if (!form.deadline)   return showToast("❌ Deadline is required");
-    if (!form.budget)     return showToast("❌ Budget is required");
-    if (!form.managerId)  return showToast("❌ Please select a manager");
-
+    if (!form.name)       return showToast("❌ Project name required");
+    if (!form.clientName) return showToast("❌ Client name required");
+    if (!form.deadline)   return showToast("❌ Deadline required");
+    if (!form.budget)     return showToast("❌ Budget required");
+    if (!form.managerId)  return showToast("❌ Manager required");
+    setSubmitting(true);
     try {
-      const payload = {
-        name:        form.name,
-        description: form.description,
-        clientName:  form.clientName,
-        deadline:    form.deadline,
-        status:      form.status,
-        budget:      Number(form.budget),
-        managerId:   form.managerId,
-        teamMembers: selectedMembers,
+      const payload: any = {
+        name: form.name, description: form.description, clientName: form.clientName,
+        deadline: form.deadline, status: form.status, budget: Number(form.budget),
+        managerId: form.managerId, teamMembers: selectedMembers,
       };
-
-      if (isEdit && editId) {
-        await projectApi.update(editId, payload);
-        showToast("✅ Project updated");
-      } else {
-        await projectApi.create(payload);
-        showToast("✅ Project created");
-      }
-
-      await loadProjects();
-      resetForm();
-    } catch (err: any) {
-      showToast("❌ " + err.message);
-    }
+      if (form.createdAt) payload.createdAt = form.createdAt;
+      if (isEdit && editId) { await projectApi.update(editId, payload); showToast("✅ Updated"); }
+      else                  { await projectApi.create(payload);         showToast("✅ Created"); }
+      await loadProjects(); resetForm();
+    } catch (err: any) { showToast("❌ " + err.message); }
+    finally { setSubmitting(false); }
   };
 
-  /* ===== DELETE ===== */
+  const handleManualSubmit = async () => {
+    if (!manualForm.name)       return showToast("❌ Project name required");
+    if (!manualForm.clientName) return showToast("❌ Client name required");
+    setSubmitting(true);
+    try {
+      const payload: any = {
+        name: manualForm.name, description: manualForm.description, clientName: manualForm.clientName,
+        deadline: manualForm.deadline, status: manualForm.status,
+        budget: Number(manualForm.budget)||0, spent: Number(manualForm.spent)||0,
+        progress: Number(manualForm.progress)||0, teamMembers: manualMembers,
+      };
+      if (manualForm.managerId) payload.managerId = manualForm.managerId;
+      if (manualForm.createdAt) payload.createdAt = manualForm.createdAt;
+      await projectApi.createManual(payload);
+      showToast("✅ Historical record saved");
+      await loadProjects();
+      setManualForm(EMPTY_MANUAL); setManualMembers([]); setManualOpen(false);
+    } catch (err: any) { showToast("❌ " + err.message); }
+    finally { setSubmitting(false); }
+  };
+
   const handleDelete = async (id: string) => {
     if (!window.confirm("Delete this project?")) return;
-    try {
-      await projectApi.delete(id);
-      showToast("✅ Project deleted");
-      await loadProjects();
-    } catch (err: any) {
-      showToast("❌ " + err.message);
-    }
+    try { await projectApi.delete(id); showToast("✅ Deleted"); await loadProjects(); }
+    catch (err: any) { showToast("❌ " + err.message); }
   };
 
-  /* ===== EDIT ===== */
   const handleEdit = (p: Project) => {
-    setIsEdit(true);
-    setEditId(p._id);
+    setIsEdit(true); setEditId(p._id);
     setForm({
-      name:        p.name,
-      description: p.description,
-      clientName:  p.clientName,
-      deadline:    p.deadline,
-      status:      p.status,
-      budget:      String(p.budget),
-      managerId:   p.managerId?._id || p.managerId || "",
+      name: p.name, description: p.description, clientName: p.clientName,
+      deadline: p.deadline, status: p.status, budget: String(p.budget),
+      spent: String(p.spent), progress: String(p.progress),
+      managerId: p.managerId?._id||p.managerId||"", createdAt: "",
     });
-    setSelectedMembers(
-      Array.isArray(p.teamMembers)
-        ? p.teamMembers.map((m: any) => m._id || m)
-        : []
-    );
+    setSelectedMembers(Array.isArray(p.teamMembers) ? p.teamMembers.map((m:any) => m._id||m) : []);
     setOpen(true);
   };
 
-  /* ===== PROGRESS / SPENT ===== */
-  const handleProgressUpdate = async (id: string, progress: number) => {
-    if (isNaN(progress) || progress < 0 || progress > 100) return;
-    try {
-      await projectApi.update(id, { progress });
-      showToast("✅ Progress updated");
-      await loadProjects();
-    } catch (err: any) {
-      showToast("❌ " + err.message);
-    }
+  const handleProgressUpdate = async (id: string, v: number) => {
+    if (isNaN(v)||v<0||v>100) return;
+    try { await projectApi.update(id, { progress: v }); showToast("✅ Progress updated"); await loadProjects(); }
+    catch (err:any) { showToast("❌ "+err.message); }
   };
 
-  const handleSpentUpdate = async (id: string, spent: number) => {
-    if (isNaN(spent) || spent < 0) return;
-    try {
-      await projectApi.update(id, { spent });
-      showToast("✅ Spent updated");
-      await loadProjects();
-    } catch (err: any) {
-      showToast("❌ " + err.message);
-    }
+  const handleSpentUpdate = async (id: string, v: number) => {
+    if (isNaN(v)||v<0) return;
+    try { await projectApi.update(id, { spent: v }); showToast("✅ Spent updated"); await loadProjects(); }
+    catch (err:any) { showToast("❌ "+err.message); }
   };
 
-  /* ===== RESET ===== */
-  const resetForm = () => {
-    setIsEdit(false);
-    setEditId(null);
-    setSelectedMembers([]);
-    setForm({
-      name: "", description: "", clientName: "",
-      deadline: "", status: "planning", budget: "", managerId: "",
-    });
-    setOpen(false);
-  };
-
-  /* ===== STATS ===== */
-  const totalBudget = projects.reduce((s, p) => s + p.budget, 0);
-  const totalSpent  = projects.reduce((s, p) => s + p.spent,  0);
-  const burnRate    = totalBudget > 0
-    ? ((totalSpent / totalBudget) * 100).toFixed(1) : "0";
+  const totalBudget = projects.reduce((s,p) => s+p.budget, 0);
+  const totalSpent  = projects.reduce((s,p) => s+p.spent, 0);
+  const burnRate    = totalBudget > 0 ? ((totalSpent/totalBudget)*100).toFixed(1) : "0";
   const velocity    = projects.length > 0
-    ? (projects.reduce((s, p) => s + p.progress, 0) / projects.length).toFixed(0)
-    : "0";
-
-  /* ===== CSV ===== */
-  const downloadReport = () => {
-    if (!projects.length) return alert("No projects to download.");
-    const headers = ["Name", "Client", "Deadline", "Status", "Budget", "Spent", "Progress", "Manager"];
-    const rows = projects.map((p) => [
-      p.name, p.clientName, p.deadline, p.status,
-      p.budget, p.spent, p.progress,
-      p.managerId?.name || "-",
-    ]);
-    const csv = "data:text/csv;charset=utf-8," +
-      [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = encodeURI(csv);
-    link.download = `project_report_${Date.now()}.csv`;
-    link.click();
-  };
+    ? (projects.reduce((s,p) => s+p.progress, 0)/projects.length).toFixed(0) : "0";
+  const byStatus    = Object.keys(STATUS_CONFIG).reduce((acc, k) => {
+    acc[k] = projects.filter(p => p.status === k).length; return acc;
+  }, {} as Record<string, number>);
 
   if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center justify-center h-48">
+      <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-w-5xl mx-auto">
 
       {/* TOAST */}
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-xs px-3 py-2 rounded-lg shadow-xl">
           {toast}
         </div>
       )}
 
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* ── MANUAL DIALOG ── no asChild, no Button wrapper */}
+      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">📋 Historical Project Entry</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Enter past project data with backdated record date.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="text-xs bg-amber-50 border border-amber-200 rounded px-2.5 py-2 text-amber-700 mb-3">
+            Data saved directly to MongoDB with your specified date.
+          </div>
+          <ProjectFormFields
+            form={manualForm} setForm={setManualForm}
+            managers={managers} members={members}
+            selectedMembers={manualMembers}
+            onToggleMember={(id: string) => toggleMember(id, true)}
+            isManual={true}
+          />
+          <button
+            onClick={handleManualSubmit}
+            disabled={submitting}
+            className="w-full mt-4 h-9 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : "💾 Save Historical Record"}
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── CREATE / EDIT DIALOG ── no asChild */}
+      <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); else setOpen(true); }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-sm">{isEdit ? "Edit Project" : "New Project"}</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              {isEdit ? "Update project details below." : "Fill in the details to create a new project."}
+            </DialogDescription>
+          </DialogHeader>
+          <ProjectFormFields
+            form={form} setForm={setForm}
+            managers={managers} members={members}
+            selectedMembers={selectedMembers}
+            onToggleMember={(id: string) => toggleMember(id, false)}
+            isManual={false}
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={submitting}
+            className="w-full mt-4 h-9 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+          >
+            {submitting ? "Saving..." : isEdit ? "Update Project" : "Create Project"}
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── HEADER ── */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Project Management</h1>
-          <p className="text-sm text-gray-500">{projects.length} project{projects.length !== 1 ? "s" : ""}</p>
+          <h1 className="text-base font-semibold text-gray-900">Project Management</h1>
+          <p className="text-xs text-gray-400">{projects.length} project{projects.length !== 1 ? "s" : ""} total</p>
         </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setManualOpen(true)}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-gray-200 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+            >
+              <ClipboardList className="h-3.5 w-3.5" /> Manual Entry
+            </button>
+            <button
+              onClick={() => { resetForm(); setOpen(true); }}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" /> New Project
+            </button>
+            <button
+              onClick={() => exportToCSV(projects)}
+              className="flex items-center gap-1.5 h-8 px-3 text-xs border border-gray-200 rounded-lg bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" /> Report
+            </button>
+          </div>
+        )}
+      </div>
 
-        <div className="flex gap-2">
-          {isAdmin && (
-            <>
-              {/* CREATE / EDIT DIALOG */}
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm}>
-                    <Plus className="h-4 w-4 mr-2" /> New Project
-                  </Button>
-                </DialogTrigger>
+      {/* ── STATS ROW ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { icon: <BarChart3 className="h-3.5 w-3.5 text-blue-500" />, bg: "bg-blue-50",   label: "Avg Progress",  value: `${velocity}%` },
+          { icon: <Flame      className="h-3.5 w-3.5 text-orange-500" />, bg: "bg-orange-50", label: "Burn Rate",     value: `${burnRate}%` },
+          { icon: <TrendingUp className="h-3.5 w-3.5 text-green-500" />, bg: "bg-green-50",  label: "Completed",     value: String(byStatus["completed"]||0) },
+          { icon: <Wallet     className="h-3.5 w-3.5 text-purple-500" />, bg: "bg-purple-50", label: "Total Budget",
+            value: totalBudget >= 100000 ? `₹${(totalBudget/100000).toFixed(1)}L` : `₹${totalBudget.toLocaleString()}` },
+        ].map((s, i) => (
+          <div key={i} className="bg-white border border-gray-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <div className={`w-6 h-6 ${s.bg} rounded flex items-center justify-center`}>{s.icon}</div>
+              <span className="text-[11px] text-gray-500">{s.label}</span>
+            </div>
+            <p className="text-xl font-bold text-gray-900">{s.value}</p>
+          </div>
+        ))}
+      </div>
 
-                <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>{isEdit ? "Edit Project" : "Create Project"}</DialogTitle>
-                  </DialogHeader>
+      {/* ── STATUS PILLS ── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {Object.entries(STATUS_CONFIG).map(([k, v]) => (
+          <span key={k} className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium ${v.bg} ${v.text}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${v.dot}`} />
+            {v.label} ({byStatus[k]||0})
+          </span>
+        ))}
+      </div>
 
-                  <div className="space-y-4 mt-2">
+      {/* ── PROJECT LIST ── */}
+      {projects.length === 0 ? (
+        <div className="bg-white border border-dashed border-gray-200 rounded-lg py-12 text-center">
+          <p className="text-sm text-gray-400">No projects yet. {isAdmin && "Create your first project!"}</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {projects.map((project) => {
+            const sc = STATUS_CONFIG[project.status] || STATUS_CONFIG["planning"];
+            const budgetPct = project.budget > 0 ? Math.min((project.spent/project.budget)*100, 100) : 0;
+            return (
+              <div key={project._id}
+                className="bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:shadow-sm transition-all">
 
-                    {/* NAME */}
-                    <div>
-                      <Label>Project Name *</Label>
-                      <Input
-                        placeholder="e.g. HRMS Redesign"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      />
-                    </div>
-
-                    {/* CLIENT */}
-                    <div>
-                      <Label>Client Name *</Label>
-                      <Input
-                        placeholder="e.g. Quibo Tech"
-                        value={form.clientName}
-                        onChange={(e) => setForm({ ...form, clientName: e.target.value })}
-                      />
-                    </div>
-
-                    {/* DESCRIPTION */}
-                    <div>
-                      <Label>Description</Label>
-                      <Textarea
-                        rows={3}
-                        placeholder="Project description..."
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                      />
-                    </div>
-
-                    {/* DEADLINE */}
-                    <div>
-                      <Label>Deadline *</Label>
-                      <Input
-                        type="date"
-                        value={form.deadline}
-                        onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-                      />
-                    </div>
-
-                    {/* BUDGET */}
-                    <div>
-                      <Label>Budget (₹) *</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g. 500000"
-                        value={form.budget}
-                        onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                      />
-                    </div>
-
-                    {/* STATUS */}
-                    <div>
-                      <Label>Status</Label>
-                      <Select
-                        value={form.status}
-                        onValueChange={(v: ProjectStatus) => setForm({ ...form, status: v })}
-                      >
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="planning">Planning</SelectItem>
-                          <SelectItem value="in-progress">In Progress</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="on-hold">On Hold</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* MANAGER DROPDOWN ✅ */}
-                    <div>
-                      <Label>Assign Manager *</Label>
-                      <Select
-                        value={form.managerId}
-                        onValueChange={(v) => setForm({ ...form, managerId: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a manager..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {managers.length === 0 ? (
-                            <SelectItem value="none" disabled>
-                              No managers found
-                            </SelectItem>
-                          ) : (
-                            managers.map((m) => (
-                              <SelectItem key={m._id} value={m._id}>
-                                {m.name} — {m.email}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* TEAM MEMBERS MULTI-SELECT ✅ */}
-                    <div>
-                      <Label>Team Members</Label>
-                      <p className="text-xs text-gray-400 mb-2">
-                        Click to select / deselect
-                      </p>
-                      <div className="border rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
-                        {members.length === 0 ? (
-                          <p className="text-xs text-gray-400 p-2">No members found</p>
-                        ) : (
-                          members.map((m) => {
-                            const selected = selectedMembers.includes(m._id);
-                            return (
-                              <div
-                                key={m._id}
-                                onClick={() => toggleMember(m._id)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm transition
-                                  ${selected
-                                    ? "bg-orange-100 text-orange-700 font-medium"
-                                    : "hover:bg-gray-50 text-gray-700"
-                                  }`}
-                              >
-                                <span>{m.name}</span>
-                                <span className="text-xs text-gray-400">{m.role}</span>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                      {selectedMembers.length > 0 && (
-                        <p className="text-xs text-orange-600 mt-1">
-                          {selectedMembers.length} member{selectedMembers.length !== 1 ? "s" : ""} selected
-                        </p>
+                {/* Header row */}
+                <div className="flex items-start justify-between px-4 pt-3 pb-2">
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${sc.dot}`} />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-gray-900 leading-tight truncate">{project.name}</h3>
+                      {project.description && (
+                        <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">{project.description}</p>
                       )}
                     </div>
-
-                    <Button className="w-full" onClick={handleSubmit}>
-                      {isEdit ? "Update Project" : "Create Project"}
-                    </Button>
                   </div>
-                </DialogContent>
-              </Dialog>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${sc.bg} ${sc.text}`}>
+                      {sc.label}
+                    </span>
+                    {isAdmin && (
+                      <div className="flex items-center gap-0.5">
+                        <button onClick={() => handleEdit(project)}
+                          className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(project._id)}
+                          className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-              {/* REPORT */}
-              <Button variant="outline" onClick={downloadReport}>
-                <Download className="h-4 w-4 mr-2" /> Report
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* KPI CARDS */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">Avg Progress (Velocity)</p>
-            <p className="text-2xl font-semibold">{velocity}%</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-gray-500">Budget Burn Rate</p>
-            <p className="text-2xl font-semibold">{burnRate}%</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* PROJECT LIST */}
-      {projects.length === 0 ? (
-        <Card>
-          <CardContent className="text-center py-12 text-gray-400">
-            No projects found. {isAdmin && "Create your first project!"}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {projects.map((project) => (
-            <Card key={project._id} className="hover:shadow-md transition">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-base">{project.name}</CardTitle>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor(project.status)}`}>
-                  {project.status}
-                </span>
-              </CardHeader>
-
-              <CardContent className="space-y-3">
-                {project.description && (
-                  <p className="text-sm text-gray-500">{project.description}</p>
-                )}
-
-                <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-                  <span>🏢 Client: {project.clientName}</span>
-                  <span>📅 Deadline: {project.deadline}</span>
-                  <span>💰 Budget: ₹{project.budget?.toLocaleString()}</span>
-                  <span>💸 Spent: ₹{project.spent?.toLocaleString()}</span>
-                  {project.managerId?.name && (
-                    <span>👤 Manager: {project.managerId.name}</span>
-                  )}
-                  {project.teamMembers?.length > 0 && (
-                    <span>
-                      👥 Team: {project.teamMembers
-                        .map((m: any) => m.name || m)
-                        .join(", ")}
+                {/* Metadata row */}
+                <div className="px-4 pb-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                    <Building2 className="h-3 w-3 text-gray-400" /> {project.clientName}
+                  </span>
+                  {project.deadline && (
+                    <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                      <Calendar className="h-3 w-3 text-gray-400" /> {project.deadline}
                     </span>
                   )}
+                  {project.managerId?.name && (
+                    <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                      <UserCheck className="h-3 w-3 text-gray-400" /> {project.managerId.name}
+                    </span>
+                  )}
+                  {project.teamMembers?.length > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                      <Users className="h-3 w-3 text-gray-400" />
+                      {project.teamMembers.map((m:any) => m.name||m).join(", ")}
+                    </span>
+                  )}
+                  <span className="text-[10px] text-gray-300 ml-auto">
+                    Added {new Date(project.createdAt).toLocaleDateString()}
+                  </span>
                 </div>
 
-                {/* PROGRESS BAR */}
-                <div className="space-y-1">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Progress</span>
-                    <span>{project.progress}%</span>
+                {/* Progress + Budget dual bars */}
+                <div className="px-4 pb-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Progress</span>
+                      <span className="text-[11px] font-semibold text-gray-700">{project.progress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${PROGRESS_COLOR(project.progress)}`}
+                        style={{ width: `${project.progress}%` }} />
+                    </div>
                   </div>
-                  <Progress value={project.progress} />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Budget</span>
+                      <span className="text-[11px] font-semibold text-gray-700">
+                        ₹{project.spent.toLocaleString()} / ₹{project.budget.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${budgetPct > 80 ? "bg-red-400" : "bg-orange-400"}`}
+                        style={{ width: `${budgetPct}%` }} />
+                    </div>
+                  </div>
                 </div>
 
-                {/* MANAGER: inline update inputs */}
+                {/* Manager inline update */}
                 {isManager && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="px-4 pb-3 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2">
                     <div>
-                      <Label className="text-xs">Update Progress %</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
+                      <Label className="text-[10px] text-gray-500 uppercase tracking-wide">Update Progress %</Label>
+                      <Input type="number" min={0} max={100} className="h-7 text-xs mt-1"
                         placeholder={String(project.progress)}
-                        onBlur={(e) =>
-                          handleProgressUpdate(project._id, Number(e.target.value))
-                        }
-                      />
+                        onBlur={(e) => handleProgressUpdate(project._id, Number(e.target.value))} />
                     </div>
                     <div>
-                      <Label className="text-xs">Update Spent (₹)</Label>
-                      <Input
-                        type="number"
-                        min={0}
+                      <Label className="text-[10px] text-gray-500 uppercase tracking-wide">Update Spent (₹)</Label>
+                      <Input type="number" min={0} className="h-7 text-xs mt-1"
                         placeholder={String(project.spent)}
-                        onBlur={(e) =>
-                          handleSpentUpdate(project._id, Number(e.target.value))
-                        }
-                      />
+                        onBlur={(e) => handleSpentUpdate(project._id, Number(e.target.value))} />
                     </div>
                   </div>
                 )}
-
-                {/* ADMIN ACTIONS */}
-                {isAdmin && (
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(project)}
-                    >
-                      <Pencil className="h-3 w-3 mr-1" /> Edit
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(project._id)}
-                    >
-                      <Trash className="h-3 w-3 mr-1" /> Delete
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
