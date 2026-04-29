@@ -1,6 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL;
+const BASE_URL = import.meta.env.VITE_API_URL || "https://hrmsbackends.onrender.com/api";
+
 console.log("🔥 BASE_URL:", BASE_URL);
-console.log("🔥 ENV FULL:", import.meta.env);
 
 /* ============================================================
    TOKEN STORAGE
@@ -69,7 +69,10 @@ export async function apiFetch(
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, { ...options, headers });
+  const url = `${BASE_URL}${endpoint}`;
+  console.log(`📡 ${options.method || "GET"} ${url}`);
+
+  const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401 && retry) {
     const refreshed = await attemptRefresh();
@@ -642,7 +645,7 @@ export const helpdeskApi = {
 };
 
 /* ============================================================
-   USER MANAGEMENT API  ✅ NEW  (Admin only)
+   USER MANAGEMENT API  (Admin only)
    ============================================================ */
 export const userManagementApi = {
   getStats: () => apiFetch("/users/stats"),
