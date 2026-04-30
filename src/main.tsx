@@ -1,19 +1,23 @@
+// src/main.tsx
 import React from "react";
 import { createRoot } from "react-dom/client";
-
-import App from "./app/App"; // Main App component
+import { GoogleOAuthProvider } from "@react-oauth/google";
+import "./styles/index.css";
+import App from "./app/App";
 import { ProjectProvider } from "./app/contexts/ProjectContext";
-import "./styles/index.css"; // Global styles
 
-// Create the root and render the app wrapped in ProjectProvider
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) throw new Error("Failed to find root element");
 
 createRoot(rootElement).render(
   <React.StrictMode>
-    <ProjectProvider>
-      <App />
-    </ProjectProvider>
+    <GoogleOAuthProvider clientId={clientId}>
+      <ProjectProvider>
+        <App />
+      </ProjectProvider>
+    </GoogleOAuthProvider>
   </React.StrictMode>
 );
