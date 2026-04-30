@@ -1,3 +1,5 @@
+// src/app/contexts/AuthContext.tsx
+
 import {
   createContext,
   useContext,
@@ -8,7 +10,7 @@ import {
 import { authApi, tokenStorage } from "../../services/api";
 
 /* ============================================================
-   TYPES — matches your existing Role and User interface exactly
+   TYPES
    ============================================================ */
 export type Role = "admin" | "hr" | "manager" | "employee";
 
@@ -30,8 +32,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
 
-  /* Actions — same signatures as your old localStorage version */
+  /* Actions */
   login: (email: string, password: string, role: Role) => Promise<boolean>;
+  loginWithGoogle: (email: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string, role: Role) => Promise<boolean>;
   logout: () => Promise<void>;
   addUser: (u: User) => void;
@@ -64,10 +67,10 @@ function mapUser(apiUser: any): User {
    ============================================================ */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers]             = useState<User[]>([]);
+  const [isLoading, setIsLoading]     = useState(true);
 
-  /* ===== REHYDRATE SESSION ON APP LOAD ===== */
+  /* ── Rehydrate session on app load ── */
   useEffect(() => {
     const rehydrate = async () => {
       const token = tokenStorage.getAccess();
@@ -92,10 +95,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     rehydrate();
   }, []);
 
-  /* ============================================================
-     LOGIN
-     Same signature as old: login(email, password, role) → boolean
-     ============================================================ */
+  /* ── Normal email/password login ── */
   const login = async (
     email: string,
     password: string,
@@ -114,9 +114,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   /* ============================================================
-     SIGNUP
-     Same signature as old: signup(name, email, password, role) → boolean
-     ============================================================ */
+     GOOGLE LOGIN
+     Receives decoded email from Google JWT.
+     Looks up the user by email in your backend.
+     If found  → sets currentUser → navigates to home.
+     If not found → throws error → shown in LoginPage.
+  ============================================================ */
+  const loginWithGoogle = async (email: string): Promise<boolean> => {
+    try {
+      const data = await authApi.googleLogin(email);
+      const user = mapUser(data.user);
+      setCurrentUser(user);
+      setUsers([user]);
+      return true;
+    } catch (error: any) {
+      console.error("Google login error:", error.message);
+      throw new Error(
+        error.message ||
+        "This Google account is not registered. Please contact your admin."
+      );
+    }
+  };
+
+  /* ── Signup ── */
   const signup = async (
     name: string,
     email: string,
@@ -135,9 +155,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  /* ============================================================
-     LOGOUT
-     ============================================================ */
+  /* ── Logout ── */
   const logout = async (): Promise<void> => {
     try {
       await authApi.logout();
@@ -148,18 +166,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  /* ============================================================
-     ADD USER
-     Old AdminUserModule uses addUser() — keep for compatibility
-     ============================================================ */
-  const addUser = (u: User) => {
-    setUsers((prev) => [...prev, u]);
-  };
+  /* ── Add user (kept for AdminUserModule compatibility) ── */
+  const addUser = (u: User) => setUsers((prev) => [...prev, u]);
 
-  /* ============================================================
-     CHANGE PASSWORD
-     Same signature: changePassword(email, oldPass, newPass) → boolean
-     ============================================================ */
+  /* ── Change password ── */
   const changePassword = async (
     _email: string,
     oldPass: string,
@@ -173,10 +183,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  /* ============================================================
-     RESET PASSWORD (Forgot Password)
-     Same signature: resetPassword(email, newPassword) → boolean
-     ============================================================ */
+  /* ── Reset / Forgot password ── */
   const resetPassword = async (
     email: string,
     newPassword: string
@@ -189,23 +196,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  /* ============================================================
-     LOADING SCREEN
-     ============================================================ */
+  /* ── Loading screen ── */
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="min-h-screen flex items-center justify-center bg-gray-950">
         <div className="text-center space-y-3">
           <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-500 text-sm font-medium">Loading SmartHR...</p>
+          <p className="text-gray-400 text-sm font-medium">Loading SmartHR...</p>
         </div>
       </div>
     );
   }
 
-  /* ============================================================
-     PROVIDER
-     ============================================================ */
+  /* ── Provider ── */
   return (
     <AuthContext.Provider
       value={{
@@ -214,6 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isAuthenticated: !!currentUser,
         isLoading,
         login,
+        loginWithGoogle,
         signup,
         logout,
         addUser,
