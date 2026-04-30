@@ -115,6 +115,17 @@ export const authApi = {
     return data;
   },
 
+  /* ── Google Login ── */
+  googleLogin: async (email: string) => {
+    const data = await apiFetch("/auth/google-login", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+    tokenStorage.set(data.accessToken, data.refreshToken);
+    localStorage.setItem("hrms_current", JSON.stringify(data.user));
+    return data;
+  },
+
   logout: async () => {
     try {
       await apiFetch("/auth/logout", { method: "POST" });
