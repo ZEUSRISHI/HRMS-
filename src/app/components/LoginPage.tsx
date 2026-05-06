@@ -111,7 +111,19 @@ return (
 
         <div className="grid grid-cols-2 gap-3 pt-1">
           {[
-            { icon: "👥", label: "Workforce Management" },
+            {
+              icon: (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10" viewBox="0 0 32 32">
+                  {/* Back person (right) */}
+                <circle cx="22" cy="10" r="5" fill="white" />
+                <path d="M14 28c0-5.523 3.582-8 8-8s8 2.477 8 8z" fill="white" />
+                  {/* Front person (left) */}
+                <circle cx="12" cy="10" r="6" fill="white" />
+                <path d="M0 28c0-5.523 4.477-10 12-10s12 4.477 12 10z" fill="white" />
+              </svg>
+              ),
+              label: "Workforce Management"
+            },
             { icon: "🗓️", label: "Leave Tracking" },
             { icon: "💰", label: "Payroll" },
             { icon: "📊", label: "Analytics" },
