@@ -1,3 +1,5 @@
+// src/app/components/modules/AttendanceModule.tsx
+
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
@@ -87,7 +89,7 @@ const currentStepIndex = (
 };
 
 /* ============================================================
-   LIVE CLOCK COMPONENT
+   LIVE CLOCK
    ============================================================ */
 const LiveClock = () => {
   const [time, setTime] = useState(new Date());
@@ -115,41 +117,36 @@ export function AttendanceModule() {
   const isAdmin    = role === "admin";
 
   /* ── state ── */
-  const [todayRecord,    setTodayRecord]    = useState<any>(null);
-  const [allAttendance,  setAllAttendance]  = useState<any[]>([]);
-  const [manualDbRecords, setManualDbRecords] = useState<any[]>([]); // from MongoDB
-  const [leaves,         setLeaves]         = useState<any>(null);
-  const [loading,        setLoading]        = useState(true);
-  const [checkInLoading, setCheckInLoading] = useState(false);
-  const [checkOutLoading,setCheckOutLoading]= useState(false);
-  const [toast,          setToast]          = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [form,           setForm]           = useState(initForm);
-  const [dialogOpen,     setDialogOpen]     = useState(false);
-  const [activeTab,      setActiveTab]      = useState<"pending" | "all">("pending");
+  const [todayRecord,      setTodayRecord]      = useState<any>(null);
+  const [allAttendance,    setAllAttendance]    = useState<any[]>([]);
+  const [manualDbRecords,  setManualDbRecords]  = useState<any[]>([]);
+  const [leaves,           setLeaves]           = useState<any>(null);
+  const [loading,          setLoading]          = useState(true);
+  const [checkInLoading,   setCheckInLoading]   = useState(false);
+  const [checkOutLoading,  setCheckOutLoading]  = useState(false);
+  const [toast,            setToast]            = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [form,             setForm]             = useState(initForm);
+  const [dialogOpen,       setDialogOpen]       = useState(false);
+  const [activeTab,        setActiveTab]        = useState<"pending" | "all">("pending");
 
-  /* ── manual attendance dialog (admin only) ── */
   const [manualAttendanceOpen, setManualAttendanceOpen] = useState(false);
   const [manualAttendance,     setManualAttendance]     = useState(initManualAttendance);
   const [manualSubmitting,     setManualSubmitting]     = useState(false);
 
-  /* ── manual leave (admin only) ── */
   const [manualLeaveOpen,    setManualLeaveOpen]    = useState(false);
   const [manualLeave,        setManualLeave]        = useState(initManualLeave);
   const [manualLeaveRecords, setManualLeaveRecords] = useState<any[]>([]);
 
-  /* ── attendance report filters ── */
   const [reportFilter, setReportFilter] = useState<"custom"|"this_week"|"last_week"|"this_month"|"last_month">("custom");
   const [reportStart,  setReportStart]  = useState("");
   const [reportEnd,    setReportEnd]    = useState("");
   const [reportRole,   setReportRole]   = useState("all");
   const [reportName,   setReportName]   = useState("");
 
-  /* ── leave report filters ── */
   const [leaveReportFilter, setLeaveReportFilter] = useState<"custom"|"this_month"|"last_month"|"this_year"|"last_year">("this_month");
   const [leaveReportStart,  setLeaveReportStart]  = useState("");
-  const [leaveReportEnd,    setLeaveReportEnd]     = useState("");
+  const [leaveReportEnd,    setLeaveReportEnd]    = useState("");
 
-  /* ── real-time polling ref ── */
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   /* ── helpers ── */
@@ -171,10 +168,11 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     LOAD DATA
+     LOAD DATA — only fetches, NEVER auto check-in
      ============================================================ */
   const loadTodayOnly = useCallback(async () => {
     try {
+      // Only READ today's record from DB — never creates one
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
@@ -191,6 +189,7 @@ export function AttendanceModule() {
     try {
       setLoading(true);
 
+      // Only READ — never writes or auto check-in
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
@@ -199,7 +198,6 @@ export function AttendanceModule() {
         setAllAttendance(allRes.records || []);
       }
 
-      // Load manual records from MongoDB (admin only)
       if (isAdmin) {
         const manualRes = await attendanceApi.getManual();
         setManualDbRecords(manualRes.records || []);
@@ -225,12 +223,12 @@ export function AttendanceModule() {
     }
   }, [isAdmin, isHR, isManager]);
 
-  /* ── initial load ── */
+  /* ── initial load: only reads data, never auto check-in ── */
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  /* ── real-time polling every 30 seconds for today's attendance ── */
+  /* ── polling every 30s: only reads, never writes ── */
   useEffect(() => {
     pollingRef.current = setInterval(() => {
       loadTodayOnly();
@@ -242,21 +240,21 @@ export function AttendanceModule() {
 
   if (!currentUser) return null;
 
-  /* ── leaves to display ── */
   const displayLeaves: any[] = isAdmin
     ? (activeTab === "pending" ? leaves?.pending ?? [] : leaves?.all ?? [])
     : (leaves ?? []);
 
   /* ============================================================
-     CHECK IN / OUT
+     CHECK IN — only fires when user explicitly clicks the button
+     Stores the check-in time to MongoDB at that exact moment
      ============================================================ */
   const handleCheckIn = async () => {
     try {
       setCheckInLoading(true);
+      // POST /api/attendance/checkin — saves current IST time to MongoDB
       const res = await attendanceApi.checkIn();
       setTodayRecord(res.record);
-      showToast("✅ Checked in successfully at " + res.record.checkIn);
-      // Refresh all overview if admin/manager/hr
+      showToast("✅ Checked in at " + res.record.checkIn);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -268,12 +266,17 @@ export function AttendanceModule() {
     }
   };
 
+  /* ============================================================
+     CHECK OUT — only fires when user explicitly clicks the button
+     Stores the check-out time to MongoDB at that exact moment
+     ============================================================ */
   const handleCheckOut = async () => {
     try {
       setCheckOutLoading(true);
+      // POST /api/attendance/checkout — saves current IST time to MongoDB
       const res = await attendanceApi.checkOut();
       setTodayRecord(res.record);
-      showToast("✅ Checked out successfully at " + res.record.checkOut);
+      showToast("✅ Checked out at " + res.record.checkOut);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -286,7 +289,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     MANUAL ATTENDANCE ENTRY — saves to MongoDB
+     MANUAL ATTENDANCE ENTRY — Admin only, for previous dates
      ============================================================ */
   const submitManualAttendance = async () => {
     if (!manualAttendance.employeeName.trim()) {
@@ -298,7 +301,6 @@ export function AttendanceModule() {
     if (!manualAttendance.checkIn) {
       showToast("Check-In time is required", "error"); return;
     }
-
     const today = format(new Date(), "yyyy-MM-dd");
     if (manualAttendance.endDate >= today) {
       showToast("Manual entry is only allowed for previous dates", "error"); return;
@@ -306,7 +308,6 @@ export function AttendanceModule() {
     if (manualAttendance.startDate > manualAttendance.endDate) {
       showToast("Start date cannot be after end date", "error"); return;
     }
-
     try {
       setManualSubmitting(true);
       const res = await attendanceApi.addManual({
@@ -317,11 +318,8 @@ export function AttendanceModule() {
         checkIn:      manualAttendance.checkIn,
         checkOut:     manualAttendance.checkOut || undefined,
       });
-
-      // Refresh manual records from DB
       const manualRes = await attendanceApi.getManual();
       setManualDbRecords(manualRes.records || []);
-
       setManualAttendance(initManualAttendance);
       setManualAttendanceOpen(false);
       showToast(`✅ ${res.records.length} attendance record(s) saved to database`);
@@ -332,7 +330,6 @@ export function AttendanceModule() {
     }
   };
 
-  /* ── delete a manual record from DB ── */
   const deleteManualRecord = async (id: string) => {
     try {
       await attendanceApi.deleteManual(id);
@@ -344,7 +341,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     MANUAL LEAVE ENTRY — local state only (same as before)
+     MANUAL LEAVE ENTRY
      ============================================================ */
   const submitManualLeave = () => {
     if (!manualLeave.employeeName.trim()) {
@@ -360,11 +357,9 @@ export function AttendanceModule() {
     if (manualLeave.startDate > manualLeave.endDate) {
       showToast("Start date cannot be after end date", "error"); return;
     }
-
     const start = new Date(manualLeave.startDate);
     const end   = new Date(manualLeave.endDate);
     const days  = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
     const newRecord = {
       id:           Date.now(),
       employeeName: manualLeave.employeeName.trim(),
@@ -378,7 +373,6 @@ export function AttendanceModule() {
       enteredBy:    currentUser?.name ?? "Admin",
       enteredAt:    new Date().toISOString(),
     };
-
     setManualLeaveRecords(prev => [...prev, newRecord]);
     setManualLeave(initManualLeave);
     setManualLeaveOpen(false);
@@ -494,17 +488,14 @@ export function AttendanceModule() {
     const { start, end } = getReportDateRange();
     const apiFiltered    = filterApiAttendance(allAttendance, start, end);
     const manualFiltered = filterManualDbAttendance(manualDbRecords, start, end);
-
-    const apiRows = apiFiltered.map(r =>
+    const apiRows    = apiFiltered.map(r =>
       `${r.userId?.name ?? "Unknown"},${r.userId?.role ?? ""},${r.date},${r.checkIn ?? ""},${r.checkOut ?? ""},API`
     );
     const manualRows = manualFiltered.map(r =>
       `${r.manualEmployeeName},${r.manualEmployeeRole},${r.date},${r.checkIn},${r.checkOut ?? ""},Manual (by ${r.enteredByName})`
     );
-
     const all = [...apiRows, ...manualRows];
     if (all.length === 0) { showToast("No records match the selected filters", "error"); return; }
-
     const csv = ["Name,Role,Date,CheckIn,CheckOut,Source", ...all].join("\n");
     triggerDownload(csv, `attendance_report_${start || "all"}_to_${end || "all"}.csv`);
   };
@@ -564,17 +555,14 @@ export function AttendanceModule() {
     const allApiLeaves   = isAdmin ? (leaves?.all ?? []) : (Array.isArray(leaves) ? leaves : []);
     const apiFiltered    = filterLeaveRows(allApiLeaves,       start, end);
     const manualFiltered = filterLeaveRows(manualLeaveRecords, start, end);
-
     const apiRows    = apiFiltered.map(l =>
       `${l.userId?.name ?? "Unknown"},${l.userId?.role ?? ""},${l.type},${l.startDate},${l.endDate},${l.days ?? ""},${l.status},${l.reason},API`
     );
     const manualRows = manualFiltered.map(l =>
       `${l.employeeName},Manual,${l.type},${l.startDate},${l.endDate},${l.days},${l.status},${l.reason},Manual (by ${l.enteredBy})`
     );
-
     const all = [...apiRows, ...manualRows];
     if (all.length === 0) { showToast("No leave records match the selected filters", "error"); return; }
-
     const csv = ["Name,Role,Type,StartDate,EndDate,Days,Status,Reason,Source", ...all].join("\n");
     triggerDownload(csv, `leave_report_${start || "all"}_to_${end || "all"}.csv`);
   };
@@ -619,10 +607,10 @@ export function AttendanceModule() {
   };
 
   const roleColor = (r: string) => {
-    if (r === "admin")   return "bg-red-500 text-white";
-    if (r === "hr")      return "bg-blue-500 text-white";
-    if (r === "manager") return "bg-purple-500 text-white";
-    return "bg-gray-500 text-white";
+    if (r === "admin")   return "bg-slate-700 text-white";
+    if (r === "hr")      return "bg-slate-500 text-white";
+    if (r === "manager") return "bg-slate-600 text-white";
+    return "bg-slate-400 text-white";
   };
 
   const canActOnLeave = (leave: any): boolean => {
@@ -640,7 +628,6 @@ export function AttendanceModule() {
     const steps         = flowSteps(applicantRole, leave.isEmergency);
     const currentIdx    = currentStepIndex(leave.status as LeaveStatus, leave.isEmergency, applicantRole);
     const isRejected    = leave.status === "rejected";
-
     return (
       <div className="flex items-center gap-1 mt-1.5 flex-wrap">
         {steps.map((step, i) => {
@@ -650,7 +637,7 @@ export function AttendanceModule() {
             <div key={step} className="flex items-center gap-1">
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium whitespace-nowrap
                 ${done    ? "bg-green-100 text-green-700" : ""}
-                ${current ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300" : ""}
+                ${current ? "bg-slate-100 text-slate-700 ring-1 ring-slate-300" : ""}
                 ${!done && !current ? "bg-gray-100 text-gray-400" : ""}
               `}>
                 {done ? "✓ " : ""}{step}
@@ -671,12 +658,11 @@ export function AttendanceModule() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-4 border-slate-600 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  /* ── today's real-time status helper ── */
   const checkedIn  = !!todayRecord?.checkIn;
   const checkedOut = !!todayRecord?.checkOut;
 
@@ -684,28 +670,29 @@ export function AttendanceModule() {
      RENDER
      ============================================================ */
   return (
-    <div className="space-y-8 max-w-7xl mx-auto px-3 py-4">
+    <div className="space-y-6 max-w-7xl mx-auto px-3 py-4">
 
       {/* TOAST */}
       {toast && (
         <div className={`fixed top-6 right-6 px-5 py-3 rounded-xl shadow-lg z-50 text-white text-sm font-medium transition-all ${
-          toast.type === "error" ? "bg-red-600" : "bg-gray-900"
+          toast.type === "error" ? "bg-red-600" : "bg-slate-800"
         }`}>
           {toast.msg}
         </div>
       )}
 
       {/* ══════════════════════════════════════════════════════
-          TODAY'S ATTENDANCE — REAL TIME
+          TODAY'S ATTENDANCE — MANUAL CHECK IN / OUT
+          User must explicitly click to check in or check out.
+          No automatic check-in happens anywhere.
           ══════════════════════════════════════════════════════ */}
       <Card className="border-2 border-gray-100">
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 text-sm sm:text-base">
               <Clock size={18} />
               Today's Attendance — {format(new Date(), "MMMM d, yyyy")}
             </div>
-            {/* Live clock */}
             <div className="flex items-center gap-2 bg-gray-50 px-4 py-1.5 rounded-xl border">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <LiveClock />
@@ -714,45 +701,54 @@ export function AttendanceModule() {
         </CardHeader>
 
         <CardContent>
+          {/* Info banner — makes it clear check-in is manual */}
+          <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-start gap-2">
+            <span className="text-slate-400 mt-0.5">ℹ️</span>
+            <span>
+              <strong>Check-in and check-out are manual.</strong> Click the button when you start
+              and end your work. Your time will be recorded in the database at that exact moment.
+            </span>
+          </div>
+
           <div className="flex flex-col md:flex-row justify-between gap-6 items-start">
 
             {/* Status tiles */}
-            <div className="flex gap-4 flex-wrap">
+            <div className="flex gap-3 sm:gap-4 flex-wrap">
               {/* Check In tile */}
-              <div className={`flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 transition-all ${
+              <div className={`flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 transition-all ${
                 checkedIn
-                  ? "border-green-400 bg-green-50"
+                  ? "border-slate-400 bg-slate-50"
                   : "border-dashed border-gray-300 bg-gray-50"
               }`}>
-                <CheckCircle2 size={22} className={checkedIn ? "text-green-500" : "text-gray-300"} />
+                <CheckCircle2 size={22} className={checkedIn ? "text-slate-600" : "text-gray-300"} />
                 <p className="text-xs text-gray-500 mt-1">Check In</p>
-                <p className={`text-base font-bold mt-0.5 ${checkedIn ? "text-green-700" : "text-gray-400"}`}>
+                <p className={`text-sm sm:text-base font-bold mt-0.5 ${checkedIn ? "text-slate-700" : "text-gray-400"}`}>
                   {todayRecord?.checkIn ?? "—"}
                 </p>
               </div>
 
               {/* Check Out tile */}
-              <div className={`flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 transition-all ${
+              <div className={`flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 transition-all ${
                 checkedOut
-                  ? "border-red-400 bg-red-50"
+                  ? "border-slate-500 bg-slate-100"
                   : "border-dashed border-gray-300 bg-gray-50"
               }`}>
-                <XCircle size={22} className={checkedOut ? "text-red-500" : "text-gray-300"} />
+                <XCircle size={22} className={checkedOut ? "text-slate-600" : "text-gray-300"} />
                 <p className="text-xs text-gray-500 mt-1">Check Out</p>
-                <p className={`text-base font-bold mt-0.5 ${checkedOut ? "text-red-700" : "text-gray-400"}`}>
+                <p className={`text-sm sm:text-base font-bold mt-0.5 ${checkedOut ? "text-slate-700" : "text-gray-400"}`}>
                   {todayRecord?.checkOut ?? "—"}
                 </p>
               </div>
 
               {/* Status tile */}
-              <div className="flex flex-col items-center justify-center w-36 h-24 rounded-2xl border-2 border-gray-200 bg-white">
+              <div className="flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 border-gray-200 bg-white">
                 <span className="text-xs text-gray-500">Status</span>
                 <span className={`mt-1 px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                  checkedOut  ? "bg-blue-100 text-blue-700"  :
-                  checkedIn   ? "bg-green-100 text-green-700" :
+                  checkedOut  ? "bg-slate-100 text-slate-700"  :
+                  checkedIn   ? "bg-green-100 text-green-700"  :
                   "bg-gray-100 text-gray-500"
                 }`}>
-                  {checkedOut ? "Completed" : checkedIn ? "Present" : todayRecord?.status ?? "Absent"}
+                  {checkedOut ? "Completed" : checkedIn ? "Present" : "Not Checked In"}
                 </span>
                 {checkedIn && !checkedOut && (
                   <span className="text-[10px] text-gray-400 mt-1">Working...</span>
@@ -760,47 +756,59 @@ export function AttendanceModule() {
               </div>
             </div>
 
-            {/* Buttons */}
+            {/* Action Buttons */}
             <div className="flex gap-3 flex-wrap items-center self-center">
+
+              {/* CHECK IN button — only shown if not checked in yet */}
               {!checkedIn && (
                 <Button
                   onClick={handleCheckIn}
                   disabled={checkInLoading}
-                  className="bg-blue-600 text-white hover:bg-blue-700 h-11 px-6"
+                  className="bg-slate-700 text-white hover:bg-slate-800 h-11 px-6"
                 >
                   {checkInLoading
-                    ? <span className="flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Checking in...</span>
-                    : <span className="flex items-center gap-2"><LogIn size={16} /> Check In</span>
+                    ? <span className="flex items-center gap-2">
+                        <RefreshCw size={15} className="animate-spin" /> Checking in...
+                      </span>
+                    : <span className="flex items-center gap-2">
+                        <LogIn size={16} /> Check In
+                      </span>
                   }
                 </Button>
               )}
 
+              {/* CHECK OUT button — only shown if checked in but not checked out */}
               {checkedIn && !checkedOut && (
                 <Button
                   onClick={handleCheckOut}
                   disabled={checkOutLoading}
-                  className="bg-red-500 text-white hover:bg-red-600 h-11 px-6"
+                  className="bg-slate-600 text-white hover:bg-slate-700 h-11 px-6"
                 >
                   {checkOutLoading
-                    ? <span className="flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Checking out...</span>
-                    : <span className="flex items-center gap-2"><LogOut size={16} /> Check Out</span>
+                    ? <span className="flex items-center gap-2">
+                        <RefreshCw size={15} className="animate-spin" /> Checking out...
+                      </span>
+                    : <span className="flex items-center gap-2">
+                        <LogOut size={16} /> Check Out
+                      </span>
                   }
                 </Button>
               )}
 
+              {/* Day Complete — shown when both check-in and check-out are done */}
               {checkedIn && checkedOut && (
-                <div className="flex items-center gap-2 bg-green-50 border border-green-200 px-4 py-2 rounded-xl">
-                  <CheckCircle2 size={18} className="text-green-500" />
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl">
+                  <CheckCircle2 size={18} className="text-slate-600" />
                   <div>
-                    <p className="text-sm font-semibold text-green-700">Day Complete</p>
-                    <p className="text-xs text-green-500">
+                    <p className="text-sm font-semibold text-slate-700">Day Complete</p>
+                    <p className="text-xs text-slate-500">
                       {todayRecord.checkIn} → {todayRecord.checkOut}
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* Manual refresh */}
+              {/* Manual refresh button */}
               <button
                 onClick={loadTodayOnly}
                 className="p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors"
@@ -811,10 +819,9 @@ export function AttendanceModule() {
             </div>
           </div>
 
-          {/* Real-time indicator */}
           <p className="text-[11px] text-gray-400 mt-4 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-            Auto-refreshes every 30 seconds
+            Status refreshes every 30 seconds
           </p>
         </CardContent>
       </Card>
@@ -822,27 +829,27 @@ export function AttendanceModule() {
       {/* ══════════════════════════════════════════════════════
           ADMIN: TODAY'S OVERVIEW
           ══════════════════════════════════════════════════════ */}
-      {isAdmin && allAttendance.length > 0 && (
+      {(isAdmin || isHR || isManager) && allAttendance.length > 0 && (
         <Card>
           <CardHeader className="flex flex-row items-center gap-2">
             <Users size={18} />
-            <CardTitle>Today's Attendance Overview</CardTitle>
+            <CardTitle className="text-sm sm:text-base">Today's Attendance Overview</CardTitle>
           </CardHeader>
-          <CardContent className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {allAttendance
               .filter(r => r.date === format(new Date(), "yyyy-MM-dd") && !r.isManual)
               .map(r => (
                 <div key={r._id} className="border rounded-lg p-4 bg-white shadow-sm">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-semibold text-sm">{r.userId?.name}</p>
-                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm truncate">{r.userId?.name}</p>
+                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
                         <span className="flex items-center gap-1">
-                          <LogIn size={11} className="text-green-500" />
+                          <LogIn size={11} className="text-slate-500" />
                           {r.checkIn ?? "—"}
                         </span>
                         <span className="flex items-center gap-1">
-                          <LogOut size={11} className="text-red-400" />
+                          <LogOut size={11} className="text-slate-400" />
                           {r.checkOut ?? "—"}
                         </span>
                       </div>
@@ -851,7 +858,7 @@ export function AttendanceModule() {
                   </div>
                   <div className="mt-2">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      r.checkOut ? "bg-blue-100 text-blue-700" :
+                      r.checkOut ? "bg-slate-100 text-slate-700" :
                       r.checkIn  ? "bg-green-100 text-green-700" :
                       "bg-gray-100 text-gray-500"
                     }`}>
@@ -871,7 +878,7 @@ export function AttendanceModule() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                 <Calendar size={18} /> Attendance Report
               </CardTitle>
 
@@ -890,26 +897,24 @@ export function AttendanceModule() {
                     <DialogHeader>
                       <DialogTitle>Manual Attendance Entry</DialogTitle>
                     </DialogHeader>
-
                     <div className="space-y-4 mt-1">
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Employee Name <span className="text-red-500">*</span>
                         </label>
                         <input
-                          className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                          className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                           placeholder="e.g. Ravi Kumar"
                           value={manualAttendance.employeeName}
                           onChange={e => setMA("employeeName", e.target.value)}
                         />
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Role <span className="text-red-500">*</span>
                         </label>
                         <select
-                          className="border p-2 rounded w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-300"
+                          className="border p-2 rounded w-full text-sm bg-white focus:outline-none focus:ring-2 focus:ring-slate-300"
                           value={manualAttendance.employeeRole}
                           onChange={e => setMA("employeeRole", e.target.value)}
                         >
@@ -919,7 +924,6 @@ export function AttendanceModule() {
                           <option value="admin">Admin</option>
                         </select>
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Date Range <span className="text-red-500">*</span>
@@ -931,7 +935,7 @@ export function AttendanceModule() {
                             <input
                               type="date"
                               max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
-                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                               value={manualAttendance.startDate}
                               onChange={e => setMA("startDate", e.target.value)}
                             />
@@ -941,7 +945,7 @@ export function AttendanceModule() {
                             <input
                               type="date"
                               max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
-                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                               value={manualAttendance.endDate}
                               onChange={e => setMA("endDate", e.target.value)}
                             />
@@ -949,7 +953,7 @@ export function AttendanceModule() {
                         </div>
                         {manualAttendance.startDate && manualAttendance.endDate &&
                           manualAttendance.startDate <= manualAttendance.endDate && (
-                          <p className="text-[11px] text-indigo-600 mt-1.5 font-medium">
+                          <p className="text-[11px] text-slate-600 mt-1.5 font-medium">
                             📅 {eachDayOfInterval({
                               start: parseISO(manualAttendance.startDate),
                               end:   parseISO(manualAttendance.endDate),
@@ -957,7 +961,6 @@ export function AttendanceModule() {
                           </p>
                         )}
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Check-In / Check-Out Time
@@ -969,7 +972,7 @@ export function AttendanceModule() {
                             </label>
                             <input
                               type="time"
-                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                               value={manualAttendance.checkIn}
                               onChange={e => setMA("checkIn", e.target.value)}
                             />
@@ -978,25 +981,25 @@ export function AttendanceModule() {
                             <label className="text-[11px] text-gray-500 mb-1 block">Check Out</label>
                             <input
                               type="time"
-                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+                              className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                               value={manualAttendance.checkOut}
                               onChange={e => setMA("checkOut", e.target.value)}
                             />
                           </div>
                         </div>
                       </div>
-
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700">
-                        ℹ️ This entry will be <strong>permanently saved to MongoDB</strong> and included in all reports.
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
+                        ℹ️ This entry will be <strong>saved to MongoDB</strong> and included in all reports.
                       </div>
-
                       <Button
                         onClick={submitManualAttendance}
                         disabled={manualSubmitting}
-                        className="w-full bg-gray-900 hover:bg-gray-800 text-white"
+                        className="w-full bg-slate-800 hover:bg-slate-900 text-white"
                       >
                         {manualSubmitting
-                          ? <span className="flex items-center gap-2 justify-center"><RefreshCw size={14} className="animate-spin" /> Saving...</span>
+                          ? <span className="flex items-center gap-2 justify-center">
+                              <RefreshCw size={14} className="animate-spin" /> Saving...
+                            </span>
                           : "Save to Database"
                         }
                       </Button>
@@ -1008,12 +1011,10 @@ export function AttendanceModule() {
           </CardHeader>
 
           <CardContent className="space-y-5">
-
-            {/* Manual DB records preview */}
             {isAdmin && manualDbRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-blue-50 px-4 py-2.5 flex items-center justify-between border-b border-blue-200">
-                  <span className="text-xs font-semibold text-blue-800">
+                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                  <span className="text-xs font-semibold text-slate-700">
                     🗄️ MongoDB Manual Records ({manualDbRecords.length} total)
                   </span>
                 </div>
@@ -1047,9 +1048,7 @@ export function AttendanceModule() {
                             <button
                               onClick={() => deleteManualRecord(r._id)}
                               className="text-red-500 hover:text-red-700 font-medium"
-                            >
-                              ✕
-                            </button>
+                            >✕</button>
                           </td>
                         </tr>
                       ))}
@@ -1059,7 +1058,6 @@ export function AttendanceModule() {
               </div>
             )}
 
-            {/* Date range pills */}
             <div>
               <p className="text-xs font-medium text-gray-500 mb-2">Date Range</p>
               <div className="flex flex-wrap gap-2">
@@ -1075,7 +1073,7 @@ export function AttendanceModule() {
                     onClick={() => setReportFilter(opt.value)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       reportFilter === opt.value
-                        ? "bg-black text-white border-black"
+                        ? "bg-slate-800 text-white border-slate-800"
                         : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
                     }`}
                   >
@@ -1128,13 +1126,8 @@ export function AttendanceModule() {
             <div className="flex items-center gap-4 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {previewCount} record{previewCount !== 1 ? "s" : ""} matched
-                {isAdmin && manualDbRecords.length > 0 && (
-                  <span className="ml-1 text-blue-600">
-                    (incl. {filterManualDbAttendance(manualDbRecords, getReportDateRange().start, getReportDateRange().end).length} from DB)
-                  </span>
-                )}
               </span>
-              <Button onClick={downloadAttendance} className="bg-black text-white flex items-center gap-2">
+              <Button onClick={downloadAttendance} className="bg-slate-800 text-white flex items-center gap-2">
                 <Download size={16} /> Download CSV
               </Button>
             </div>
@@ -1149,7 +1142,7 @@ export function AttendanceModule() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                 <Download size={18} /> Leave Report
               </CardTitle>
 
@@ -1180,7 +1173,6 @@ export function AttendanceModule() {
                           onChange={e => setML("employeeName", e.target.value)}
                         />
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Leave Type <span className="text-red-500">*</span>
@@ -1200,86 +1192,53 @@ export function AttendanceModule() {
                           <option value="Other">Other</option>
                         </select>
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">Priority</label>
-                        <select
-                          className="border p-2 rounded w-full text-sm bg-white"
-                          value={manualLeave.priority}
-                          onChange={e => setML("priority", e.target.value)}
-                        >
+                        <select className="border p-2 rounded w-full text-sm bg-white" value={manualLeave.priority} onChange={e => setML("priority", e.target.value)}>
                           <option value="low">Low</option>
                           <option value="medium">Medium</option>
                           <option value="high">High</option>
                         </select>
                       </div>
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">Status</label>
-                        <select
-                          className="border p-2 rounded w-full text-sm bg-white"
-                          value={manualLeave.status}
-                          onChange={e => setML("status", e.target.value)}
-                        >
+                        <select className="border p-2 rounded w-full text-sm bg-white" value={manualLeave.status} onChange={e => setML("status", e.target.value)}>
                           <option value="approved">Approved</option>
                           <option value="rejected">Rejected</option>
                           <option value="pending_admin">Pending Admin</option>
                         </select>
                       </div>
-
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-xs font-semibold text-gray-700 mb-1 block">
                             Start Date <span className="text-red-500">*</span>
                           </label>
-                          <input
-                            type="date"
-                            max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
+                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                             className="border p-2 rounded w-full text-sm"
-                            value={manualLeave.startDate}
-                            onChange={e => setML("startDate", e.target.value)}
-                          />
+                            value={manualLeave.startDate} onChange={e => setML("startDate", e.target.value)} />
                         </div>
                         <div>
                           <label className="text-xs font-semibold text-gray-700 mb-1 block">
                             End Date <span className="text-red-500">*</span>
                           </label>
-                          <input
-                            type="date"
-                            max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
+                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
                             className="border p-2 rounded w-full text-sm"
-                            value={manualLeave.endDate}
-                            onChange={e => setML("endDate", e.target.value)}
-                          />
+                            value={manualLeave.endDate} onChange={e => setML("endDate", e.target.value)} />
                         </div>
                       </div>
-
-                      {manualLeave.startDate && manualLeave.endDate &&
-                        manualLeave.startDate <= manualLeave.endDate && (
-                        <p className="text-[11px] text-indigo-600 font-medium">
-                          📅 {Math.ceil(
-                            (new Date(manualLeave.endDate).getTime() - new Date(manualLeave.startDate).getTime()) /
-                            (1000 * 60 * 60 * 24)
-                          ) + 1} day(s)
+                      {manualLeave.startDate && manualLeave.endDate && manualLeave.startDate <= manualLeave.endDate && (
+                        <p className="text-[11px] text-slate-600 font-medium">
+                          📅 {Math.ceil((new Date(manualLeave.endDate).getTime() - new Date(manualLeave.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} day(s)
                         </p>
                       )}
-
                       <div>
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">
                           Reason <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          className="border p-2 rounded w-full text-sm"
-                          placeholder="Brief reason"
-                          value={manualLeave.reason}
-                          onChange={e => setML("reason", e.target.value)}
-                        />
+                        <input className="border p-2 rounded w-full text-sm" placeholder="Brief reason"
+                          value={manualLeave.reason} onChange={e => setML("reason", e.target.value)} />
                       </div>
-
-                      <Button
-                        onClick={submitManualLeave}
-                        className="w-full bg-gray-900 hover:bg-gray-800 text-white"
-                      >
+                      <Button onClick={submitManualLeave} className="w-full bg-slate-800 hover:bg-slate-900 text-white">
                         Save Leave Entry
                       </Button>
                     </div>
@@ -1292,12 +1251,11 @@ export function AttendanceModule() {
           <CardContent className="space-y-5">
             {isAdmin && manualLeaveRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-yellow-50 px-4 py-2.5 flex items-center justify-between border-b border-yellow-200">
-                  <span className="text-xs font-semibold text-yellow-800">
+                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                  <span className="text-xs font-semibold text-slate-700">
                     📋 Manually Added Leave Records ({manualLeaveRecords.length})
                   </span>
-                  <button onClick={() => setManualLeaveRecords([])}
-                    className="text-[11px] text-red-500 hover:text-red-700 font-medium">
+                  <button onClick={() => setManualLeaveRecords([])} className="text-[11px] text-red-500 hover:text-red-700 font-medium">
                     Clear All
                   </button>
                 </div>
@@ -1328,10 +1286,8 @@ export function AttendanceModule() {
                             </span>
                           </td>
                           <td className="px-3 py-2">
-                            <button
-                              onClick={() => setManualLeaveRecords(prev => prev.filter(x => x.id !== l.id))}
-                              className="text-red-500 hover:text-red-700 font-medium"
-                            >✕</button>
+                            <button onClick={() => setManualLeaveRecords(prev => prev.filter(x => x.id !== l.id))}
+                              className="text-red-500 hover:text-red-700 font-medium">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -1356,7 +1312,7 @@ export function AttendanceModule() {
                     onClick={() => setLeaveReportFilter(opt.value)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                       leaveReportFilter === opt.value
-                        ? "bg-black text-white border-black"
+                        ? "bg-slate-800 text-white border-slate-800"
                         : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
                     }`}
                   >
@@ -1383,7 +1339,7 @@ export function AttendanceModule() {
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {leavePreviewCount} record{leavePreviewCount !== 1 ? "s" : ""} matched
               </span>
-              <Button onClick={downloadLeaveReport} className="bg-black text-white flex items-center gap-2">
+              <Button onClick={downloadLeaveReport} className="bg-slate-800 text-white flex items-center gap-2">
                 <Download size={16} /> Download Leave CSV
               </Button>
             </div>
@@ -1398,17 +1354,15 @@ export function AttendanceModule() {
         <div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-indigo-600 text-white hover:bg-indigo-700 w-fit">
+              <Button className="bg-slate-700 text-white hover:bg-slate-800 w-fit">
                 + Request Leave
               </Button>
             </DialogTrigger>
-
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Submit Leave Request</DialogTitle>
               </DialogHeader>
-
-              <div className="text-xs bg-gray-50 border rounded-lg p-3 text-gray-600 space-y-0.5">
+              <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-600 space-y-0.5">
                 {isEmployee && (
                   <>
                     <p>📋 <strong>Normal leave</strong> requires HR → Manager → Admin approval</p>
@@ -1419,32 +1373,26 @@ export function AttendanceModule() {
                   <p>📋 Your leave goes directly to <strong>Admin</strong> for approval</p>
                 )}
               </div>
-
               <div className="space-y-4 mt-2">
                 {isEmployee && (
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-orange-200 bg-orange-50">
+                  <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
                     <input
                       type="checkbox"
                       id="emergency"
                       checked={form.isEmergency}
                       onChange={e => setF("isEmergency", e.target.checked)}
-                      className="w-4 h-4 accent-orange-500"
+                      className="w-4 h-4"
                     />
-                    <label htmlFor="emergency" className="font-medium text-sm text-orange-700 cursor-pointer">
+                    <label htmlFor="emergency" className="font-medium text-sm text-slate-700 cursor-pointer">
                       🚨 Emergency Leave
                     </label>
                   </div>
                 )}
-
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">
                     Leave Type <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    className="border p-2 rounded w-full text-sm bg-white"
-                    value={form.type}
-                    onChange={e => setF("type", e.target.value)}
-                  >
+                  <select className="border p-2 rounded w-full text-sm bg-white" value={form.type} onChange={e => setF("type", e.target.value)}>
                     <option value="">— Select type —</option>
                     <option value="Casual Leave">Casual Leave</option>
                     <option value="Sick Leave">Sick Leave</option>
@@ -1455,72 +1403,39 @@ export function AttendanceModule() {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Priority</label>
-                  <select
-                    className="border p-2 rounded w-full text-sm bg-white"
-                    value={form.priority}
-                    onChange={e => setF("priority", e.target.value as any)}
-                  >
+                  <select className="border p-2 rounded w-full text-sm bg-white" value={form.priority} onChange={e => setF("priority", e.target.value as any)}>
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
                   </select>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">
-                      Start Date <span className="text-red-500">*</span>
-                    </label>
-                    <input type="date" className="border p-2 rounded w-full text-sm"
-                      value={form.startDate} onChange={e => setF("startDate", e.target.value)} />
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">Start Date <span className="text-red-500">*</span></label>
+                    <input type="date" className="border p-2 rounded w-full text-sm" value={form.startDate} onChange={e => setF("startDate", e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-600 mb-1 block">
-                      End Date <span className="text-red-500">*</span>
-                    </label>
-                    <input type="date" className="border p-2 rounded w-full text-sm"
-                      value={form.endDate} onChange={e => setF("endDate", e.target.value)} />
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">End Date <span className="text-red-500">*</span></label>
+                    <input type="date" className="border p-2 rounded w-full text-sm" value={form.endDate} onChange={e => setF("endDate", e.target.value)} />
                   </div>
                 </div>
-
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    Reason <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    className="border p-2 rounded w-full text-sm"
-                    placeholder="Brief reason"
-                    value={form.reason}
-                    onChange={e => setF("reason", e.target.value)}
-                  />
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Reason <span className="text-red-500">*</span></label>
+                  <input className="border p-2 rounded w-full text-sm" placeholder="Brief reason" value={form.reason} onChange={e => setF("reason", e.target.value)} />
                 </div>
-
                 <div>
                   <label className="text-xs font-medium text-gray-600 mb-1 block">Description (Optional)</label>
-                  <Textarea
-                    placeholder="Additional details"
-                    value={form.description}
-                    onChange={e => setF("description", e.target.value)}
-                    rows={3}
-                  />
+                  <Textarea placeholder="Additional details" value={form.description} onChange={e => setF("description", e.target.value)} rows={3} />
                 </div>
-
                 {form.isEmergency && (
                   <div>
                     <label className="text-xs font-medium text-gray-600 mb-1 block">Emergency Contact Number</label>
-                    <input
-                      className="border p-2 rounded w-full text-sm"
-                      placeholder="+91 9XXXXXXXXX"
-                      value={form.emergencyContact}
-                      onChange={e => setF("emergencyContact", e.target.value)}
-                    />
+                    <input className="border p-2 rounded w-full text-sm" placeholder="+91 9XXXXXXXXX" value={form.emergencyContact} onChange={e => setF("emergencyContact", e.target.value)} />
                   </div>
                 )}
-
-                <Button onClick={submitLeave} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white">
+                <Button onClick={submitLeave} className="w-full bg-slate-700 hover:bg-slate-800 text-white">
                   Submit Leave Request
                 </Button>
               </div>
@@ -1535,27 +1450,24 @@ export function AttendanceModule() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <CardTitle>
+            <CardTitle className="text-sm sm:text-base">
               {isAdmin   ? "Leave Requests"              :
                isManager ? "Pending Approvals (Manager)" :
                isHR      ? "Pending Approvals (HR)"      :
                "My Leave Requests"}
             </CardTitle>
-
             <div className="flex items-center gap-3 flex-wrap">
               {isAdmin && (
                 <div className="flex rounded-lg border overflow-hidden text-sm">
                   <button
                     onClick={() => setActiveTab("pending")}
                     className={`px-3 py-1.5 font-medium transition-colors ${
-                      activeTab === "pending"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
+                      activeTab === "pending" ? "bg-slate-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                   >
                     Pending
                     {(leaves?.pending ?? []).length > 0 && (
-                      <span className="ml-1.5 bg-orange-400 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                      <span className="ml-1.5 bg-slate-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                         {leaves.pending.length}
                       </span>
                     )}
@@ -1563,9 +1475,7 @@ export function AttendanceModule() {
                   <button
                     onClick={() => setActiveTab("all")}
                     className={`px-3 py-1.5 font-medium transition-colors ${
-                      activeTab === "all"
-                        ? "bg-indigo-600 text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
+                      activeTab === "all" ? "bg-slate-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                   >
                     All Requests
@@ -1577,22 +1487,6 @@ export function AttendanceModule() {
               </span>
             </div>
           </div>
-
-          {isAdmin && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              {[
-                { label: "Pending HR",      cls: "bg-blue-400 text-white"   },
-                { label: "Pending Manager", cls: "bg-purple-400 text-white" },
-                { label: "Pending Admin",   cls: "bg-orange-400 text-white" },
-                { label: "Approved",        cls: "bg-green-500 text-white"  },
-                { label: "Rejected",        cls: "bg-red-500 text-white"    },
-              ].map(b => (
-                <span key={b.label} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${b.cls}`}>
-                  {b.label}
-                </span>
-              ))}
-            </div>
-          )}
         </CardHeader>
 
         <CardContent className="overflow-x-auto">
@@ -1627,7 +1521,7 @@ export function AttendanceModule() {
                       <div className="flex flex-col gap-1">
                         <span>{l.type}</span>
                         {l.isEmergency && (
-                          <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full w-fit">
+                          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full w-fit">
                             🚨 Emergency
                           </span>
                         )}
@@ -1653,7 +1547,7 @@ export function AttendanceModule() {
                       <TableCell>
                         {canActOnLeave(l) ? (
                           <div className="flex gap-2 flex-wrap">
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white"
+                            <Button size="sm" className="bg-slate-700 hover:bg-slate-800 text-white"
                               onClick={() => approveLeave(l._id)}>
                               Approve
                             </Button>
@@ -1674,7 +1568,6 @@ export function AttendanceModule() {
           )}
         </CardContent>
       </Card>
-
     </div>
   );
 }
