@@ -701,14 +701,7 @@ export function AttendanceModule() {
         </CardHeader>
 
         <CardContent>
-          {/* Info banner — makes it clear check-in is manual */}
-          <div className="mb-4 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex items-start gap-2">
-            <span className="text-slate-400 mt-0.5">ℹ️</span>
-            <span>
-              <strong>Check-in and check-out are manual.</strong> Click the button when you start
-              and end your work. Your time will be recorded in the database at that exact moment.
-            </span>
-          </div>
+          
 
           <div className="flex flex-col md:flex-row justify-between gap-6 items-start">
 
