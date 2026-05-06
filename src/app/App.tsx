@@ -11,37 +11,22 @@ import { AdminUsersProvider } from "./contexts/AdminUsersContext";
 
 import MainLayout from "../layouts/MainLayout";
 
-/* PERMISSIONS */
 import { canManageVendors } from "../utils/permissions";
 
-/* AUTH */
 import LoginPage from "./components/LoginPage";
 import SignupPage from "./components/SignUpPage";
 import ForgotPassword from "./components/ForgotPassword";
 
-/* ICONS */
 import {
-  LayoutDashboard,
-  Clock,
-  CheckSquare,
-  FileText,
-  Calendar,
-  DollarSign,
-  Building2,
-  FolderKanban,
-  UserPlus,
-  Timer,
-  BarChart3,
-  Briefcase,
-  Users as UsersIcon,
-  TicketCheck,
-  UserCog,       // ✅ NEW icon for User Management
-  LucideIcon,
+  LayoutDashboard, Clock, CheckSquare, FileText, Calendar,
+  DollarSign, Building2, FolderKanban, UserPlus, Timer,
+  BarChart3, Briefcase, Users as UsersIcon, TicketCheck,
+  UserCog, LucideIcon,
 } from "lucide-react";
 
-/* MODULES */
-import { Dashboard, DashboardStats } from "./components/Dashboard";
-import { EmployeeDashboard } from "./components/modules/EmployeeDashboard";
+// ✅ REPLACED: Dashboard + EmployeeDashboard → RoleBasedDashboard
+import RoleBasedDashboard from "./components/modules/RoleBasedDashboard";
+import { DashboardStats } from "./components/Dashboard"; // keep for workforce-overview
 import { AttendanceModule } from "./components/modules/AttendanceModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
 import { DailyStatusModule } from "./components/modules/DailyStatusModule";
@@ -54,21 +39,16 @@ import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
-import { UserManagementModule } from "./components/modules/UserManagementModule"; // ✅ NEW
+import { UserManagementModule } from "./components/modules/UserManagementModule";
 
-/* HR */
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
 
-/* PROFILE */
 import ProfilePage from "../pages/ProfilePage";
 import AccountPage from "../pages/AccountPage";
 
-/* WORKFORCE */
 import VendorModule from "./components/modules/VendorModule";
 import FreelancerModule from "./components/modules/FreelancerModule";
-
-/* ================= TYPES ================= */
 
 export type ModuleType =
   | "dashboard"
@@ -87,7 +67,7 @@ export type ModuleType =
   | "hr-employees"
   | "hr-attendance-leave"
   | "helpdesk"
-  | "user-management"  // ✅ NEW
+  | "user-management"
   | "profile"
   | "account";
 
@@ -97,8 +77,6 @@ interface MenuItem {
   icon: LucideIcon;
   roles: Role[];
 }
-
-/* ================= APP CONTENT ================= */
 
 function AppContent() {
   const { currentUser } = useAuth();
@@ -110,7 +88,6 @@ function AppContent() {
     console.log("Vendor management allowed");
   }
 
-  /* MENU */
   const menuItems: MenuItem[] = [
     { id: "dashboard",            name: "Dashboard",          icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
     { id: "attendance",           name: "Attendance",         icon: Clock,           roles: ["admin","manager","employee","hr"] },
@@ -128,20 +105,17 @@ function AppContent() {
     { id: "hr-employees",         name: "Employee Records",   icon: UsersIcon,       roles: ["hr"] },
     { id: "hr-attendance-leave",  name: "Attendance & Leave", icon: Clock,           roles: ["hr"] },
     { id: "helpdesk",             name: "Helpdesk",           icon: TicketCheck,     roles: ["admin","manager","employee","hr"] },
-    { id: "user-management",      name: "User Management",    icon: UserCog,         roles: ["admin"] }, // ✅ NEW
+    { id: "user-management",      name: "User Management",    icon: UserCog,         roles: ["admin"] },
   ];
 
   const visibleMenuItems = menuItems.filter(item =>
     item.roles.includes(currentUser.role)
   );
 
-  /* MODULE RENDER */
   const renderModule = () => {
     switch (activeModule) {
-      case "dashboard":
-        return currentUser.role === "employee"
-          ? <EmployeeDashboard />
-          : <Dashboard />;
+      // ✅ Single case — RoleBasedDashboard picks the right view internally
+      case "dashboard":            return <RoleBasedDashboard />;
 
       case "attendance":           return <AttendanceModule />;
       case "tasks":                return <TaskManagement />;
@@ -155,7 +129,7 @@ function AppContent() {
       case "time-tracking":        return <TimeTracking />;
       case "analytics":            return <AnalyticsReports />;
       case "helpdesk":             return <HelpdeskModule />;
-      case "user-management":      return <UserManagementModule />; // ✅ NEW
+      case "user-management":      return <UserManagementModule />;
 
       case "workforce-overview":
         return (
@@ -166,13 +140,13 @@ function AppContent() {
           </div>
         );
 
-      case "hr-employees":        return <EmployeeRecordsModule />;
-      case "hr-attendance-leave": return <AttendanceLeaveModule />;
-      case "profile":             return <ProfilePage />;
-      case "account":             return <AccountPage />;
+      case "hr-employees":         return <EmployeeRecordsModule />;
+      case "hr-attendance-leave":  return <AttendanceLeaveModule />;
+      case "profile":              return <ProfilePage />;
+      case "account":              return <AccountPage />;
 
       default:
-        return <Dashboard />;
+        return <RoleBasedDashboard />;
     }
   };
 
@@ -188,20 +162,15 @@ function AppContent() {
   );
 }
 
-/* ================= AUTH SWITCH ================= */
-
 function AppWrapper() {
   const { isAuthenticated } = useAuth();
   const [view, setView] = useState<"login" | "signup" | "forgot">("login");
 
   if (!isAuthenticated) {
-    if (view === "signup")
-      return <SignupPage onBack={() => setView("login")} />;
-    if (view === "forgot")
-      return <ForgotPassword onBack={() => setView("login")} />;
+    if (view === "signup")  return <SignupPage onBack={() => setView("login")} />;
+    if (view === "forgot")  return <ForgotPassword onBack={() => setView("login")} />;
     return (
       <LoginPage
-        onSignup={() => setView("signup")}
         onReset={() => setView("forgot")}
       />
     );
@@ -209,8 +178,6 @@ function AppWrapper() {
 
   return <AppContent />;
 }
-
-/* ================= ROOT ================= */
 
 export default function App() {
   return (
