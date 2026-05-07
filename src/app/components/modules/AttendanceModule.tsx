@@ -17,7 +17,8 @@ import {
 } from "date-fns";
 import {
   LogIn, LogOut, Download, Users, Calendar, Clock,
-  PlusCircle, RefreshCw, CheckCircle2, XCircle,
+  PlusCircle, RefreshCw, CheckCircle2, XCircle, UserX,
+  AlertCircle, Search, ShieldCheck,
 } from "lucide-react";
 
 /* ============================================================
@@ -49,6 +50,7 @@ const initManualAttendance = {
   endDate:      "",
   checkIn:      "",
   checkOut:     "",
+  tagline:      "",
 };
 
 const initManualLeave = {
@@ -116,9 +118,14 @@ export function AttendanceModule() {
   const isHR       = role === "hr";
   const isAdmin    = role === "admin";
 
+  const canCheckInOut   = isEmployee || isHR || isAdmin || isManager;
+  const canAdminControl = isAdmin || isHR;  // can directly check-in/out others
+
   /* ── state ── */
   const [todayRecord,      setTodayRecord]      = useState<any>(null);
   const [allAttendance,    setAllAttendance]    = useState<any[]>([]);
+  const [allUsersList,     setAllUsersList]     = useState<any[]>([]);
+  const [todayAllRecords,  setTodayAllRecords]  = useState<any[]>([]);
   const [manualDbRecords,  setManualDbRecords]  = useState<any[]>([]);
   const [leaves,           setLeaves]           = useState<any>(null);
   const [loading,          setLoading]          = useState(true);
@@ -128,6 +135,9 @@ export function AttendanceModule() {
   const [form,             setForm]             = useState(initForm);
   const [dialogOpen,       setDialogOpen]       = useState(false);
   const [activeTab,        setActiveTab]        = useState<"pending" | "all">("pending");
+
+  const [checkInTagline,    setCheckInTagline]    = useState("");
+  const [taglineDialogOpen, setTaglineDialogOpen] = useState(false);
 
   const [manualAttendanceOpen, setManualAttendanceOpen] = useState(false);
   const [manualAttendance,     setManualAttendance]     = useState(initManualAttendance);
@@ -146,6 +156,17 @@ export function AttendanceModule() {
   const [leaveReportFilter, setLeaveReportFilter] = useState<"custom"|"this_month"|"last_month"|"this_year"|"last_year">("this_month");
   const [leaveReportStart,  setLeaveReportStart]  = useState("");
   const [leaveReportEnd,    setLeaveReportEnd]    = useState("");
+
+  const [overviewTab,  setOverviewTab]  = useState<"present" | "absent">("present");
+
+  // Admin/HR direct check-in dialog state
+  const [adminCheckInDialog,  setAdminCheckInDialog]  = useState(false);
+  const [adminCheckInUser,    setAdminCheckInUser]    = useState<any>(null);
+  const [adminCheckInTagline, setAdminCheckInTagline] = useState("");
+  const [adminActionLoading,  setAdminActionLoading]  = useState<string | null>(null);  // userId being processed
+
+  // User search for admin panel
+  const [userSearch, setUserSearch] = useState("");
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -168,11 +189,10 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     LOAD DATA — only fetches, NEVER auto check-in
+     LOAD DATA
      ============================================================ */
   const loadTodayOnly = useCallback(async () => {
     try {
-      // Only READ today's record from DB — never creates one
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
@@ -189,13 +209,20 @@ export function AttendanceModule() {
     try {
       setLoading(true);
 
-      // Only READ — never writes or auto check-in
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
+      }
+
+      // Admin/HR: load full users list for direct check-in/out
+      if (canAdminControl) {
+        const [usersRes] = await Promise.all([
+          attendanceApi.getUsersList(),
+        ]);
+        setAllUsersList(usersRes.users || []);
       }
 
       if (isAdmin) {
@@ -221,14 +248,12 @@ export function AttendanceModule() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, isHR, isManager]);
+  }, [isAdmin, isHR, isManager, canAdminControl]);
 
-  /* ── initial load: only reads data, never auto check-in ── */
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  /* ── polling every 30s: only reads, never writes ── */
   useEffect(() => {
     pollingRef.current = setInterval(() => {
       loadTodayOnly();
@@ -245,16 +270,87 @@ export function AttendanceModule() {
     : (leaves ?? []);
 
   /* ============================================================
-     CHECK IN — only fires when user explicitly clicks the button
-     Stores the check-in time to MongoDB at that exact moment
+     TODAY's OVERVIEW — present vs absent split
      ============================================================ */
-  const handleCheckIn = async () => {
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+
+  const todayPresentRecords = allAttendance.filter(
+    r => r.date === todayStr && !r.isManual
+  );
+
+  const knownUserMap: Record<string, any> = {};
+  allAttendance.forEach(r => {
+    if (r.userId?._id && !knownUserMap[r.userId._id]) {
+      knownUserMap[r.userId._id] = r.userId;
+    }
+  });
+
+  // Also add from allUsersList so absent list is always complete
+  allUsersList.forEach(u => {
+    if (u._id && !knownUserMap[u._id]) {
+      knownUserMap[u._id] = u;
+    }
+  });
+
+  const presentUserIds = new Set(todayPresentRecords.map(r => r.userId?._id));
+  const absentUsers = Object.values(knownUserMap).filter(u => !presentUserIds.has(u._id));
+
+  /* ============================================================
+     ADMIN / HR: get today's record for a specific user
+     ============================================================ */
+  const getUserTodayRecord = (userId: string) => {
+    return todayPresentRecords.find(r => r.userId?._id === userId) || null;
+  };
+
+  /* ============================================================
+     ADMIN / HR: Direct Check-In for user
+     ============================================================ */
+  const handleAdminCheckIn = async (user: any, tagline?: string) => {
+    try {
+      setAdminActionLoading(user._id);
+      const res = await attendanceApi.adminCheckIn(user._id, { tagline: tagline || adminCheckInTagline || "" });
+      showToast(`✅ Checked in ${user.name} at ${res.record.checkIn}`);
+      setAdminCheckInTagline("");
+      setAdminCheckInDialog(false);
+      setAdminCheckInUser(null);
+      // Refresh
+      const allRes = await attendanceApi.getAll();
+      setAllAttendance(allRes.records || []);
+    } catch (err: any) {
+      showToast(err.message || "Check-in failed", "error");
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  /* ============================================================
+     ADMIN / HR: Direct Check-Out for user
+     ============================================================ */
+  const handleAdminCheckOut = async (user: any) => {
+    try {
+      setAdminActionLoading(user._id);
+      const res = await attendanceApi.adminCheckOut(user._id);
+      showToast(`✅ Checked out ${user.name} at ${res.record.checkOut}`);
+      const allRes = await attendanceApi.getAll();
+      setAllAttendance(allRes.records || []);
+    } catch (err: any) {
+      showToast(err.message || "Check-out failed", "error");
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  /* ============================================================
+     CHECK IN — own
+     ============================================================ */
+  const handleCheckIn = async (tagline?: string) => {
     try {
       setCheckInLoading(true);
-      // POST /api/attendance/checkin — saves current IST time to MongoDB
-      const res = await attendanceApi.checkIn();
+      const res = await attendanceApi.checkIn({ tagline: tagline || checkInTagline || "" });
       setTodayRecord(res.record);
       showToast("✅ Checked in at " + res.record.checkIn);
+      setCheckInTagline("");
+      setTaglineDialogOpen(false);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -267,13 +363,11 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     CHECK OUT — only fires when user explicitly clicks the button
-     Stores the check-out time to MongoDB at that exact moment
+     CHECK OUT — own
      ============================================================ */
   const handleCheckOut = async () => {
     try {
       setCheckOutLoading(true);
-      // POST /api/attendance/checkout — saves current IST time to MongoDB
       const res = await attendanceApi.checkOut();
       setTodayRecord(res.record);
       showToast("✅ Checked out at " + res.record.checkOut);
@@ -289,7 +383,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     MANUAL ATTENDANCE ENTRY — Admin only, for previous dates
+     MANUAL ATTENDANCE ENTRY
      ============================================================ */
   const submitManualAttendance = async () => {
     if (!manualAttendance.employeeName.trim()) {
@@ -317,6 +411,7 @@ export function AttendanceModule() {
         endDate:      manualAttendance.endDate,
         checkIn:      manualAttendance.checkIn,
         checkOut:     manualAttendance.checkOut || undefined,
+        tagline:      manualAttendance.tagline  || undefined,
       });
       const manualRes = await attendanceApi.getManual();
       setManualDbRecords(manualRes.records || []);
@@ -489,14 +584,14 @@ export function AttendanceModule() {
     const apiFiltered    = filterApiAttendance(allAttendance, start, end);
     const manualFiltered = filterManualDbAttendance(manualDbRecords, start, end);
     const apiRows    = apiFiltered.map(r =>
-      `${r.userId?.name ?? "Unknown"},${r.userId?.role ?? ""},${r.date},${r.checkIn ?? ""},${r.checkOut ?? ""},API`
+      `${r.userId?.name ?? "Unknown"},${r.userId?.role ?? ""},${r.date},${r.checkIn ?? ""},${r.checkOut ?? ""},${r.tagline ?? ""},API`
     );
     const manualRows = manualFiltered.map(r =>
-      `${r.manualEmployeeName},${r.manualEmployeeRole},${r.date},${r.checkIn},${r.checkOut ?? ""},Manual (by ${r.enteredByName})`
+      `${r.manualEmployeeName},${r.manualEmployeeRole},${r.date},${r.checkIn},${r.checkOut ?? ""},${r.tagline ?? ""},Manual (by ${r.enteredByName})`
     );
     const all = [...apiRows, ...manualRows];
     if (all.length === 0) { showToast("No records match the selected filters", "error"); return; }
-    const csv = ["Name,Role,Date,CheckIn,CheckOut,Source", ...all].join("\n");
+    const csv = ["Name,Role,Date,CheckIn,CheckOut,Tagline,Source", ...all].join("\n");
     triggerDownload(csv, `attendance_report_${start || "all"}_to_${end || "all"}.csv`);
   };
 
@@ -655,6 +750,14 @@ export function AttendanceModule() {
     );
   };
 
+  /* ── filtered users for admin control panel ── */
+  const filteredUsers = allUsersList.filter(u =>
+    !userSearch.trim() ||
+    u.name?.toLowerCase().includes(userSearch.trim().toLowerCase()) ||
+    u.role?.toLowerCase().includes(userSearch.trim().toLowerCase()) ||
+    u.department?.toLowerCase().includes(userSearch.trim().toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -670,11 +773,11 @@ export function AttendanceModule() {
      RENDER
      ============================================================ */
   return (
-    <div className="space-y-6 max-w-7xl mx-auto px-3 py-4">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto px-2 sm:px-3 py-3 sm:py-4">
 
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-6 right-6 px-5 py-3 rounded-xl shadow-lg z-50 text-white text-sm font-medium transition-all ${
+        <div className={`fixed top-4 right-4 sm:top-6 sm:right-6 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl shadow-lg z-50 text-white text-xs sm:text-sm font-medium transition-all max-w-[90vw] ${
           toast.type === "error" ? "bg-red-600" : "bg-slate-800"
         }`}>
           {toast.msg}
@@ -682,184 +785,527 @@ export function AttendanceModule() {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          TODAY'S ATTENDANCE — MANUAL CHECK IN / OUT
-          User must explicitly click to check in or check out.
-          No automatic check-in happens anywhere.
+          TODAY'S ATTENDANCE — CHECK IN / CHECK OUT (own)
           ══════════════════════════════════════════════════════ */}
-      <Card className="border-2 border-gray-100">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2 text-sm sm:text-base">
-              <Clock size={18} />
-              Today's Attendance — {format(new Date(), "MMMM d, yyyy")}
-            </div>
-            <div className="flex items-center gap-2 bg-gray-50 px-4 py-1.5 rounded-xl border">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <LiveClock />
-            </div>
-          </CardTitle>
-        </CardHeader>
-
-        <CardContent>
-          
-
-          <div className="flex flex-col md:flex-row justify-between gap-6 items-start">
-
-            {/* Status tiles */}
-            <div className="flex gap-3 sm:gap-4 flex-wrap">
-              {/* Check In tile */}
-              <div className={`flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 transition-all ${
-                checkedIn
-                  ? "border-slate-400 bg-slate-50"
-                  : "border-dashed border-gray-300 bg-gray-50"
-              }`}>
-                <CheckCircle2 size={22} className={checkedIn ? "text-slate-600" : "text-gray-300"} />
-                <p className="text-xs text-gray-500 mt-1">Check In</p>
-                <p className={`text-sm sm:text-base font-bold mt-0.5 ${checkedIn ? "text-slate-700" : "text-gray-400"}`}>
-                  {todayRecord?.checkIn ?? "—"}
-                </p>
-              </div>
-
-              {/* Check Out tile */}
-              <div className={`flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 transition-all ${
-                checkedOut
-                  ? "border-slate-500 bg-slate-100"
-                  : "border-dashed border-gray-300 bg-gray-50"
-              }`}>
-                <XCircle size={22} className={checkedOut ? "text-slate-600" : "text-gray-300"} />
-                <p className="text-xs text-gray-500 mt-1">Check Out</p>
-                <p className={`text-sm sm:text-base font-bold mt-0.5 ${checkedOut ? "text-slate-700" : "text-gray-400"}`}>
-                  {todayRecord?.checkOut ?? "—"}
-                </p>
-              </div>
-
-              {/* Status tile */}
-              <div className="flex flex-col items-center justify-center w-32 sm:w-36 h-24 rounded-2xl border-2 border-gray-200 bg-white">
-                <span className="text-xs text-gray-500">Status</span>
-                <span className={`mt-1 px-3 py-1 rounded-full text-xs font-semibold capitalize ${
-                  checkedOut  ? "bg-slate-100 text-slate-700"  :
-                  checkedIn   ? "bg-green-100 text-green-700"  :
-                  "bg-gray-100 text-gray-500"
-                }`}>
-                  {checkedOut ? "Completed" : checkedIn ? "Present" : "Not Checked In"}
+      {canCheckInOut && (
+        <Card className="border-2 border-gray-100">
+          <CardHeader className="pb-3 px-3 sm:px-6">
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm sm:text-base">
+              <div className="flex items-center gap-2">
+                <Clock size={17} />
+                <span className="font-semibold">Today's Attendance</span>
+                <span className="text-gray-400 font-normal text-xs hidden sm:inline">
+                  — {format(new Date(), "MMMM d, yyyy")}
                 </span>
-                {checkedIn && !checkedOut && (
-                  <span className="text-[10px] text-gray-400 mt-1">Working...</span>
-                )}
               </div>
-            </div>
+              <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-xl border self-start sm:self-auto">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                <LiveClock />
+              </div>
+            </CardTitle>
+            <p className="text-xs text-gray-400 sm:hidden mt-0.5">
+              {format(new Date(), "MMMM d, yyyy")}
+            </p>
+            {(isHR || isAdmin) && (
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                  isAdmin ? "bg-slate-700 text-white" : "bg-slate-500 text-white"
+                }`}>
+                  {isAdmin ? "Admin" : "HR"}
+                </span>
+                <span className="text-[11px] text-gray-500">
+                  — Your attendance is tracked too
+                </span>
+              </div>
+            )}
+          </CardHeader>
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 flex-wrap items-center self-center">
+          <CardContent className="px-3 sm:px-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${
+                  checkedIn ? "border-slate-400 bg-slate-50" : "border-dashed border-gray-300 bg-gray-50"
+                }`}>
+                  <CheckCircle2 size={20} className={checkedIn ? "text-slate-600" : "text-gray-300"} />
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Check In</p>
+                  <p className={`text-xs sm:text-sm font-bold mt-0.5 ${checkedIn ? "text-slate-700" : "text-gray-400"}`}>
+                    {todayRecord?.checkIn ?? "—"}
+                  </p>
+                </div>
+                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${
+                  checkedOut ? "border-slate-500 bg-slate-100" : "border-dashed border-gray-300 bg-gray-50"
+                }`}>
+                  <XCircle size={20} className={checkedOut ? "text-slate-600" : "text-gray-300"} />
+                  <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Check Out</p>
+                  <p className={`text-xs sm:text-sm font-bold mt-0.5 ${checkedOut ? "text-slate-700" : "text-gray-400"}`}>
+                    {todayRecord?.checkOut ?? "—"}
+                  </p>
+                </div>
+                <div className="flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 border-gray-200 bg-white">
+                  <span className="text-[10px] sm:text-xs text-gray-500">Status</span>
+                  <span className={`mt-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold capitalize ${
+                    checkedOut ? "bg-slate-100 text-slate-700" :
+                    checkedIn  ? "bg-green-100 text-green-700" :
+                    "bg-gray-100 text-gray-500"
+                  }`}>
+                    {checkedOut ? "Completed" : checkedIn ? "Present" : "Not In"}
+                  </span>
+                  {checkedIn && !checkedOut && (
+                    <span className="text-[10px] text-gray-400 mt-1">Working…</span>
+                  )}
+                </div>
+              </div>
 
-              {/* CHECK IN button — only shown if not checked in yet */}
-              {!checkedIn && (
-                <Button
-                  onClick={handleCheckIn}
-                  disabled={checkInLoading}
-                  className="bg-slate-700 text-white hover:bg-slate-800 h-11 px-6"
-                >
-                  {checkInLoading
-                    ? <span className="flex items-center gap-2">
-                        <RefreshCw size={15} className="animate-spin" /> Checking in...
-                      </span>
-                    : <span className="flex items-center gap-2">
-                        <LogIn size={16} /> Check In
-                      </span>
-                  }
-                </Button>
-              )}
-
-              {/* CHECK OUT button — only shown if checked in but not checked out */}
-              {checkedIn && !checkedOut && (
-                <Button
-                  onClick={handleCheckOut}
-                  disabled={checkOutLoading}
-                  className="bg-slate-600 text-white hover:bg-slate-700 h-11 px-6"
-                >
-                  {checkOutLoading
-                    ? <span className="flex items-center gap-2">
-                        <RefreshCw size={15} className="animate-spin" /> Checking out...
-                      </span>
-                    : <span className="flex items-center gap-2">
-                        <LogOut size={16} /> Check Out
-                      </span>
-                  }
-                </Button>
-              )}
-
-              {/* Day Complete — shown when both check-in and check-out are done */}
-              {checkedIn && checkedOut && (
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl">
-                  <CheckCircle2 size={18} className="text-slate-600" />
+              {checkedIn && todayRecord?.tagline && (
+                <div className="flex items-start gap-2 bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl">
+                  <span className="text-slate-400 text-sm mt-0.5">💬</span>
                   <div>
-                    <p className="text-sm font-semibold text-slate-700">Day Complete</p>
-                    <p className="text-xs text-slate-500">
-                      {todayRecord.checkIn} → {todayRecord.checkOut}
-                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium">Today's tagline</p>
+                    <p className="text-xs sm:text-sm text-slate-700 italic">"{todayRecord.tagline}"</p>
                   </div>
                 </div>
               )}
 
-              {/* Manual refresh button */}
-              <button
-                onClick={loadTodayOnly}
-                className="p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors"
-                title="Refresh attendance"
-              >
-                <RefreshCw size={16} />
-              </button>
+              <div className="flex gap-2 sm:gap-3 flex-wrap items-center">
+                {!checkedIn && (
+                  <Button
+                    onClick={() => setTaglineDialogOpen(true)}
+                    disabled={checkInLoading}
+                    className="bg-slate-700 text-white hover:bg-slate-800 h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm"
+                  >
+                    {checkInLoading
+                      ? <span className="flex items-center gap-1.5"><RefreshCw size={13} className="animate-spin" /> Checking in…</span>
+                      : <span className="flex items-center gap-1.5"><LogIn size={14} /> Check In</span>
+                    }
+                  </Button>
+                )}
+                {checkedIn && !checkedOut && (
+                  <Button
+                    onClick={handleCheckOut}
+                    disabled={checkOutLoading}
+                    className="bg-slate-600 text-white hover:bg-slate-700 h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm"
+                  >
+                    {checkOutLoading
+                      ? <span className="flex items-center gap-1.5"><RefreshCw size={13} className="animate-spin" /> Checking out…</span>
+                      : <span className="flex items-center gap-1.5"><LogOut size={14} /> Check Out</span>
+                    }
+                  </Button>
+                )}
+                {checkedIn && checkedOut && (
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 sm:px-4 py-2 rounded-xl">
+                    <CheckCircle2 size={16} className="text-slate-600 flex-shrink-0" />
+                    <div>
+                      <p className="text-xs sm:text-sm font-semibold text-slate-700">Day Complete</p>
+                      <p className="text-[10px] sm:text-xs text-slate-500">
+                        {todayRecord.checkIn} → {todayRecord.checkOut}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <button
+                  onClick={loadTodayOnly}
+                  className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors"
+                  title="Refresh attendance"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+
+              <p className="text-[10px] sm:text-[11px] text-gray-400 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block flex-shrink-0" />
+                Status refreshes every 30 seconds
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── TAGLINE DIALOG ── */}
+      <Dialog open={taglineDialogOpen} onOpenChange={open => {
+        setTaglineDialogOpen(open);
+        if (!open) setCheckInTagline("");
+      }}>
+        <DialogContent className="max-w-sm mx-3 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <LogIn size={17} /> Check In
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-1">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setTaglineDialogOpen(false); setCheckInTagline(""); }} className="flex-1 text-sm">
+                Cancel
+              </Button>
+              <Button onClick={() => handleCheckIn(checkInTagline)} disabled={checkInLoading} className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-sm">
+                {checkInLoading
+                  ? <span className="flex items-center gap-1.5 justify-center"><RefreshCw size={13} className="animate-spin" /> Checking in…</span>
+                  : <span className="flex items-center gap-1.5 justify-center"><LogIn size={14} /> Check In</span>
+                }
+              </Button>
             </div>
           </div>
-
-          <p className="text-[11px] text-gray-400 mt-4 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block" />
-            Status refreshes every 30 seconds
-          </p>
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
 
       {/* ══════════════════════════════════════════════════════
-          ADMIN: TODAY'S OVERVIEW
+          ADMIN / HR: USER ATTENDANCE CONTROL PANEL
+          Full user list with direct Check In / Check Out
           ══════════════════════════════════════════════════════ */}
-      {(isAdmin || isHR || isManager) && allAttendance.length > 0 && (
-        <Card>
-          <CardHeader className="flex flex-row items-center gap-2">
-            <Users size={18} />
-            <CardTitle className="text-sm sm:text-base">Today's Attendance Overview</CardTitle>
+      {canAdminControl && (
+        <Card className="border-2 border-slate-200">
+          <CardHeader className="px-3 sm:px-6 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <ShieldCheck size={17} className="text-slate-600" />
+                <span>User Attendance Control</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ml-1 ${
+                  isAdmin ? "bg-slate-700 text-white" : "bg-slate-500 text-white"
+                }`}>
+                  {isAdmin ? "Admin" : "HR"}
+                </span>
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                  {allUsersList.length} users
+                </span>
+                <button
+                  onClick={async () => {
+                    try {
+                      const [usersRes, allRes] = await Promise.all([
+                        attendanceApi.getUsersList(),
+                        attendanceApi.getAll(),
+                      ]);
+                      setAllUsersList(usersRes.users || []);
+                      setAllAttendance(allRes.records || []);
+                      showToast("Refreshed");
+                    } catch {}
+                  }}
+                  className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-500 hover:text-gray-700 transition-colors"
+                  title="Refresh"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+            </div>
+
+            {/* Search bar */}
+            <div className="relative mt-2">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name, role, department…"
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-xs sm:text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-300 bg-gray-50"
+              />
+            </div>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {allAttendance
-              .filter(r => r.date === format(new Date(), "yyyy-MM-dd") && !r.isManual)
-              .map(r => (
-                <div key={r._id} className="border rounded-lg p-4 bg-white shadow-sm">
-                  <div className="flex justify-between items-start">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-sm truncate">{r.userId?.name}</p>
-                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
+
+          <CardContent className="px-3 sm:px-6">
+            {filteredUsers.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                <Users size={32} className="mb-2 opacity-30" />
+                <p className="text-sm">No users found.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {filteredUsers.map(u => {
+                  const todayRec     = getUserTodayRecord(u._id);
+                  const isIn         = !!todayRec?.checkIn;
+                  const isOut        = !!todayRec?.checkOut;
+                  const isProcessing = adminActionLoading === u._id;
+
+                  return (
+                    <div
+                      key={u._id}
+                      className={`border rounded-xl p-3 sm:p-4 bg-white shadow-sm hover:shadow-md transition-all ${
+                        isOut  ? "border-slate-200 bg-slate-50/50" :
+                        isIn   ? "border-green-200 bg-green-50/30" :
+                        "border-gray-200"
+                      }`}
+                    >
+                      {/* User info row */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-gray-800 truncate">{u.name}</p>
+                          <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                            {u.department || u.designation || u.email || "—"}
+                          </p>
+                        </div>
+                        <Badge className={`${roleColor(u.role)} text-[10px] flex-shrink-0`}>
+                          {u.role}
+                        </Badge>
+                      </div>
+
+                      {/* Times row */}
+                      <div className="flex gap-3 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
-                          <LogIn size={11} className="text-slate-500" />
-                          {r.checkIn ?? "—"}
+                          <LogIn size={10} className={isIn ? "text-green-600" : "text-gray-300"} />
+                          {isIn ? todayRec.checkIn : "—"}
                         </span>
                         <span className="flex items-center gap-1">
-                          <LogOut size={11} className="text-slate-400" />
-                          {r.checkOut ?? "—"}
+                          <LogOut size={10} className={isOut ? "text-slate-500" : "text-gray-300"} />
+                          {isOut ? todayRec.checkOut : "—"}
+                        </span>
+                      </div>
+
+                      {/* Tagline if present */}
+                      {todayRec?.tagline && (
+                        <p className="text-[11px] text-slate-500 italic mb-2 truncate">
+                          💬 "{todayRec.tagline}"
+                        </p>
+                      )}
+
+                      {/* Status badge */}
+                      <div className="mb-3">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          isOut ? "bg-slate-100 text-slate-600" :
+                          isIn  ? "bg-green-100 text-green-700" :
+                          "bg-red-50 text-red-500"
+                        }`}>
+                          {isOut ? "✓ Completed" : isIn ? "● Working" : "✕ Not In"}
+                        </span>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 flex-wrap">
+                        {!isIn && (
+                          <Button
+                            size="sm"
+                            disabled={isProcessing}
+                            onClick={() => {
+                              setAdminCheckInUser(u);
+                              setAdminCheckInDialog(true);
+                            }}
+                            className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-xs h-8 px-3 min-w-0"
+                          >
+                            {isProcessing
+                              ? <RefreshCw size={11} className="animate-spin mx-auto" />
+                              : <span className="flex items-center gap-1 justify-center">
+                                  <LogIn size={11} /> Check In
+                                </span>
+                            }
+                          </Button>
+                        )}
+                        {isIn && !isOut && (
+                          <Button
+                            size="sm"
+                            disabled={isProcessing}
+                            onClick={() => handleAdminCheckOut(u)}
+                            className="flex-1 bg-slate-500 hover:bg-slate-600 text-white text-xs h-8 px-3 min-w-0"
+                          >
+                            {isProcessing
+                              ? <RefreshCw size={11} className="animate-spin mx-auto" />
+                              : <span className="flex items-center gap-1 justify-center">
+                                  <LogOut size={11} /> Check Out
+                                </span>
+                            }
+                          </Button>
+                        )}
+                        {isOut && (
+                          <span className="flex-1 flex items-center justify-center gap-1 text-[11px] text-slate-500 bg-slate-100 rounded-lg h-8 px-2">
+                            <CheckCircle2 size={11} /> Done
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Admin Check-In for User Dialog ── */}
+      <Dialog open={adminCheckInDialog} onOpenChange={open => {
+        setAdminCheckInDialog(open);
+        if (!open) { setAdminCheckInTagline(""); setAdminCheckInUser(null); }
+      }}>
+        <DialogContent className="max-w-sm mx-3 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck size={17} /> Check In for {adminCheckInUser?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {adminCheckInUser && (
+            <div className="space-y-4 mt-1">
+              <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg p-3">
+                <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm flex-shrink-0">
+                  {adminCheckInUser.name?.[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-sm truncate">{adminCheckInUser.name}</p>
+                  <p className="text-xs text-gray-500">{adminCheckInUser.role} · {adminCheckInUser.department || adminCheckInUser.email}</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                  Tagline <span className="font-normal text-gray-400">(optional)</span>
+                </label>
+                <input
+                  className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  placeholder='e.g. "WFH today" or "Client meeting"'
+                  value={adminCheckInTagline}
+                  onChange={e => setAdminCheckInTagline(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAdminCheckIn(adminCheckInUser, adminCheckInTagline)}
+                  autoFocus
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Tagline will be stored in MongoDB and shown in the overview.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { setAdminCheckInDialog(false); setAdminCheckInTagline(""); }} className="flex-1 text-sm">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => handleAdminCheckIn(adminCheckInUser, adminCheckInTagline)}
+                  disabled={adminActionLoading === adminCheckInUser._id}
+                  className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-sm"
+                >
+                  {adminActionLoading === adminCheckInUser._id
+                    ? <span className="flex items-center gap-1.5 justify-center"><RefreshCw size={13} className="animate-spin" /> Checking in…</span>
+                    : <span className="flex items-center gap-1.5 justify-center"><LogIn size={14} /> Check In</span>
+                  }
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════════════════════════════════════════════════════
+          ADMIN / HR / MANAGER: TODAY'S OVERVIEW
+          ══════════════════════════════════════════════════════ */}
+      {(isAdmin || isHR || isManager) && (
+        <Card>
+          <CardHeader className="px-3 sm:px-6 pb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <Users size={17} />
+                Today's Attendance Overview
+              </CardTitle>
+              <div className="flex rounded-lg border overflow-hidden text-xs self-start sm:self-auto">
+                <button
+                  onClick={() => setOverviewTab("present")}
+                  className={`px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5 ${
+                    overviewTab === "present" ? "bg-green-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <CheckCircle2 size={12} />
+                  Present
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    overviewTab === "present" ? "bg-green-500 text-white" : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {todayPresentRecords.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setOverviewTab("absent")}
+                  className={`px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5 ${
+                    overviewTab === "absent" ? "bg-red-500 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <UserX size={12} />
+                  Absent
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    overviewTab === "absent" ? "bg-red-400 text-white" : "bg-gray-100 text-gray-600"
+                  }`}>
+                    {absentUsers.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6">
+            {overviewTab === "present" ? (
+              todayPresentRecords.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                  <Users size={32} className="mb-2 opacity-30" />
+                  <p className="text-sm">No one has checked in yet today.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {todayPresentRecords.map(r => (
+                    <div key={r._id} className="border rounded-xl p-3 sm:p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm truncate">{r.userId?.name}</p>
+                          <div className="flex gap-2 sm:gap-3 mt-1.5 text-xs text-gray-500 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <LogIn size={10} className="text-slate-500 flex-shrink-0" />
+                              {r.checkIn ?? "—"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <LogOut size={10} className="text-slate-400 flex-shrink-0" />
+                              {r.checkOut ?? "—"}
+                            </span>
+                          </div>
+                          {r.tagline && (
+                            <p className="text-[11px] text-slate-500 italic mt-1.5 truncate">
+                              💬 "{r.tagline}"
+                            </p>
+                          )}
+                        </div>
+                        <Badge className={`${roleColor(r.userId?.role)} text-[10px] flex-shrink-0`}>
+                          {r.userId?.role}
+                        </Badge>
+                      </div>
+                      <div className="mt-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          r.checkOut ? "bg-slate-100 text-slate-700" :
+                          r.checkIn  ? "bg-green-100 text-green-700" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>
+                          {r.checkOut ? "✓ Completed" : r.checkIn ? "● Working" : "Absent"}
                         </span>
                       </div>
                     </div>
-                    <Badge className={roleColor(r.userId?.role)}>{r.userId?.role}</Badge>
-                  </div>
-                  <div className="mt-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      r.checkOut ? "bg-slate-100 text-slate-700" :
-                      r.checkIn  ? "bg-green-100 text-green-700" :
-                      "bg-gray-100 text-gray-500"
-                    }`}>
-                      {r.checkOut ? "✓ Completed" : r.checkIn ? "● Working" : "Absent"}
-                    </span>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              )
+            ) : (
+              absentUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-gray-400">
+                  <CheckCircle2 size={32} className="mb-2 opacity-30 text-green-400" />
+                  <p className="text-sm">Everyone has checked in today! 🎉</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {absentUsers.map((u: any) => (
+                    <div key={u._id} className="border border-red-100 rounded-xl p-3 sm:p-4 bg-red-50/40 hover:bg-red-50 transition-colors">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-gray-800 truncate">{u.name}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">{u.department || u.designation || "—"}</p>
+                        </div>
+                        <Badge className={`${roleColor(u.role)} text-[10px] flex-shrink-0`}>
+                          {u.role}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">
+                          ✕ Absent Today
+                        </span>
+                        {/* Quick check-in from absent list (Admin/HR only) */}
+                        {canAdminControl && (
+                          <button
+                            onClick={() => {
+                              setAdminCheckInUser(u);
+                              setAdminCheckInDialog(true);
+                            }}
+                            className="text-[10px] flex items-center gap-1 text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-lg transition-colors font-medium"
+                          >
+                            <LogIn size={10} /> Check In
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
           </CardContent>
         </Card>
       )}
@@ -869,10 +1315,10 @@ export function AttendanceModule() {
           ══════════════════════════════════════════════════════ */}
       {(isAdmin || isManager) && (
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+          <CardHeader className="px-3 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                <Calendar size={18} /> Attendance Report
+                <Calendar size={17} /> Attendance Report
               </CardTitle>
 
               {isAdmin && (
@@ -881,12 +1327,12 @@ export function AttendanceModule() {
                   if (!open) setManualAttendance(initManualAttendance);
                 }}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="flex items-center gap-2 text-sm border-dashed border-gray-400 hover:border-gray-600">
-                      <PlusCircle size={15} /> Add Previous Entry
+                    <Button variant="outline" className="flex items-center gap-2 text-xs sm:text-sm border-dashed border-gray-400 hover:border-gray-600 self-start sm:self-auto">
+                      <PlusCircle size={14} /> Add Previous Entry
                     </Button>
                   </DialogTrigger>
 
-                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto mx-3 sm:mx-auto">
                     <DialogHeader>
                       <DialogTitle>Manual Attendance Entry</DialogTitle>
                     </DialogHeader>
@@ -981,6 +1427,18 @@ export function AttendanceModule() {
                           </div>
                         </div>
                       </div>
+                      <div>
+                        <label className="text-xs font-semibold text-gray-700 mb-1 block">
+                          Tagline
+                          <span className="font-normal text-gray-400 ml-1">(optional)</span>
+                        </label>
+                        <input
+                          className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                          placeholder='e.g. "Working from home due to travel"'
+                          value={manualAttendance.tagline}
+                          onChange={e => setMA("tagline", e.target.value)}
+                        />
+                      </div>
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
                         ℹ️ This entry will be <strong>saved to MongoDB</strong> and included in all reports.
                       </div>
@@ -990,9 +1448,7 @@ export function AttendanceModule() {
                         className="w-full bg-slate-800 hover:bg-slate-900 text-white"
                       >
                         {manualSubmitting
-                          ? <span className="flex items-center gap-2 justify-center">
-                              <RefreshCw size={14} className="animate-spin" /> Saving...
-                            </span>
+                          ? <span className="flex items-center gap-2 justify-center"><RefreshCw size={14} className="animate-spin" /> Saving…</span>
                           : "Save to Database"
                         }
                       </Button>
@@ -1003,16 +1459,16 @@ export function AttendanceModule() {
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 px-3 sm:px-6">
             {isAdmin && manualDbRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                <div className="bg-slate-50 px-3 sm:px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
                   <span className="text-xs font-semibold text-slate-700">
                     🗄️ MongoDB Manual Records ({manualDbRecords.length} total)
                   </span>
                 </div>
                 <div className="overflow-x-auto max-h-52 overflow-y-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[600px]">
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -1020,6 +1476,7 @@ export function AttendanceModule() {
                         <th className="text-left px-3 py-2 font-medium">Date</th>
                         <th className="text-left px-3 py-2 font-medium">Check In</th>
                         <th className="text-left px-3 py-2 font-medium">Check Out</th>
+                        <th className="text-left px-3 py-2 font-medium">Tagline</th>
                         <th className="text-left px-3 py-2 font-medium">Added By</th>
                         <th className="text-left px-3 py-2 font-medium">Delete</th>
                       </tr>
@@ -1036,12 +1493,12 @@ export function AttendanceModule() {
                           <td className="px-3 py-2">{r.date}</td>
                           <td className="px-3 py-2">{r.checkIn}</td>
                           <td className="px-3 py-2">{r.checkOut || "—"}</td>
+                          <td className="px-3 py-2 text-gray-500 italic max-w-[120px] truncate" title={r.tagline}>
+                            {r.tagline || "—"}
+                          </td>
                           <td className="px-3 py-2 text-gray-500">{r.enteredByName}</td>
                           <td className="px-3 py-2">
-                            <button
-                              onClick={() => deleteManualRecord(r._id)}
-                              className="text-red-500 hover:text-red-700 font-medium"
-                            >✕</button>
+                            <button onClick={() => deleteManualRecord(r._id)} className="text-red-500 hover:text-red-700 font-medium">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -1077,26 +1534,22 @@ export function AttendanceModule() {
             </div>
 
             {reportFilter === "custom" && (
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap gap-3 sm:gap-4">
+                <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
                   <label className="text-xs text-gray-500">From</label>
-                  <input type="date" value={reportStart} onChange={e => setReportStart(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={reportStart} onChange={e => setReportStart(e.target.value)} className="border p-2 rounded text-sm w-full" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
                   <label className="text-xs text-gray-500">To</label>
-                  <input type="date" value={reportEnd} onChange={e => setReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={reportEnd} onChange={e => setReportEnd(e.target.value)} className="border p-2 rounded text-sm w-full" />
                 </div>
               </div>
             )}
 
-            <div className="flex flex-wrap gap-4">
-              <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap gap-3 sm:gap-4">
+              <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
                 <label className="text-xs text-gray-500">Filter by Role</label>
-                <select
-                  value={reportRole}
-                  onChange={e => setReportRole(e.target.value)}
-                  className="border p-2 rounded text-sm bg-white min-w-[140px]"
-                >
+                <select value={reportRole} onChange={e => setReportRole(e.target.value)} className="border p-2 rounded text-sm bg-white w-full">
                   <option value="all">All Roles</option>
                   <option value="employee">Employee</option>
                   <option value="manager">Manager</option>
@@ -1104,24 +1557,18 @@ export function AttendanceModule() {
                   {isAdmin && <option value="admin">Admin</option>}
                 </select>
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
                 <label className="text-xs text-gray-500">Filter by Name</label>
-                <input
-                  type="text"
-                  placeholder="Search name…"
-                  value={reportName}
-                  onChange={e => setReportName(e.target.value)}
-                  className="border p-2 rounded text-sm min-w-[180px]"
-                />
+                <input type="text" placeholder="Search name…" value={reportName} onChange={e => setReportName(e.target.value)} className="border p-2 rounded text-sm w-full" />
               </div>
             </div>
 
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {previewCount} record{previewCount !== 1 ? "s" : ""} matched
               </span>
-              <Button onClick={downloadAttendance} className="bg-slate-800 text-white flex items-center gap-2">
-                <Download size={16} /> Download CSV
+              <Button onClick={downloadAttendance} className="bg-slate-800 text-white flex items-center gap-2 text-xs sm:text-sm">
+                <Download size={14} /> Download CSV
               </Button>
             </div>
           </CardContent>
@@ -1133,10 +1580,10 @@ export function AttendanceModule() {
           ══════════════════════════════════════════════════════ */}
       {(isAdmin || isHR || isManager) && (
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+          <CardHeader className="px-3 sm:px-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
-                <Download size={18} /> Leave Report
+                <Download size={17} /> Leave Report
               </CardTitle>
 
               {isAdmin && (
@@ -1145,36 +1592,23 @@ export function AttendanceModule() {
                   if (!open) setManualLeave(initManualLeave);
                 }}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="flex items-center gap-2 text-sm border-dashed border-gray-400 hover:border-gray-600">
-                      <PlusCircle size={15} /> Add Previous Leave Entry
+                    <Button variant="outline" className="flex items-center gap-2 text-xs sm:text-sm border-dashed border-gray-400 hover:border-gray-600 self-start sm:self-auto">
+                      <PlusCircle size={14} /> Add Previous Leave Entry
                     </Button>
                   </DialogTrigger>
 
-                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto mx-3 sm:mx-auto">
                     <DialogHeader>
                       <DialogTitle>Manual Leave Entry</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 mt-2">
                       <div>
-                        <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                          Employee Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          className="border p-2 rounded w-full text-sm"
-                          placeholder="Enter employee name"
-                          value={manualLeave.employeeName}
-                          onChange={e => setML("employeeName", e.target.value)}
-                        />
+                        <label className="text-xs font-semibold text-gray-700 mb-1 block">Employee Name <span className="text-red-500">*</span></label>
+                        <input className="border p-2 rounded w-full text-sm" placeholder="Enter employee name" value={manualLeave.employeeName} onChange={e => setML("employeeName", e.target.value)} />
                       </div>
                       <div>
-                        <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                          Leave Type <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          className="border p-2 rounded w-full text-sm bg-white"
-                          value={manualLeave.type}
-                          onChange={e => setML("type", e.target.value)}
-                        >
+                        <label className="text-xs font-semibold text-gray-700 mb-1 block">Leave Type <span className="text-red-500">*</span></label>
+                        <select className="border p-2 rounded w-full text-sm bg-white" value={manualLeave.type} onChange={e => setML("type", e.target.value)}>
                           <option value="">— Select type —</option>
                           <option value="Casual Leave">Casual Leave</option>
                           <option value="Sick Leave">Sick Leave</option>
@@ -1203,20 +1637,12 @@ export function AttendanceModule() {
                       </div>
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                            Start Date <span className="text-red-500">*</span>
-                          </label>
-                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
-                            className="border p-2 rounded w-full text-sm"
-                            value={manualLeave.startDate} onChange={e => setML("startDate", e.target.value)} />
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">Start Date <span className="text-red-500">*</span></label>
+                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")} className="border p-2 rounded w-full text-sm" value={manualLeave.startDate} onChange={e => setML("startDate", e.target.value)} />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                            End Date <span className="text-red-500">*</span>
-                          </label>
-                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")}
-                            className="border p-2 rounded w-full text-sm"
-                            value={manualLeave.endDate} onChange={e => setML("endDate", e.target.value)} />
+                          <label className="text-xs font-semibold text-gray-700 mb-1 block">End Date <span className="text-red-500">*</span></label>
+                          <input type="date" max={format(new Date(Date.now() - 86400000), "yyyy-MM-dd")} className="border p-2 rounded w-full text-sm" value={manualLeave.endDate} onChange={e => setML("endDate", e.target.value)} />
                         </div>
                       </div>
                       {manualLeave.startDate && manualLeave.endDate && manualLeave.startDate <= manualLeave.endDate && (
@@ -1225,11 +1651,8 @@ export function AttendanceModule() {
                         </p>
                       )}
                       <div>
-                        <label className="text-xs font-semibold text-gray-700 mb-1 block">
-                          Reason <span className="text-red-500">*</span>
-                        </label>
-                        <input className="border p-2 rounded w-full text-sm" placeholder="Brief reason"
-                          value={manualLeave.reason} onChange={e => setML("reason", e.target.value)} />
+                        <label className="text-xs font-semibold text-gray-700 mb-1 block">Reason <span className="text-red-500">*</span></label>
+                        <input className="border p-2 rounded w-full text-sm" placeholder="Brief reason" value={manualLeave.reason} onChange={e => setML("reason", e.target.value)} />
                       </div>
                       <Button onClick={submitManualLeave} className="w-full bg-slate-800 hover:bg-slate-900 text-white">
                         Save Leave Entry
@@ -1241,19 +1664,17 @@ export function AttendanceModule() {
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 px-3 sm:px-6">
             {isAdmin && manualLeaveRecords.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                <div className="bg-slate-50 px-3 sm:px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
                   <span className="text-xs font-semibold text-slate-700">
                     📋 Manually Added Leave Records ({manualLeaveRecords.length})
                   </span>
-                  <button onClick={() => setManualLeaveRecords([])} className="text-[11px] text-red-500 hover:text-red-700 font-medium">
-                    Clear All
-                  </button>
+                  <button onClick={() => setManualLeaveRecords([])} className="text-[11px] text-red-500 hover:text-red-700 font-medium">Clear All</button>
                 </div>
                 <div className="overflow-x-auto max-h-52 overflow-y-auto">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-xs min-w-[500px]">
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="text-left px-3 py-2 font-medium">Name</th>
@@ -1279,8 +1700,7 @@ export function AttendanceModule() {
                             </span>
                           </td>
                           <td className="px-3 py-2">
-                            <button onClick={() => setManualLeaveRecords(prev => prev.filter(x => x.id !== l.id))}
-                              className="text-red-500 hover:text-red-700 font-medium">✕</button>
+                            <button onClick={() => setManualLeaveRecords(prev => prev.filter(x => x.id !== l.id))} className="text-red-500 hover:text-red-700 font-medium">✕</button>
                           </td>
                         </tr>
                       ))}
@@ -1316,24 +1736,24 @@ export function AttendanceModule() {
             </div>
 
             {leaveReportFilter === "custom" && (
-              <div className="flex flex-wrap gap-4">
-                <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap gap-3 sm:gap-4">
+                <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
                   <label className="text-xs text-gray-500">From</label>
-                  <input type="date" value={leaveReportStart} onChange={e => setLeaveReportStart(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={leaveReportStart} onChange={e => setLeaveReportStart(e.target.value)} className="border p-2 rounded text-sm w-full" />
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
                   <label className="text-xs text-gray-500">To</label>
-                  <input type="date" value={leaveReportEnd} onChange={e => setLeaveReportEnd(e.target.value)} className="border p-2 rounded text-sm" />
+                  <input type="date" value={leaveReportEnd} onChange={e => setLeaveReportEnd(e.target.value)} className="border p-2 rounded text-sm w-full" />
                 </div>
               </div>
             )}
 
-            <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
                 {leavePreviewCount} record{leavePreviewCount !== 1 ? "s" : ""} matched
               </span>
-              <Button onClick={downloadLeaveReport} className="bg-slate-800 text-white flex items-center gap-2">
-                <Download size={16} /> Download Leave CSV
+              <Button onClick={downloadLeaveReport} className="bg-slate-800 text-white flex items-center gap-2 text-xs sm:text-sm">
+                <Download size={14} /> Download Leave CSV
               </Button>
             </div>
           </CardContent>
@@ -1347,11 +1767,11 @@ export function AttendanceModule() {
         <div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-slate-700 text-white hover:bg-slate-800 w-fit">
+              <Button className="bg-slate-700 text-white hover:bg-slate-800 w-fit text-sm">
                 + Request Leave
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto mx-3 sm:mx-auto">
               <DialogHeader>
                 <DialogTitle>Submit Leave Request</DialogTitle>
               </DialogHeader>
@@ -1369,22 +1789,12 @@ export function AttendanceModule() {
               <div className="space-y-4 mt-2">
                 {isEmployee && (
                   <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-slate-50">
-                    <input
-                      type="checkbox"
-                      id="emergency"
-                      checked={form.isEmergency}
-                      onChange={e => setF("isEmergency", e.target.checked)}
-                      className="w-4 h-4"
-                    />
-                    <label htmlFor="emergency" className="font-medium text-sm text-slate-700 cursor-pointer">
-                      🚨 Emergency Leave
-                    </label>
+                    <input type="checkbox" id="emergency" checked={form.isEmergency} onChange={e => setF("isEmergency", e.target.checked)} className="w-4 h-4" />
+                    <label htmlFor="emergency" className="font-medium text-sm text-slate-700 cursor-pointer">🚨 Emergency Leave</label>
                   </div>
                 )}
                 <div>
-                  <label className="text-xs font-medium text-gray-600 mb-1 block">
-                    Leave Type <span className="text-red-500">*</span>
-                  </label>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">Leave Type <span className="text-red-500">*</span></label>
                   <select className="border p-2 rounded w-full text-sm bg-white" value={form.type} onChange={e => setF("type", e.target.value)}>
                     <option value="">— Select type —</option>
                     <option value="Casual Leave">Casual Leave</option>
@@ -1441,37 +1851,37 @@ export function AttendanceModule() {
           LEAVE TABLE
           ══════════════════════════════════════════════════════ */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between flex-wrap gap-3">
+        <CardHeader className="px-3 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-sm sm:text-base">
               {isAdmin   ? "Leave Requests"              :
                isManager ? "Pending Approvals (Manager)" :
                isHR      ? "Pending Approvals (HR)"      :
                "My Leave Requests"}
             </CardTitle>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               {isAdmin && (
-                <div className="flex rounded-lg border overflow-hidden text-sm">
+                <div className="flex rounded-lg border overflow-hidden text-xs sm:text-sm">
                   <button
                     onClick={() => setActiveTab("pending")}
-                    className={`px-3 py-1.5 font-medium transition-colors ${
+                    className={`px-2.5 sm:px-3 py-1.5 font-medium transition-colors ${
                       activeTab === "pending" ? "bg-slate-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                   >
                     Pending
                     {(leaves?.pending ?? []).length > 0 && (
-                      <span className="ml-1.5 bg-slate-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                      <span className="ml-1 sm:ml-1.5 bg-slate-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
                         {leaves.pending.length}
                       </span>
                     )}
                   </button>
                   <button
                     onClick={() => setActiveTab("all")}
-                    className={`px-3 py-1.5 font-medium transition-colors ${
+                    className={`px-2.5 sm:px-3 py-1.5 font-medium transition-colors ${
                       activeTab === "all" ? "bg-slate-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"
                     }`}
                   >
-                    All Requests
+                    All
                   </button>
                 </div>
               )}
@@ -1482,11 +1892,11 @@ export function AttendanceModule() {
           </div>
         </CardHeader>
 
-        <CardContent className="overflow-x-auto">
+        <CardContent className="overflow-x-auto px-0 sm:px-6">
           {displayLeaves.length === 0 ? (
             <p className="text-center text-gray-400 text-sm py-10">No leave requests found.</p>
           ) : (
-            <Table className="min-w-[750px] text-sm">
+            <Table className="min-w-[700px] text-xs sm:text-sm">
               <TableHeader>
                 <TableRow className="bg-gray-50">
                   {(isManager || isHR || isAdmin) && <TableHead className="font-semibold">Employee</TableHead>}
@@ -1527,25 +1937,23 @@ export function AttendanceModule() {
                         {l.priority}
                       </span>
                     </TableCell>
-                    <TableCell className="min-w-[180px]">
+                    <TableCell className="min-w-[160px] sm:min-w-[180px]">
                       <Badge className={statusColor(l.status)}>{statusLabel(l.status)}</Badge>
                       {(isEmployee || (isAdmin && activeTab === "all")) && (
                         <FlowTracker leave={l} />
                       )}
                     </TableCell>
-                    <TableCell className="max-w-[160px] truncate" title={l.reason}>
+                    <TableCell className="max-w-[120px] sm:max-w-[160px] truncate" title={l.reason}>
                       {l.reason}
                     </TableCell>
                     {(isManager || isHR || isAdmin) && (
                       <TableCell>
                         {canActOnLeave(l) ? (
-                          <div className="flex gap-2 flex-wrap">
-                            <Button size="sm" className="bg-slate-700 hover:bg-slate-800 text-white"
-                              onClick={() => approveLeave(l._id)}>
+                          <div className="flex gap-1.5 sm:gap-2 flex-wrap">
+                            <Button size="sm" className="bg-slate-700 hover:bg-slate-800 text-white text-xs h-7 sm:h-8 px-2 sm:px-3" onClick={() => approveLeave(l._id)}>
                               Approve
                             </Button>
-                            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white"
-                              onClick={() => rejectLeave(l._id)}>
+                            <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white text-xs h-7 sm:h-8 px-2 sm:px-3" onClick={() => rejectLeave(l._id)}>
                               Reject
                             </Button>
                           </div>
