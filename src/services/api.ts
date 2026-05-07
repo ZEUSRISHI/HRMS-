@@ -115,7 +115,6 @@ export const authApi = {
     return data;
   },
 
-  /* ── Google Login ── */
   googleLogin: async (email: string) => {
     const data = await apiFetch("/auth/google-login", {
       method: "POST",
@@ -203,12 +202,34 @@ export const dashboardApi = {
    ATTENDANCE API
    ============================================================ */
 export const attendanceApi = {
-  checkIn:     () => apiFetch("/attendance/checkin",  { method: "POST" }),
-  checkOut:    () => apiFetch("/attendance/checkout", { method: "POST" }),
+  checkIn: (body?: { tagline?: string }) =>
+    apiFetch("/attendance/checkin", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  checkOut: () => apiFetch("/attendance/checkout", { method: "POST" }),
   getToday:    () => apiFetch("/attendance/today"),
   getMy:       () => apiFetch("/attendance/my"),
   getAll:      () => apiFetch("/attendance/all"),
   getTodayAll: () => apiFetch("/attendance/today-all"),
+
+  /* ── NEW: Admin / HR check users list ── */
+  getUsersList: () => apiFetch("/attendance/users-list"),
+
+  /* ── NEW: Admin / HR direct check-in for any user ── */
+  adminCheckIn: (userId: string, body?: { tagline?: string }) =>
+    apiFetch(`/attendance/admin-checkin/${userId}`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  /* ── NEW: Admin / HR direct check-out for any user ── */
+  adminCheckOut: (userId: string) =>
+    apiFetch(`/attendance/admin-checkout/${userId}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
 
   addManual: (data: {
     employeeName: string;
@@ -217,6 +238,7 @@ export const attendanceApi = {
     endDate:      string;
     checkIn:      string;
     checkOut?:    string;
+    tagline?:     string;
   }) =>
     apiFetch("/attendance/manual", {
       method: "POST",
