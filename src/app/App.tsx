@@ -18,10 +18,23 @@ import SignupPage from "./components/SignUpPage";
 import ForgotPassword from "./components/ForgotPassword";
 
 import {
-  LayoutDashboard, Clock, CheckSquare, FileText, Calendar,
-  DollarSign, Building2, FolderKanban, UserPlus, Timer,
-  BarChart3, Briefcase, Users as UsersIcon, TicketCheck,
-  UserCog, LucideIcon,
+  LayoutDashboard,
+  Clock,
+  CheckSquare,
+  FileText,
+  Calendar,
+  DollarSign,
+  Building2,
+  FolderKanban,
+  UserPlus,
+  Timer,
+  BarChart3,
+  Briefcase,
+  Users as UsersIcon,
+  TicketCheck,
+  UserCog,
+  MessageSquare,
+  LucideIcon,
 } from "lucide-react";
 
 // ✅ REPLACED: Dashboard + EmployeeDashboard → RoleBasedDashboard
@@ -40,6 +53,9 @@ import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
 import { UserManagementModule } from "./components/modules/UserManagementModule";
+
+// ✅ NEW IMPORT
+import { MessagingModule } from "./components/modules/MessagingModule";
 
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
@@ -68,6 +84,7 @@ export type ModuleType =
   | "hr-attendance-leave"
   | "helpdesk"
   | "user-management"
+  | "messaging" // ✅ NEW MODULE TYPE
   | "profile"
   | "account";
 
@@ -80,7 +97,8 @@ interface MenuItem {
 
 function AppContent() {
   const { currentUser } = useAuth();
-  const [activeModule, setActiveModule] = useState<ModuleType>("dashboard");
+  const [activeModule, setActiveModule] =
+    useState<ModuleType>("dashboard");
 
   if (!currentUser) return null;
 
@@ -89,47 +107,170 @@ function AppContent() {
   }
 
   const menuItems: MenuItem[] = [
-    { id: "dashboard",            name: "Dashboard",          icon: LayoutDashboard, roles: ["admin","manager","employee","hr"] },
-    { id: "attendance",           name: "Attendance",         icon: Clock,           roles: ["admin","manager","employee","hr"] },
-    { id: "tasks",                name: "Tasks",              icon: CheckSquare,     roles: ["admin","manager","employee","hr"] },
-    { id: "employee-task-status", name: "My Task Status",     icon: CheckSquare,     roles: ["employee"] },
-    { id: "status",               name: "Daily Status",       icon: FileText,        roles: ["admin","manager","employee","hr"] },
-    { id: "calendar",             name: "Calendar",           icon: Calendar,        roles: ["admin","manager","employee","hr"] },
-    { id: "payroll",              name: "Payroll",            icon: DollarSign,      roles: ["admin","hr"] },
-    { id: "clients",              name: "Clients",            icon: Building2,       roles: ["admin","manager"] },
-    { id: "projects",             name: "Projects",           icon: FolderKanban,    roles: ["admin","manager","employee"] },
-    { id: "onboarding",           name: "Onboarding",         icon: UserPlus,        roles: ["admin","hr"] },
-    { id: "time-tracking",        name: "Time Tracking",      icon: Timer,           roles: ["admin","manager","employee"] },
-    { id: "analytics",            name: "Analytics",          icon: BarChart3,       roles: ["admin","manager"] },
-    { id: "workforce-overview",   name: "Workforce",          icon: Briefcase,       roles: ["admin","manager","hr"] },
-    { id: "hr-employees",         name: "Employee Records",   icon: UsersIcon,       roles: ["hr"] },
-    { id: "hr-attendance-leave",  name: "Attendance & Leave", icon: Clock,           roles: ["hr"] },
-    { id: "helpdesk",             name: "Helpdesk",           icon: TicketCheck,     roles: ["admin","manager","employee","hr"] },
-    { id: "user-management",      name: "User Management",    icon: UserCog,         roles: ["admin"] },
+    {
+      id: "dashboard",
+      name: "Dashboard",
+      icon: LayoutDashboard,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "attendance",
+      name: "Attendance",
+      icon: Clock,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "tasks",
+      name: "Tasks",
+      icon: CheckSquare,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "employee-task-status",
+      name: "My Task Status",
+      icon: CheckSquare,
+      roles: ["employee"],
+    },
+    {
+      id: "status",
+      name: "Daily Status",
+      icon: FileText,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "calendar",
+      name: "Calendar",
+      icon: Calendar,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "payroll",
+      name: "Payroll",
+      icon: DollarSign,
+      roles: ["admin", "hr"],
+    },
+    {
+      id: "clients",
+      name: "Clients",
+      icon: Building2,
+      roles: ["admin", "manager"],
+    },
+    {
+      id: "projects",
+      name: "Projects",
+      icon: FolderKanban,
+      roles: ["admin", "manager", "employee"],
+    },
+    {
+      id: "onboarding",
+      name: "Onboarding",
+      icon: UserPlus,
+      roles: ["admin", "hr"],
+    },
+    {
+      id: "time-tracking",
+      name: "Time Tracking",
+      icon: Timer,
+      roles: ["admin", "manager", "employee"],
+    },
+    {
+      id: "analytics",
+      name: "Analytics",
+      icon: BarChart3,
+      roles: ["admin", "manager"],
+    },
+    {
+      id: "workforce-overview",
+      name: "Workforce",
+      icon: Briefcase,
+      roles: ["admin", "manager", "hr"],
+    },
+    {
+      id: "hr-employees",
+      name: "Employee Records",
+      icon: UsersIcon,
+      roles: ["hr"],
+    },
+    {
+      id: "hr-attendance-leave",
+      name: "Attendance & Leave",
+      icon: Clock,
+      roles: ["hr"],
+    },
+    {
+      id: "helpdesk",
+      name: "Helpdesk",
+      icon: TicketCheck,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
+      id: "user-management",
+      name: "User Management",
+      icon: UserCog,
+      roles: ["admin"],
+    },
+
+    // ✅ NEW MESSAGING MENU
+    {
+      id: "messaging",
+      name: "Messages",
+      icon: MessageSquare,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
   ];
 
-  const visibleMenuItems = menuItems.filter(item =>
+  const visibleMenuItems = menuItems.filter((item) =>
     item.roles.includes(currentUser.role)
   );
 
   const renderModule = () => {
     switch (activeModule) {
-      // ✅ Single case — RoleBasedDashboard picks the right view internally
-      case "dashboard":            return <RoleBasedDashboard />;
+      // ✅ Dashboard
+      case "dashboard":
+        return <RoleBasedDashboard />;
 
-      case "attendance":           return <AttendanceModule />;
-      case "tasks":                return <TaskManagement />;
-      case "employee-task-status": return <EmployeeTaskStatusModule />;
-      case "status":               return <DailyStatusModule />;
-      case "calendar":             return <CalendarModule />;
-      case "payroll":              return <PayrollModule />;
-      case "clients":              return <ClientManagement />;
-      case "projects":             return <ProjectManagement />;
-      case "onboarding":           return <OnboardingModule />;
-      case "time-tracking":        return <TimeTracking />;
-      case "analytics":            return <AnalyticsReports />;
-      case "helpdesk":             return <HelpdeskModule />;
-      case "user-management":      return <UserManagementModule />;
+      case "attendance":
+        return <AttendanceModule />;
+
+      case "tasks":
+        return <TaskManagement />;
+
+      case "employee-task-status":
+        return <EmployeeTaskStatusModule />;
+
+      case "status":
+        return <DailyStatusModule />;
+
+      case "calendar":
+        return <CalendarModule />;
+
+      case "payroll":
+        return <PayrollModule />;
+
+      case "clients":
+        return <ClientManagement />;
+
+      case "projects":
+        return <ProjectManagement />;
+
+      case "onboarding":
+        return <OnboardingModule />;
+
+      case "time-tracking":
+        return <TimeTracking />;
+
+      case "analytics":
+        return <AnalyticsReports />;
+
+      case "helpdesk":
+        return <HelpdeskModule />;
+
+      case "user-management":
+        return <UserManagementModule />;
+
+      // ✅ NEW MESSAGING MODULE
+      case "messaging":
+        return <MessagingModule />;
 
       case "workforce-overview":
         return (
@@ -140,10 +281,17 @@ function AppContent() {
           </div>
         );
 
-      case "hr-employees":         return <EmployeeRecordsModule />;
-      case "hr-attendance-leave":  return <AttendanceLeaveModule />;
-      case "profile":              return <ProfilePage />;
-      case "account":              return <AccountPage />;
+      case "hr-employees":
+        return <EmployeeRecordsModule />;
+
+      case "hr-attendance-leave":
+        return <AttendanceLeaveModule />;
+
+      case "profile":
+        return <ProfilePage />;
+
+      case "account":
+        return <AccountPage />;
 
       default:
         return <RoleBasedDashboard />;
@@ -164,11 +312,24 @@ function AppContent() {
 
 function AppWrapper() {
   const { isAuthenticated } = useAuth();
-  const [view, setView] = useState<"login" | "signup" | "forgot">("login");
+
+  const [view, setView] = useState<
+    "login" | "signup" | "forgot"
+  >("login");
 
   if (!isAuthenticated) {
-    if (view === "signup")  return <SignupPage onBack={() => setView("login")} />;
-    if (view === "forgot")  return <ForgotPassword onBack={() => setView("login")} />;
+    if (view === "signup") {
+      return (
+        <SignupPage onBack={() => setView("login")} />
+      );
+    }
+
+    if (view === "forgot") {
+      return (
+        <ForgotPassword onBack={() => setView("login")} />
+      );
+    }
+
     return (
       <LoginPage
         onReset={() => setView("forgot")}
