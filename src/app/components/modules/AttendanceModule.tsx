@@ -13,12 +13,14 @@ import { useAuth } from "../../contexts/AuthContext";
 import { attendanceApi, leaveApi } from "@/services/api";
 import {
   format, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
-  subWeeks, subMonths, eachDayOfInterval, parseISO,
+  subWeeks, subMonths, eachDayOfInterval, parseISO, getDaysInMonth,
+  startOfDay,
 } from "date-fns";
 import {
   LogIn, LogOut, Download, Users, Calendar, Clock,
   PlusCircle, RefreshCw, CheckCircle2, XCircle, UserX,
-  AlertCircle, Search, ShieldCheck,
+  AlertCircle, Search, ShieldCheck, ChevronLeft, ChevronRight,
+  TrendingUp,
 } from "lucide-react";
 
 /* ============================================================
@@ -107,6 +109,303 @@ const LiveClock = () => {
 };
 
 /* ============================================================
+   MONTHLY ATTENDANCE CALENDAR COMPONENT
+   ============================================================ */
+interface MonthlyAttendanceProps {
+  records: any[];       // attendance records from MongoDB
+  leaveRecords: any[];  // leave records
+  userId?: string;      // if provided, filter by this user (admin view)
+  userName?: string;
+  isAdminView?: boolean;
+}
+
+const MonthlyAttendanceCalendar = ({
+  records,
+  leaveRecords,
+  userId,
+  userName,
+  isAdminView = false,
+}: MonthlyAttendanceProps) => {
+  const [viewMonth, setViewMonth] = useState(new Date());
+  const [hoveredDay, setHoveredDay] = useState<number | null>(null);
+
+  const year         = viewMonth.getFullYear();
+  const month        = viewMonth.getMonth();
+  const daysInMonth  = getDaysInMonth(viewMonth);
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const todayStr     = format(new Date(), "yyyy-MM-dd");
+
+  const dayData = Array.from({ length: daysInMonth }, (_, i) => {
+    const day     = i + 1;
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const date    = new Date(year, month, day);
+    const isToday   = dateStr === todayStr;
+    const isFuture  = dateStr > todayStr;
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+    const attRecord = records.find(r => {
+      if (r.isManual) return false;
+      if (userId) return r.date === dateStr && r.userId?._id === userId;
+      return r.date === dateStr;
+    });
+
+    const leaveRecord = leaveRecords.find(l => {
+      const approved = l.status === "approved" || l.status === "emergency_approved";
+      if (!approved) return false;
+      if (userId) return dateStr >= l.startDate && dateStr <= l.endDate && l.userId?._id === userId;
+      return dateStr >= l.startDate && dateStr <= l.endDate;
+    });
+
+    let status: "present" | "absent" | "leave" | "weekend" | "future" | "partial" = "absent";
+    if (isFuture)         status = "future";
+    else if (isWeekend)   status = "weekend";
+    else if (leaveRecord) status = "leave";
+    else if (attRecord?.checkIn && attRecord?.checkOut) status = "present";
+    else if (attRecord?.checkIn && !attRecord?.checkOut) status = "partial";
+    else status = "absent";
+
+    return {
+      day, dateStr, isToday, isFuture, isWeekend, status,
+      checkIn:   attRecord?.checkIn  ?? null,
+      checkOut:  attRecord?.checkOut ?? null,
+      tagline:   attRecord?.tagline  ?? null,
+      leaveType: leaveRecord?.type   ?? null,
+    };
+  });
+
+  const workingDays = dayData.filter(d => !d.isWeekend && !d.isFuture).length;
+  const presentDays = dayData.filter(d => d.status === "present" || d.status === "partial").length;
+  const absentDays  = dayData.filter(d => d.status === "absent").length;
+  const leaveDays   = dayData.filter(d => d.status === "leave").length;
+  const percentage  = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
+
+  const isCurrentMonth =
+    format(viewMonth, "yyyy-MM") === format(new Date(), "yyyy-MM");
+
+  /* Returns bg color class only — text is always dark/black */
+  const cellBg = (status: string) => {
+    switch (status) {
+      case "present": return "bg-slate-200";
+      case "partial":  return "bg-slate-100";
+      case "absent":   return "bg-red-100";
+      case "leave":    return "bg-amber-100";
+      default:         return "bg-transparent";
+    }
+  };
+
+  /* Bottom indicator dot/label */
+  const cellIndicator = (status: string) => {
+    if (status === "present") return <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-slate-500 opacity-70" />;
+    if (status === "partial")  return <span className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-slate-400 opacity-70" />;
+    if (status === "leave")    return <span className="absolute bottom-[2px] left-1/2 -translate-x-1/2 text-[7px] font-bold text-amber-600 leading-none">L</span>;
+    return null;
+  };
+
+  return (
+    <div className="w-full space-y-3">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() =>
+              setViewMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))
+            }
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors"
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <span className="text-sm font-bold text-gray-800 w-[110px] text-center">
+            {format(viewMonth, "MMMM yyyy")}
+          </span>
+          <button
+            onClick={() =>
+              setViewMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))
+            }
+            disabled={isCurrentMonth}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-600 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight size={13} />
+          </button>
+        </div>
+        {userName && (
+          <span className="text-[10px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full font-semibold truncate max-w-[120px]">
+            {userName}
+          </span>
+        )}
+      </div>
+
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-4 gap-2">
+        {[
+          { label: "Rate",    value: `${percentage}%`, bg: "bg-slate-700 text-white"        },
+          { label: "Present", value: presentDays,       bg: "bg-slate-100 text-slate-800"   },
+          { label: "Absent",  value: absentDays,        bg: "bg-red-100 text-red-800"       },
+          { label: "Leave",   value: leaveDays,         bg: "bg-amber-100 text-amber-800"   },
+        ].map(s => (
+          <div key={s.label} className={`${s.bg} rounded-xl py-2 px-1 text-center`}>
+            <p className="text-base font-extrabold leading-none">{s.value}</p>
+            <p className="text-[10px] mt-1 opacity-75 font-medium">{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Progress ── */}
+      <div className="space-y-1">
+        <div className="flex justify-between text-[11px] text-gray-400">
+          <span>{presentDays} of {workingDays} working days</span>
+          <span className="font-bold text-slate-700">{percentage}%</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-slate-600 rounded-full transition-all duration-500"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ── Calendar Grid ── */}
+      <div className="w-full">
+        {/* Weekday headers */}
+        <div className="grid grid-cols-7 mb-1">
+          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d, i) => (
+            <div
+              key={d}
+              className={`text-center py-1 text-[10px] font-bold tracking-wide ${
+                i === 0 || i === 6 ? "text-gray-300" : "text-gray-400"
+              }`}
+            >
+              {/* Show 3-letter on sm+, single letter on xs */}
+              <span className="hidden sm:inline">{d}</span>
+              <span className="sm:hidden">{d[0]}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        <div className="grid grid-cols-7" style={{ gap: "3px" }}>
+          {Array.from({ length: firstWeekday }, (_, i) => (
+            <div key={`e-${i}`} />
+          ))}
+
+          {dayData.map(d => {
+            const isActive  = d.status !== "future" && d.status !== "weekend";
+            const isHovered = hoveredDay === d.day;
+
+            return (
+              <div
+                key={d.day}
+                className="relative"
+                style={{ paddingBottom: "100%" }} /* forces square via padding trick */
+                onMouseEnter={() => isActive && setHoveredDay(d.day)}
+                onMouseLeave={() => setHoveredDay(null)}
+              >
+                {/* Inner absolutely-positioned cell fills the square */}
+                <div
+                  className={`
+                    absolute inset-0 flex flex-col items-center justify-center
+                    rounded-md transition-all duration-100 cursor-default
+                    ${cellBg(d.status)}
+                    ${d.isToday ? "ring-2 ring-slate-800 ring-offset-1" : ""}
+                    ${isActive ? "hover:brightness-95" : ""}
+                  `}
+                >
+                  <span
+                    className={`
+                      font-semibold leading-none tabular-nums
+                      text-[11px] sm:text-[13px]
+                      ${d.status === "future" || d.status === "weekend"
+                        ? "text-gray-300"
+                        : "text-gray-900"   /* BLACK for all active days */
+                      }
+                    `}
+                  >
+                    {d.day}
+                  </span>
+                  {cellIndicator(d.status)}
+                </div>
+
+                {/* Tooltip */}
+                {isHovered && isActive && (
+                  <div
+                    className="absolute z-50 pointer-events-none"
+                    style={{
+                      bottom: "calc(100% + 6px)",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                    }}
+                  >
+                    <div className="bg-gray-900 text-white rounded-xl shadow-2xl px-3 py-2.5 text-left min-w-[130px] whitespace-nowrap">
+                      <p className="text-[12px] font-bold mb-1">
+                        {format(parseISO(d.dateStr), "d MMM yyyy")}
+                      </p>
+                      <p className={`text-[10px] font-semibold capitalize mb-1 ${
+                        d.status === "present" ? "text-emerald-400" :
+                        d.status === "partial"  ? "text-slate-300"   :
+                        d.status === "leave"    ? "text-amber-400"   :
+                        "text-red-400"
+                      }`}>
+                        {d.status === "partial" ? "Partial day" : d.status}
+                      </p>
+                      {d.checkIn  && (
+                        <p className="text-[10px] text-gray-300">
+                          In: <span className="text-green-400 font-mono font-bold">{d.checkIn}</span>
+                        </p>
+                      )}
+                      {d.checkOut && (
+                        <p className="text-[10px] text-gray-300">
+                          Out: <span className="text-red-400 font-mono font-bold">{d.checkOut}</span>
+                        </p>
+                      )}
+                      {d.leaveType && (
+                        <p className="text-[10px] text-amber-400 mt-0.5">{d.leaveType}</p>
+                      )}
+                      {d.tagline && (
+                        <p className="text-[10px] text-gray-400 italic mt-0.5 max-w-[150px] truncate">
+                          "{d.tagline}"
+                        </p>
+                      )}
+                    </div>
+                    {/* Arrow */}
+                    <div
+                      className="flex justify-center"
+                      style={{ marginTop: "-1px" }}
+                    >
+                      <div style={{
+                        width: 0, height: 0,
+                        borderLeft: "5px solid transparent",
+                        borderRight: "5px solid transparent",
+                        borderTop: "5px solid #111827",
+                      }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Legend ── */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1.5 pt-2 border-t border-gray-100">
+        {[
+          { color: "bg-slate-200", label: "Present"  },
+          { color: "bg-slate-100", label: "Partial"  },
+          { color: "bg-red-100",   label: "Absent"   },
+          { color: "bg-amber-100", label: "Leave"    },
+          { color: "bg-gray-100",  label: "Weekend"  },
+        ].map(l => (
+          <div key={l.label} className="flex items-center gap-1.5 text-[11px] text-gray-600">
+            <span className={`w-3 h-3 rounded-sm ${l.color} border border-gray-300 flex-shrink-0`} />
+            <span className="font-medium">{l.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ============================================================
    COMPONENT
    ============================================================ */
 export function AttendanceModule() {
@@ -119,15 +418,17 @@ export function AttendanceModule() {
   const isAdmin    = role === "admin";
 
   const canCheckInOut   = isEmployee || isHR || isAdmin || isManager;
-  const canAdminControl = isAdmin || isHR;  // can directly check-in/out others
+  const canAdminControl = isAdmin || isHR;
 
   /* ── state ── */
   const [todayRecord,      setTodayRecord]      = useState<any>(null);
   const [allAttendance,    setAllAttendance]    = useState<any[]>([]);
+  const [myAttendance,     setMyAttendance]     = useState<any[]>([]);
   const [allUsersList,     setAllUsersList]     = useState<any[]>([]);
   const [todayAllRecords,  setTodayAllRecords]  = useState<any[]>([]);
   const [manualDbRecords,  setManualDbRecords]  = useState<any[]>([]);
   const [leaves,           setLeaves]           = useState<any>(null);
+  const [myLeaves,         setMyLeaves]         = useState<any[]>([]);
   const [loading,          setLoading]          = useState(true);
   const [checkInLoading,   setCheckInLoading]   = useState(false);
   const [checkOutLoading,  setCheckOutLoading]  = useState(false);
@@ -163,10 +464,13 @@ export function AttendanceModule() {
   const [adminCheckInDialog,  setAdminCheckInDialog]  = useState(false);
   const [adminCheckInUser,    setAdminCheckInUser]    = useState<any>(null);
   const [adminCheckInTagline, setAdminCheckInTagline] = useState("");
-  const [adminActionLoading,  setAdminActionLoading]  = useState<string | null>(null);  // userId being processed
+  const [adminActionLoading,  setAdminActionLoading]  = useState<string | null>(null);
 
   // User search for admin panel
   const [userSearch, setUserSearch] = useState("");
+
+  // Monthly calendar — which user to show in admin view
+  const [calendarSelectedUser, setCalendarSelectedUser] = useState<any>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -212,16 +516,17 @@ export function AttendanceModule() {
       const todayRes = await attendanceApi.getToday();
       setTodayRecord(todayRes.record || null);
 
+      // Always load own records for calendar
+      const myRes = await attendanceApi.getMy();
+      setMyAttendance(myRes.records || []);
+
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
       }
 
-      // Admin/HR: load full users list for direct check-in/out
       if (canAdminControl) {
-        const [usersRes] = await Promise.all([
-          attendanceApi.getUsersList(),
-        ]);
+        const usersRes = await attendanceApi.getUsersList();
         setAllUsersList(usersRes.users || []);
       }
 
@@ -231,17 +536,21 @@ export function AttendanceModule() {
       }
 
       if (isAdmin) {
-        const [allRes, pendingRes] = await Promise.all([
+        const [allLeavesRes, pendingRes] = await Promise.all([
           leaveApi.getAll(),
           leaveApi.getPending(),
         ]);
-        setLeaves({ all: allRes.leaves || [], pending: pendingRes.leaves || [] });
+        setLeaves({ all: allLeavesRes.leaves || [], pending: pendingRes.leaves || [] });
+        setMyLeaves(allLeavesRes.leaves || []);
       } else if (isHR || isManager) {
         const pendingRes = await leaveApi.getPending();
         setLeaves(pendingRes.leaves || []);
+        const myLeavesRes = await leaveApi.getMy();
+        setMyLeaves(myLeavesRes.leaves || []);
       } else {
-        const myRes = await leaveApi.getMy();
-        setLeaves(myRes.leaves || []);
+        const myLeavesRes = await leaveApi.getMy();
+        setLeaves(myLeavesRes.leaves || []);
+        setMyLeaves(myLeavesRes.leaves || []);
       }
     } catch (err: any) {
       console.error("loadData error:", err.message);
@@ -270,7 +579,7 @@ export function AttendanceModule() {
     : (leaves ?? []);
 
   /* ============================================================
-     TODAY's OVERVIEW — present vs absent split
+     TODAY's OVERVIEW
      ============================================================ */
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
@@ -285,7 +594,6 @@ export function AttendanceModule() {
     }
   });
 
-  // Also add from allUsersList so absent list is always complete
   allUsersList.forEach(u => {
     if (u._id && !knownUserMap[u._id]) {
       knownUserMap[u._id] = u;
@@ -303,7 +611,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     ADMIN / HR: Direct Check-In for user
+     ADMIN / HR: Direct Check-In / Check-Out
      ============================================================ */
   const handleAdminCheckIn = async (user: any, tagline?: string) => {
     try {
@@ -313,7 +621,6 @@ export function AttendanceModule() {
       setAdminCheckInTagline("");
       setAdminCheckInDialog(false);
       setAdminCheckInUser(null);
-      // Refresh
       const allRes = await attendanceApi.getAll();
       setAllAttendance(allRes.records || []);
     } catch (err: any) {
@@ -323,9 +630,6 @@ export function AttendanceModule() {
     }
   };
 
-  /* ============================================================
-     ADMIN / HR: Direct Check-Out for user
-     ============================================================ */
   const handleAdminCheckOut = async (user: any) => {
     try {
       setAdminActionLoading(user._id);
@@ -341,7 +645,7 @@ export function AttendanceModule() {
   };
 
   /* ============================================================
-     CHECK IN — own
+     CHECK IN / CHECK OUT — own
      ============================================================ */
   const handleCheckIn = async (tagline?: string) => {
     try {
@@ -351,6 +655,9 @@ export function AttendanceModule() {
       showToast("✅ Checked in at " + res.record.checkIn);
       setCheckInTagline("");
       setTaglineDialogOpen(false);
+      // Refresh my attendance for calendar
+      const myRes = await attendanceApi.getMy();
+      setMyAttendance(myRes.records || []);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -362,15 +669,15 @@ export function AttendanceModule() {
     }
   };
 
-  /* ============================================================
-     CHECK OUT — own
-     ============================================================ */
   const handleCheckOut = async () => {
     try {
       setCheckOutLoading(true);
       const res = await attendanceApi.checkOut();
       setTodayRecord(res.record);
       showToast("✅ Checked out at " + res.record.checkOut);
+      // Refresh my attendance for calendar
+      const myRes = await attendanceApi.getMy();
+      setMyAttendance(myRes.records || []);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -948,8 +1255,104 @@ export function AttendanceModule() {
       </Dialog>
 
       {/* ══════════════════════════════════════════════════════
+          MONTHLY ATTENDANCE CALENDAR — OWN (all roles)
+          Data: fetched from MongoDB via attendanceApi.getMy()
+          ══════════════════════════════════════════════════════ */}
+      <Card className="border-2 border-gray-100">
+        <CardHeader className="px-3 sm:px-6 pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+            <Calendar size={17} />
+            <span>My Monthly Attendance</span>
+            <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-normal ml-1">
+              MongoDB
+            </span>
+          </CardTitle>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Day-by-day attendance from your records stored in the database
+          </p>
+        </CardHeader>
+        <CardContent className="px-3 sm:px-6">
+          <MonthlyAttendanceCalendar
+            records={myAttendance}
+            leaveRecords={myLeaves}
+          />
+        </CardContent>
+      </Card>
+
+      {/* ══════════════════════════════════════════════════════
+          ADMIN / HR: TEAM MONTHLY ATTENDANCE CALENDAR
+          Select any user to view their monthly attendance
+          ══════════════════════════════════════════════════════ */}
+      {(isAdmin || isHR) && (
+        <Card className="border-2 border-slate-200">
+          <CardHeader className="px-3 sm:px-6 pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
+              <Users size={17} />
+              <span>Team Monthly Attendance</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                isAdmin ? "bg-slate-700 text-white" : "bg-slate-500 text-white"
+              }`}>
+                {isAdmin ? "Admin" : "HR"}
+              </span>
+            </CardTitle>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Select a team member to view their monthly attendance calendar
+            </p>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6 space-y-4">
+            {/* User selector */}
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
+              {allUsersList.map(u => (
+                <button
+                  key={u._id}
+                  onClick={() => setCalendarSelectedUser(
+                    calendarSelectedUser?._id === u._id ? null : u
+                  )}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                    calendarSelectedUser?._id === u._id
+                      ? "bg-slate-700 text-white border-slate-700"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-slate-400"
+                  }`}
+                >
+                  <span className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center text-slate-700 font-bold text-[10px] flex-shrink-0">
+                    {u.name?.[0]?.toUpperCase()}
+                  </span>
+                  <span className="truncate max-w-[100px]">{u.name}</span>
+                  <span className={`text-[9px] px-1 py-0.5 rounded ${
+                    calendarSelectedUser?._id === u._id
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-100 text-gray-500"
+                  }`}>{u.role}</span>
+                </button>
+              ))}
+              {allUsersList.length === 0 && (
+                <p className="text-xs text-gray-400">No users found</p>
+              )}
+            </div>
+
+            {/* Calendar for selected user */}
+            {calendarSelectedUser ? (
+              <div className="border border-slate-100 rounded-xl p-3 sm:p-4 bg-slate-50/30">
+                <MonthlyAttendanceCalendar
+                  records={allAttendance}
+                  leaveRecords={isAdmin ? (leaves?.all ?? []) : (Array.isArray(leaves) ? leaves : [])}
+                  userId={calendarSelectedUser._id}
+                  userName={calendarSelectedUser.name}
+                  isAdminView
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-10 text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                <Users size={28} className="mb-2 opacity-30" />
+                <p className="text-sm">Select a team member above to view their calendar</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
           ADMIN / HR: USER ATTENDANCE CONTROL PANEL
-          Full user list with direct Check In / Check Out
           ══════════════════════════════════════════════════════ */}
       {canAdminControl && (
         <Card className="border-2 border-slate-200">
@@ -988,7 +1391,6 @@ export function AttendanceModule() {
               </div>
             </div>
 
-            {/* Search bar */}
             <div className="relative mt-2">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -1024,7 +1426,6 @@ export function AttendanceModule() {
                         "border-gray-200"
                       }`}
                     >
-                      {/* User info row */}
                       <div className="flex items-start justify-between gap-2 mb-3">
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-sm text-gray-800 truncate">{u.name}</p>
@@ -1037,7 +1438,6 @@ export function AttendanceModule() {
                         </Badge>
                       </div>
 
-                      {/* Times row */}
                       <div className="flex gap-3 text-xs text-gray-500 mb-3">
                         <span className="flex items-center gap-1">
                           <LogIn size={10} className={isIn ? "text-green-600" : "text-gray-300"} />
@@ -1049,14 +1449,12 @@ export function AttendanceModule() {
                         </span>
                       </div>
 
-                      {/* Tagline if present */}
                       {todayRec?.tagline && (
                         <p className="text-[11px] text-slate-500 italic mb-2 truncate">
                           💬 "{todayRec.tagline}"
                         </p>
                       )}
 
-                      {/* Status badge */}
                       <div className="mb-3">
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
                           isOut ? "bg-slate-100 text-slate-600" :
@@ -1067,7 +1465,6 @@ export function AttendanceModule() {
                         </span>
                       </div>
 
-                      {/* Action buttons */}
                       <div className="flex gap-2 flex-wrap">
                         {!isIn && (
                           <Button
@@ -1151,9 +1548,6 @@ export function AttendanceModule() {
                   onKeyDown={e => e.key === "Enter" && handleAdminCheckIn(adminCheckInUser, adminCheckInTagline)}
                   autoFocus
                 />
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Tagline will be stored in MongoDB and shown in the overview.
-                </p>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => { setAdminCheckInDialog(false); setAdminCheckInTagline(""); }} className="flex-1 text-sm">
@@ -1288,7 +1682,6 @@ export function AttendanceModule() {
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-600">
                           ✕ Absent Today
                         </span>
-                        {/* Quick check-in from absent list (Admin/HR only) */}
                         {canAdminControl && (
                           <button
                             onClick={() => {
