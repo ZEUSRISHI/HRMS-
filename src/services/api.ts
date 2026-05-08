@@ -214,17 +214,14 @@ export const attendanceApi = {
   getAll:      () => apiFetch("/attendance/all"),
   getTodayAll: () => apiFetch("/attendance/today-all"),
 
-  /* ── NEW: Admin / HR check users list ── */
   getUsersList: () => apiFetch("/attendance/users-list"),
 
-  /* ── NEW: Admin / HR direct check-in for any user ── */
   adminCheckIn: (userId: string, body?: { tagline?: string }) =>
     apiFetch(`/attendance/admin-checkin/${userId}`, {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
 
-  /* ── NEW: Admin / HR direct check-out for any user ── */
   adminCheckOut: (userId: string) =>
     apiFetch(`/attendance/admin-checkout/${userId}`, {
       method: "POST",
@@ -746,4 +743,42 @@ export const userManagementApi = {
       method: "PATCH",
       body: JSON.stringify({ newPassword }),
     }),
+};
+
+/* ============================================================
+   MESSAGES API
+   ============================================================ */
+export const messageApi = {
+  getUsers: () =>
+    apiFetch("/messages/users"),
+
+  getConversations: () =>
+    apiFetch("/messages/conversations"),
+
+  startDirect: (targetUserId: string) =>
+    apiFetch("/messages/conversations/direct", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId }),
+    }),
+
+  createGroup: (name: string, participantIds: string[]) =>
+    apiFetch("/messages/conversations/group", {
+      method: "POST",
+      body: JSON.stringify({ name, participantIds }),
+    }),
+
+  getMessages: (conversationId: string, page = 1) =>
+    apiFetch(`/messages/conversations/${conversationId}/messages?page=${page}`),
+
+  sendMessage: (conversationId: string, content: string, type = "text") =>
+    apiFetch(`/messages/conversations/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ content, type }),
+    }),
+
+  deleteMessage: (messageId: string) =>
+    apiFetch(`/messages/messages/${messageId}`, { method: "DELETE" }),
+
+  getUnreadCount: () =>
+    apiFetch("/messages/unread-count"),
 };
