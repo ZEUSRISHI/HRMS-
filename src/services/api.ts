@@ -236,6 +236,7 @@ export const attendanceApi = {
     checkIn:      string;
     checkOut?:    string;
     tagline?:     string;
+    userId?:      string;
   }) =>
     apiFetch("/attendance/manual", {
       method: "POST",
