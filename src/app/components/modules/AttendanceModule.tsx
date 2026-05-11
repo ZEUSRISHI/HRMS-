@@ -1731,10 +1731,6 @@ export function AttendanceModule() {
               )}
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600">
-              ℹ️ Entry saved to <strong>MongoDB</strong>. Visible in attendance calendars, reports, and CSV exports.
-            </div>
-
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => { setAdminDailyEntryOpen(false); setAdminDailyEntry(initAdminDailyEntry); setAdminDailyEditId(null); }} className="flex-1 text-sm">
                 Cancel
