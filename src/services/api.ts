@@ -819,4 +819,7 @@ export const emailCommApi = {
 
   testSmtp: () =>
     apiFetch("/email-comm/test-smtp"),
+
+  debugEnv: () =>
+    apiFetch("/email-comm/debug-env"),
 };
