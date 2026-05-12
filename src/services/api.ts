@@ -783,3 +783,40 @@ export const messageApi = {
   getUnreadCount: () =>
     apiFetch("/messages/unread-count"),
 };
+
+/* ============================================================
+   EMAIL COMMUNICATION API
+   ============================================================ */
+export const emailCommApi = {
+  getDirectory: () =>
+    apiFetch("/email-comm/directory"),
+
+  getLogs: () =>
+    apiFetch("/email-comm/logs"),
+
+  send: (data: {
+    to:        string[];
+    cc?:       string[];
+    subject:   string;
+    body:      string;
+    priority?: "normal" | "medium" | "high";
+  }) =>
+    apiFetch("/email-comm/send", {
+      method: "POST",
+      body:   JSON.stringify(data),
+    }),
+
+  sendToTeam: (data: {
+    roles:     string[];
+    subject:   string;
+    body:      string;
+    priority?: "normal" | "medium" | "high";
+  }) =>
+    apiFetch("/email-comm/send-team", {
+      method: "POST",
+      body:   JSON.stringify(data),
+    }),
+
+  testSmtp: () =>
+    apiFetch("/email-comm/test-smtp"),
+};
