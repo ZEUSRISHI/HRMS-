@@ -34,12 +34,13 @@ import {
   TicketCheck,
   UserCog,
   MessageSquare,
+  Mail, // ✅ added Mail icon
   LucideIcon,
 } from "lucide-react";
 
 // ✅ REPLACED: Dashboard + EmployeeDashboard → RoleBasedDashboard
 import RoleBasedDashboard from "./components/modules/RoleBasedDashboard";
-import { DashboardStats } from "./components/Dashboard"; // keep for workforce-overview
+import { DashboardStats } from "./components/Dashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
 import { DailyStatusModule } from "./components/modules/DailyStatusModule";
@@ -54,8 +55,9 @@ import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusMod
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
 import { UserManagementModule } from "./components/modules/UserManagementModule";
 
-// ✅ NEW IMPORT
+// ✅ NEW IMPORTS
 import { MessagingModule } from "./components/modules/MessagingModule";
+import { EmailCommunicationModule } from "./components/modules/EmailCommunicationModule"; // ✅ ADDED
 
 import EmployeeRecordsModule from "./components/modules/hr/EmployeeRecordsModule";
 import AttendanceLeaveModule from "./components/modules/hr/AttendanceLeaveModule";
@@ -84,7 +86,8 @@ export type ModuleType =
   | "hr-attendance-leave"
   | "helpdesk"
   | "user-management"
-  | "messaging" // ✅ NEW MODULE TYPE
+  | "messaging"
+  | "email-comm" // ✅ ADDED
   | "profile"
   | "account";
 
@@ -209,13 +212,19 @@ function AppContent() {
       icon: UserCog,
       roles: ["admin"],
     },
-
-    // ✅ NEW MESSAGING MENU
     {
       id: "messaging",
       name: "Messages",
       icon: MessageSquare,
       roles: ["admin", "manager", "employee", "hr"],
+    },
+
+    // ✅ EMAIL COMMUNICATION MENU
+    {
+      id: "email-comm",
+      name: "Email Comm",
+      icon: Mail,
+      roles: ["admin", "manager", "hr", "employee"],
     },
   ];
 
@@ -225,7 +234,6 @@ function AppContent() {
 
   const renderModule = () => {
     switch (activeModule) {
-      // ✅ Dashboard
       case "dashboard":
         return <RoleBasedDashboard />;
 
@@ -268,9 +276,12 @@ function AppContent() {
       case "user-management":
         return <UserManagementModule />;
 
-      // ✅ NEW MESSAGING MODULE
       case "messaging":
         return <MessagingModule />;
+
+      // ✅ EMAIL MODULE RENDER
+      case "email-comm":
+        return <EmailCommunicationModule />;
 
       case "workforce-overview":
         return (
@@ -331,9 +342,7 @@ function AppWrapper() {
     }
 
     return (
-      <LoginPage
-        onReset={() => setView("forgot")}
-      />
+      <LoginPage onReset={() => setView("forgot")} />
     );
   }
 
