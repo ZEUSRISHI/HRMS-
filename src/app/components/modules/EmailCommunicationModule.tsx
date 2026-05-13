@@ -1,4 +1,3 @@
-// src/app/components/modules/EmailCommunicationModule.tsx
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { emailCommApi } from "@/services/api";
@@ -6,7 +5,7 @@ import {
   Mail, Send, Users, Search, X, Plus, CheckCheck,
   Info, Loader2, Wifi, WifiOff, Building2,
   Inbox, Clock, RefreshCw, Zap, Shield,
-  TrendingUp, CheckCircle2, XCircle, Sparkles,
+  CheckCircle2, XCircle,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────── */
@@ -37,7 +36,7 @@ const GRADIENTS = [
   "from-emerald-500 to-teal-600","from-orange-500 to-red-500","from-pink-500 to-rose-600",
   "from-indigo-500 to-violet-600","from-teal-500 to-emerald-600",
 ];
-const avatarGrad = (n: string) => GRADIENTS[n.charCodeAt(0) % GRADIENTS.length];
+const avatarGrad  = (n: string) => GRADIENTS[n.charCodeAt(0) % GRADIENTS.length];
 const getInitials = (n: string) => n.split(" ").map(x => x[0]).join("").toUpperCase().slice(0, 2);
 
 /* ─── Avatar ── */
@@ -55,12 +54,10 @@ const RecipTag = ({ name, onRemove }: { name: string; onRemove: () => void }) =>
   <span className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold px-2.5 py-1.5 rounded-xl">
     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
     {name}
-    <button
-      type="button"
+    <button type="button"
       onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
       onClick={onRemove}
-      className="hover:text-red-500 hover:bg-red-50 rounded-lg p-0.5 transition-all ml-0.5"
-    >
+      className="hover:text-red-500 hover:bg-red-50 rounded-lg p-0.5 transition-all ml-0.5">
       <X className="w-2.5 h-2.5" />
     </button>
   </span>
@@ -87,40 +84,26 @@ const StatCard = ({ icon: Icon, label, value, color }: { icon: any; label: strin
 );
 
 /* ─── Subject Input ── */
-const SubjectInput = ({
-  value, onChange, placeholder = "Email subject…"
-}: {
-  value: string; onChange: (v: string) => void; placeholder?: string;
-}) => (
+const SubjectInput = ({ value, onChange, placeholder = "Email subject…" }: { value: string; onChange: (v: string) => void; placeholder?: string }) => (
   <div>
     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
       Subject <span className="text-red-400">*</span>
     </label>
-    <input
-      type="text"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
+    <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
       className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-500/10 transition-all placeholder:font-normal placeholder:text-slate-300 shadow-sm"
     />
   </div>
 );
 
 /* ─── Priority Picker ── */
-const PriPicker = ({
-  value, onChange
-}: {
-  value: Priority; onChange: (p: Priority) => void;
-}) => (
+const PriPicker = ({ value, onChange }: { value: Priority; onChange: (p: Priority) => void }) => (
   <div>
     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Priority</label>
     <div className="grid grid-cols-3 gap-2">
       {(["normal","medium","high"] as Priority[]).map(p => (
         <button key={p} type="button" onClick={() => onChange(p)}
           className={`flex flex-col items-center gap-1.5 py-3.5 rounded-2xl border-2 text-xs font-black transition-all ${
-            value === p
-              ? `${PRI[p].chip} shadow-md scale-[1.02]`
-              : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:bg-slate-50"
+            value === p ? `${PRI[p].chip} shadow-md scale-[1.02]` : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:bg-slate-50"
           }`}>
           <span className="text-lg">{PRI[p].icon}</span>
           <span>{PRI[p].label}</span>
@@ -131,21 +114,13 @@ const PriPicker = ({
 );
 
 /* ─── Message Area ── */
-const MsgArea = ({
-  value, onChange, rows = 8, placeholder = "Write your message here…"
-}: {
-  value: string; onChange: (v: string) => void; rows?: number; placeholder?: string;
-}) => (
+const MsgArea = ({ value, onChange, rows = 8, placeholder = "Write your message here…" }: { value: string; onChange: (v: string) => void; rows?: number; placeholder?: string }) => (
   <div>
     <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
       Message <span className="text-red-400">*</span>
     </label>
     <div className="relative">
-      <textarea
-        rows={rows}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
+      <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         className="w-full bg-white border-2 border-slate-200 rounded-2xl px-4 py-3.5 text-sm text-slate-700 focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-500/10 transition-all placeholder:text-slate-300 resize-none leading-relaxed shadow-sm"
       />
       <span className={`absolute bottom-3 right-3 text-[10px] font-bold px-2 py-1 rounded-lg ${value.length > 0 ? "bg-slate-100 text-slate-500" : "bg-slate-50 text-slate-300"}`}>
@@ -156,9 +131,7 @@ const MsgArea = ({
 );
 
 /* ─── Send Row ── */
-const SendRow = ({
-  onSend, onClear, disabled, label, count, sending
-}: {
+const SendRow = ({ onSend, onClear, disabled, label, count, sending }: {
   onSend: () => void; onClear: () => void; disabled: boolean;
   label: string; count: number; sending: boolean;
 }) => (
@@ -180,9 +153,7 @@ const SendRow = ({
             ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
             : "bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white shadow-slate-300 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
         }`}>
-        {sending
-          ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</>
-          : <><Send className="w-4 h-4" />Send Email</>}
+        {sending ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</> : <><Send className="w-4 h-4" />Send Email</>}
       </button>
     </div>
   </div>
@@ -192,19 +163,15 @@ const SendRow = ({
    RECIPIENT FIELD
 ═══════════════════════════════════════════════════════════ */
 interface RecipFieldProps {
-  label: string;
-  required?: boolean;
-  list: Recipient[];
-  onRemove: (email: string) => void;
-  onAdd: (u: TeamUser) => void;
-  suggestions: TeamUser[];
-  placeholder?: string;
+  label: string; required?: boolean; list: Recipient[];
+  onRemove: (email: string) => void; onAdd: (u: TeamUser) => void;
+  suggestions: TeamUser[]; placeholder?: string;
 }
 
 function RecipField({ label, required, list, onRemove, onAdd, suggestions, placeholder }: RecipFieldProps) {
   const [query, setQuery] = useState("");
   const [open,  setOpen]  = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const ref      = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -223,9 +190,7 @@ function RecipField({ label, required, list, onRemove, onAdd, suggestions, place
   [suggestions, query]);
 
   const handleAdd = useCallback((u: TeamUser) => {
-    onAdd(u);
-    setQuery("");
-    setOpen(false);
+    onAdd(u); setQuery(""); setOpen(false);
     setTimeout(() => inputRef.current?.focus(), 0);
   }, [onAdd]);
 
@@ -234,37 +199,26 @@ function RecipField({ label, required, list, onRemove, onAdd, suggestions, place
       <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">
         {label}{required && <span className="text-red-400 ml-0.5">*</span>}
       </label>
-      <div
-        onClick={() => { setOpen(true); inputRef.current?.focus(); }}
+      <div onClick={() => { setOpen(true); inputRef.current?.focus(); }}
         className={`min-h-[52px] bg-white border-2 rounded-2xl px-3 py-2.5 flex flex-wrap gap-1.5 items-center cursor-text transition-all shadow-sm ${
           open ? "border-slate-400 ring-4 ring-slate-500/10" : "border-slate-200 hover:border-slate-300"
-        }`}
-      >
-        {list.map(r => (
-          <RecipTag key={r.email} name={r.name} onRemove={() => onRemove(r.email)} />
-        ))}
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
+        }`}>
+        {list.map(r => <RecipTag key={r.email} name={r.name} onRemove={() => onRemove(r.email)} />)}
+        <input ref={inputRef} type="text" value={query}
           placeholder={list.length ? "Add more…" : (placeholder || "Search name or email…")}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           className="flex-1 min-w-[140px] outline-none text-sm text-slate-700 placeholder:text-slate-300 bg-transparent font-medium"
         />
       </div>
-
       {open && filtered.length > 0 && (
         <div className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
           <div className="p-2 space-y-0.5">
             {filtered.map(u => (
-              <button
-                key={u._id}
-                type="button"
+              <button key={u._id} type="button"
                 onMouseDown={e => { e.preventDefault(); e.stopPropagation(); }}
                 onClick={() => handleAdd(u)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-all group"
-              >
+                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 rounded-xl text-left transition-all group">
                 <Av name={u.name} size="sm" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
@@ -296,7 +250,7 @@ export function EmailCommunicationModule() {
   /* ── Core state ── */
   const [dir,      setDir]      = useState<TeamUser[]>([]);
   const [loadDir,  setLoadDir]  = useState(true);
-  const [relay,    setRelay]    = useState<"unknown"|"ok"|"error">("unknown");
+  const [relay,    setRelay]    = useState<"unknown"|"checking"|"ok"|"error">("unknown");
   const [toast,    setToast]    = useState<{ msg: string; type: "success"|"error"|"info"|"warning" }|null>(null);
   const [tab,      setTab]      = useState<ComposeTab>("compose");
   const [panel,    setPanel]    = useState<Panel>("compose");
@@ -336,8 +290,9 @@ export function EmailCommunicationModule() {
     finally { setLoadDir(false); }
   };
 
+  /* ── Only fires on button click, NEVER on mount ── */
   const fetchRelay = async () => {
-    setRelay("unknown");
+    setRelay("checking");
     try { await emailCommApi.testSmtp(); setRelay("ok"); }
     catch { setRelay("error"); }
   };
@@ -349,36 +304,24 @@ export function EmailCommunicationModule() {
     finally { setLoadHist(false); }
   };
 
+  /* ── On mount: load directory + history only. NO relay test ── */
   useEffect(() => {
     fetchDir();
-    if (currentUser.role === "admin") { fetchRelay(); fetchHist(); }
+    if (currentUser.role === "admin") fetchHist();
   }, []);
 
   /* ── Suggestion lists ── */
-  const toSuggestions = useMemo(() =>
-    dir.filter(u => !toList.some(r => r.email === u.email)),
-  [dir, toList]);
-
-  const ccSuggestions = useMemo(() =>
-    dir.filter(u => !ccList.some(r => r.email === u.email) && !toList.some(r => r.email === u.email)),
-  [dir, ccList, toList]);
+  const toSuggestions = useMemo(() => dir.filter(u => !toList.some(r => r.email === u.email)), [dir, toList]);
+  const ccSuggestions = useMemo(() => dir.filter(u => !ccList.some(r => r.email === u.email) && !toList.some(r => r.email === u.email)), [dir, ccList, toList]);
 
   /* ── Recipient handlers ── */
-  const addTo = useCallback((u: TeamUser) => {
-    setToList(p => p.some(r => r.email === u.email) ? p : [...p, { name: u.name, email: u.email }]);
-  }, []);
-
-  const addCc = useCallback((u: TeamUser) => {
-    setCcList(p => p.some(r => r.email === u.email) ? p : [...p, { name: u.name, email: u.email }]);
-  }, []);
-
+  const addTo        = useCallback((u: TeamUser) => { setToList(p => p.some(r => r.email === u.email) ? p : [...p, { name: u.name, email: u.email }]); }, []);
+  const addCc        = useCallback((u: TeamUser) => { setCcList(p => p.some(r => r.email === u.email) ? p : [...p, { name: u.name, email: u.email }]); }, []);
   const removeFrom   = useCallback((email: string) => setToList(p => p.filter(r => r.email !== email)), []);
   const removeFromCc = useCallback((email: string) => setCcList(p => p.filter(r => r.email !== email)), []);
 
   /* ── Team preview ── */
-  const preview = useMemo(() =>
-    roles.length ? dir.filter(u => roles.includes(u.role)) : [],
-  [roles, dir]);
+  const preview = useMemo(() => roles.length ? dir.filter(u => roles.includes(u.role)) : [], [roles, dir]);
 
   /* ── Reset ── */
   const resetDirect = () => { setToList([]); setCcList([]); setShowCc(false); setSubj(""); setMsg(""); setPri("normal"); };
@@ -391,12 +334,10 @@ export function EmailCommunicationModule() {
     if (!msg.trim())    return flash("Message body is required", "error");
     setSending(true);
     try {
-      const res = await emailCommApi.send({
-        to: toList.map(r => r.email), cc: ccList.map(r => r.email),
-        subject: subj.trim(), body: msg.trim(), priority: pri,
-      });
+      await emailCommApi.send({ to: toList.map(r => r.email), cc: ccList.map(r => r.email), subject: subj.trim(), body: msg.trim(), priority: pri });
       setHist(p => [{
-        _id: Date.now(), type: "direct", to: toList.map(r => r.email),
+        _id: Date.now(), type: "direct",
+        to: toList.map(r => r.email),
         subject: subj.trim(), body: msg.trim(), priority: pri,
         status: "sent", createdAt: new Date().toISOString(),
         sentBy: { name: currentUser.name },
@@ -469,12 +410,11 @@ export function EmailCommunicationModule() {
           "bg-white border-emerald-200 text-emerald-700"
         }`}>
           <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            toast.type === "error"   ? "bg-red-100" :
-            toast.type === "warning" ? "bg-amber-100" :
-            toast.type === "info"    ? "bg-slate-100" : "bg-emerald-100"
+            toast.type === "error" ? "bg-red-100" : toast.type === "warning" ? "bg-amber-100" :
+            toast.type === "info"  ? "bg-slate-100" : "bg-emerald-100"
           }`}>
-            {toast.type === "error"   ? <XCircle className="w-4 h-4" /> :
-             toast.type === "info"    ? <Info className="w-4 h-4" /> :
+            {toast.type === "error" ? <XCircle className="w-4 h-4" /> :
+             toast.type === "info"  ? <Info className="w-4 h-4" /> :
              <CheckCircle2 className="w-4 h-4" />}
           </div>
           <span className="text-sm font-semibold flex-1">{toast.msg}</span>
@@ -495,9 +435,8 @@ export function EmailCommunicationModule() {
               <h1 className="text-base font-black text-slate-900 leading-tight">Email Communication</h1>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[11px] text-slate-400">via</span>
-                {/* ✅ UPDATED: was "Gmail SMTP" */}
                 <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                  RelayMail API
+                  Brevo API
                 </span>
               </div>
             </div>
@@ -505,21 +444,23 @@ export function EmailCommunicationModule() {
 
           <div className="flex items-center gap-2 flex-shrink-0">
             {currentUser.role === "admin" && (
-              <button
-                onClick={fetchRelay}
+              <button onClick={fetchRelay} title="Click to test Brevo connection"
                 className={`hidden sm:flex items-center gap-2 text-xs px-3 py-2 rounded-xl border font-bold transition-all ${
-                  relay === "ok"      ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-                  relay === "error"   ? "bg-red-50 border-red-200 text-red-600" :
-                  "bg-slate-50 border-slate-200 text-slate-500"
-                }`}
-              >
-                {relay === "ok"    ? <Wifi className="w-3.5 h-3.5" /> :
-                 relay === "error" ? <WifiOff className="w-3.5 h-3.5" /> :
-                 <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {relay === "ok" ? "RelayMail Connected" : relay === "error" ? "RelayMail Error" : "Checking…"}
+                  relay === "ok"       ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                  relay === "error"    ? "bg-red-50 border-red-200 text-red-600" :
+                  relay === "checking" ? "bg-slate-50 border-slate-200 text-slate-500" :
+                  "bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300"
+                }`}>
+                {relay === "ok"       ? <Wifi className="w-3.5 h-3.5" /> :
+                 relay === "error"    ? <WifiOff className="w-3.5 h-3.5" /> :
+                 relay === "checking" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> :
+                 <Wifi className="w-3.5 h-3.5 opacity-40" />}
+                {relay === "ok"       ? "Brevo Connected" :
+                 relay === "error"    ? "Brevo Error" :
+                 relay === "checking" ? "Checking…" :
+                 "Test Brevo"}
               </button>
             )}
-
             <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2">
               <Users className="w-3.5 h-3.5 text-slate-500" />
               <span className="text-xs font-black text-slate-700">{dir.length} members</span>
@@ -533,9 +474,7 @@ export function EmailCommunicationModule() {
             <button key={p} onClick={() => setPanel(p)}
               className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all capitalize ${
                 panel === p ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"
-              }`}>
-              {p}
-            </button>
+              }`}>{p}</button>
           ))}
         </div>
       </header>
@@ -554,9 +493,7 @@ export function EmailCommunicationModule() {
               className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left transition-all ${
                 panel === n.id ? "bg-slate-800 text-white shadow-lg" : "text-slate-600 hover:bg-slate-50"
               }`}>
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                panel === n.id ? "bg-white/20" : "bg-slate-100"
-              }`}>
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${panel === n.id ? "bg-white/20" : "bg-slate-100"}`}>
                 <n.icon className={`w-4 h-4 ${panel === n.id ? "text-white" : "text-slate-500"}`} />
               </div>
               <div className="flex-1 min-w-0">
@@ -564,9 +501,7 @@ export function EmailCommunicationModule() {
                 <p className={`text-[10px] truncate mt-0.5 ${panel === n.id ? "text-white/60" : "text-slate-400"}`}>{n.sub}</p>
               </div>
               {n.badge > 0 && (
-                <span className={`text-[10px] px-2 py-1 rounded-lg font-black ${panel === n.id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>
-                  {n.badge}
-                </span>
+                <span className={`text-[10px] px-2 py-1 rounded-lg font-black ${panel === n.id ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"}`}>{n.badge}</span>
               )}
             </button>
           ))}
@@ -601,8 +536,7 @@ export function EmailCommunicationModule() {
               </div>
               <div className="bg-white/10 rounded-xl p-2.5 border border-white/10">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Service</p>
-                {/* ✅ UPDATED: was "Gmail SMTP" */}
-                <p className="text-[10px] font-mono text-slate-200 break-all leading-relaxed">RelayMail API</p>
+                <p className="text-[10px] font-mono text-slate-200 break-all leading-relaxed">Brevo API</p>
               </div>
             </div>
           </div>
@@ -614,8 +548,6 @@ export function EmailCommunicationModule() {
           {/* ══ COMPOSE ══ */}
           {panel === "compose" && (
             <div className="flex-1 overflow-hidden flex flex-col">
-
-              {/* Tab bar */}
               <div className="flex-shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 flex gap-0 pt-3">
                 {([
                   { id: "compose", label: "Direct Email",    icon: Mail },
@@ -623,9 +555,7 @@ export function EmailCommunicationModule() {
                 ]).map(t => (
                   <button key={t.id} onClick={() => setTab(t.id as ComposeTab)}
                     className={`flex items-center gap-2 px-5 py-2.5 border-b-2 -mb-px transition-all text-sm font-bold ${
-                      tab === t.id
-                        ? "border-slate-800 text-slate-900"
-                        : "border-transparent text-slate-400 hover:text-slate-600"
+                      tab === t.id ? "border-slate-800 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-600"
                     }`}>
                     <t.icon className="w-4 h-4" />
                     <span className="hidden sm:inline">{t.label}</span>
@@ -638,52 +568,31 @@ export function EmailCommunicationModule() {
               {tab === "compose" && (
                 <div className="flex-1 overflow-y-auto email-scroll">
                   <div className="max-w-2xl mx-auto p-5 sm:p-7 space-y-5">
-
                     <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3">
                       <div className="w-8 h-8 bg-slate-800 rounded-xl flex items-center justify-center flex-shrink-0">
                         <Shield className="w-4 h-4 text-white" />
                       </div>
                       <div>
                         <p className="text-xs font-black text-slate-700">Professional Email</p>
-                        {/* ✅ UPDATED: was "via Gmail" */}
-                        <p className="text-[11px] text-slate-400">Recipients receive a branded Quibo Tech HRMS email via RelayMail</p>
+                        <p className="text-[11px] text-slate-400">Recipients receive a branded Quibo Tech HRMS email via Brevo</p>
                       </div>
                     </div>
 
-                    <RecipField
-                      label="To" required
-                      list={toList}
-                      onRemove={removeFrom}
-                      onAdd={addTo}
-                      suggestions={toSuggestions}
-                    />
+                    <RecipField label="To" required list={toList} onRemove={removeFrom} onAdd={addTo} suggestions={toSuggestions} />
 
                     <button type="button" onClick={() => setShowCc(v => !v)}
                       className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-700 font-bold transition-colors bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl">
                       <Plus className="w-3.5 h-3.5" />{showCc ? "Remove CC" : "Add CC field"}
                     </button>
 
-                    {showCc && (
-                      <RecipField
-                        label="CC"
-                        list={ccList}
-                        onRemove={removeFromCc}
-                        onAdd={addCc}
-                        suggestions={ccSuggestions}
-                      />
-                    )}
+                    {showCc && <RecipField label="CC" list={ccList} onRemove={removeFromCc} onAdd={addCc} suggestions={ccSuggestions} />}
 
                     <SubjectInput value={subj} onChange={setSubj} />
                     <PriPicker value={pri} onChange={setPri} />
                     <MsgArea value={msg} onChange={setMsg} />
-                    <SendRow
-                      onSend={handleSend}
-                      onClear={resetDirect}
+                    <SendRow onSend={handleSend} onClear={resetDirect}
                       disabled={!toList.length || !subj.trim() || !msg.trim()}
-                      count={toList.length}
-                      label="recipient"
-                      sending={sending}
-                    />
+                      count={toList.length} label="recipient" sending={sending} />
                   </div>
                 </div>
               )}
@@ -692,18 +601,16 @@ export function EmailCommunicationModule() {
               {tab === "team" && (
                 <div className="flex-1 overflow-y-auto email-scroll">
                   <div className="max-w-2xl mx-auto p-5 sm:p-7 space-y-5">
-
                     <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-4">
                       <div className="w-8 h-8 bg-slate-800 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
                         <Zap className="w-4 h-4 text-white" />
                       </div>
                       <div>
                         <p className="text-xs font-black text-slate-700 mb-0.5">Team Broadcast</p>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Send to all members of selected roles simultaneously. Each gets a personalised branded email via RelayMail.</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">Send to all members of selected roles simultaneously. Each gets a personalised branded email via Brevo.</p>
                       </div>
                     </div>
 
-                    {/* Role selector */}
                     <div>
                       <label className="block text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3">
                         Target Roles <span className="text-red-400">*</span>
@@ -716,35 +623,26 @@ export function EmailCommunicationModule() {
                             <button key={r} type="button"
                               onClick={() => setRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
                               className={`flex items-center justify-between px-4 py-4 rounded-2xl border-2 font-black transition-all ${
-                                sel
-                                  ? "border-slate-800 bg-slate-800 text-white shadow-lg"
-                                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                sel ? "border-slate-800 bg-slate-800 text-white shadow-lg" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                               }`}>
                               <span className="flex items-center gap-3">
-                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                                  sel ? "border-white bg-white" : "border-slate-300"
-                                }`}>
+                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${sel ? "border-white bg-white" : "border-slate-300"}`}>
                                   {sel && <CheckCheck className="w-3 h-3 text-slate-800" />}
                                 </div>
                                 <span className="text-sm">{ROLE[r]?.label}</span>
                               </span>
-                              <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${
-                                sel ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"
-                              }`}>{cnt}</span>
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-xl ${sel ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"}`}>{cnt}</span>
                             </button>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* Preview */}
                     {preview.length > 0 && (
                       <div className="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-4">
                         <div className="flex items-center gap-2 mb-3">
                           <Users className="w-3.5 h-3.5 text-slate-500" />
-                          <p className="text-xs font-black text-slate-600">
-                            Broadcasting to <span className="text-slate-900">{preview.length} members</span>
-                          </p>
+                          <p className="text-xs font-black text-slate-600">Broadcasting to <span className="text-slate-900">{preview.length} members</span></p>
                         </div>
                         <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto email-scroll">
                           {preview.map(u => (
@@ -759,14 +657,9 @@ export function EmailCommunicationModule() {
                     <SubjectInput value={tSubj} onChange={setTSubj} placeholder="Broadcast subject…" />
                     <PriPicker value={tPri} onChange={setTPri} />
                     <MsgArea value={tMsg} onChange={setTMsg} rows={7} placeholder="Write your broadcast message…" />
-                    <SendRow
-                      onSend={handleTeam}
-                      onClear={resetTeam}
+                    <SendRow onSend={handleTeam} onClear={resetTeam}
                       disabled={!roles.length || !tSubj.trim() || !tMsg.trim() || !preview.length}
-                      count={preview.length}
-                      label="member"
-                      sending={sending}
-                    />
+                      count={preview.length} label="member" sending={sending} />
                   </div>
                 </div>
               )}
@@ -798,7 +691,6 @@ export function EmailCommunicationModule() {
                   </div>
                 )}
               </div>
-
               <div className="flex-1 overflow-y-auto email-scroll p-5 sm:p-7">
                 {loadHist ? (
                   <div className="flex flex-col items-center justify-center py-20">
@@ -820,33 +712,20 @@ export function EmailCommunicationModule() {
                 ) : (
                   <div className="space-y-3 max-w-2xl mx-auto">
                     {hist.map((item: any) => (
-                      <div key={item._id}
-                        className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-300 hover:shadow-md transition-all">
+                      <div key={item._id} className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-300 hover:shadow-md transition-all">
                         <div className="flex items-start gap-4 mb-3">
-                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${
-                            item.type === "team" ? "bg-slate-700" : "bg-slate-800"
-                          }`}>
-                            {item.type === "team"
-                              ? <Zap className="w-5 h-5 text-white" />
-                              : <Mail className="w-5 h-5 text-white" />}
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${item.type === "team" ? "bg-slate-700" : "bg-slate-800"}`}>
+                            {item.type === "team" ? <Zap className="w-5 h-5 text-white" /> : <Mail className="w-5 h-5 text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-start justify-between gap-2 mb-1.5">
                               <p className="font-black text-slate-900 text-sm truncate max-w-[260px]">{item.subject}</p>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <PriBadge p={item.priority as Priority} />
-                                <span className={`text-[10px] px-2 py-1 rounded-xl font-black border ${
-                                  item.type === "team"
-                                    ? "bg-slate-100 text-slate-700 border-slate-200"
-                                    : "bg-slate-50 text-slate-600 border-slate-200"
-                                }`}>
+                                <span className={`text-[10px] px-2 py-1 rounded-xl font-black border ${item.type === "team" ? "bg-slate-100 text-slate-700 border-slate-200" : "bg-slate-50 text-slate-600 border-slate-200"}`}>
                                   {item.type === "team" ? "📢 Broadcast" : "✉️ Direct"}
                                 </span>
-                                <span className={`text-[10px] px-2 py-1 rounded-xl font-black flex items-center gap-1 ${
-                                  item.status === "sent"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                                    : "bg-red-50 text-red-600 border border-red-100"
-                                }`}>
+                                <span className={`text-[10px] px-2 py-1 rounded-xl font-black flex items-center gap-1 ${item.status === "sent" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
                                   {item.status === "sent"
                                     ? <><CheckCheck className="w-2.5 h-2.5" /> Sent</>
                                     : <><X className="w-2.5 h-2.5" /> Failed</>}
@@ -862,21 +741,15 @@ export function EmailCommunicationModule() {
                         </div>
                         {item.body && (
                           <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 mb-3">
-                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                              {item.body.slice(0, 150)}{item.body.length > 150 ? "…" : ""}
-                            </p>
+                            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{item.body.slice(0, 150)}{item.body.length > 150 ? "…" : ""}</p>
                           </div>
                         )}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                             <Clock className="w-3 h-3" />
-                            {new Date(item.createdAt).toLocaleString("en-IN", {
-                              day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"
-                            })}
+                            {new Date(item.createdAt).toLocaleString("en-IN", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" })}
                           </div>
-                          <span className="text-[11px] text-slate-400">
-                            by <strong className="text-slate-600">{item.sentBy?.name || "—"}</strong>
-                          </span>
+                          <span className="text-[11px] text-slate-400">by <strong className="text-slate-600">{item.sentBy?.name || "—"}</strong></span>
                         </div>
                       </div>
                     ))}
@@ -897,20 +770,16 @@ export function EmailCommunicationModule() {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                    <input type="text" placeholder="Search name, email, department…"
-                      value={dq} onChange={e => setDq(e.target.value)}
+                    <input type="text" placeholder="Search name, email, department…" value={dq} onChange={e => setDq(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 text-sm bg-white border border-slate-200 rounded-2xl focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-500/10 transition-all placeholder:text-slate-300 font-medium" />
                   </div>
                   <select value={drole} onChange={e => setDrole(e.target.value)}
                     className="border border-slate-200 rounded-2xl px-4 py-3 text-sm bg-white focus:outline-none focus:border-slate-400 transition-all font-bold text-slate-600">
                     <option value="all">All Roles</option>
-                    {["admin","manager","hr","employee"].map(r => (
-                      <option key={r} value={r}>{ROLE[r].label}</option>
-                    ))}
+                    {["admin","manager","hr","employee"].map(r => <option key={r} value={r}>{ROLE[r].label}</option>)}
                   </select>
                 </div>
               </div>
-
               <div className="flex-1 overflow-y-auto email-scroll p-5 sm:p-7">
                 {loadDir ? (
                   <div className="flex flex-col items-center justify-center py-20">
@@ -936,8 +805,7 @@ export function EmailCommunicationModule() {
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                           {g.users.map(u => (
-                            <div key={u._id}
-                              className="group flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 hover:shadow-md transition-all">
+                            <div key={u._id} className="group flex items-center gap-3 p-4 bg-white border border-slate-200 rounded-2xl hover:border-slate-300 hover:shadow-md transition-all">
                               <Av name={u.name} size="md" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-black text-slate-900 truncate">{u.name}</p>
@@ -970,4 +838,5 @@ export function EmailCommunicationModule() {
     </div>
   );
 }
+
 export default EmailCommunicationModule;
