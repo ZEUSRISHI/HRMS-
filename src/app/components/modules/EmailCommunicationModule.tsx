@@ -189,7 +189,7 @@ const SendRow = ({
 );
 
 /* ═══════════════════════════════════════════════════════════
-   RECIPIENT FIELD — isolated to prevent parent re-render focus loss
+   RECIPIENT FIELD
 ═══════════════════════════════════════════════════════════ */
 interface RecipFieldProps {
   label: string;
@@ -296,7 +296,7 @@ export function EmailCommunicationModule() {
   /* ── Core state ── */
   const [dir,      setDir]      = useState<TeamUser[]>([]);
   const [loadDir,  setLoadDir]  = useState(true);
-  const [smtp,     setSmtp]     = useState<"unknown"|"ok"|"error">("unknown");
+  const [relay,    setRelay]    = useState<"unknown"|"ok"|"error">("unknown");
   const [toast,    setToast]    = useState<{ msg: string; type: "success"|"error"|"info"|"warning" }|null>(null);
   const [tab,      setTab]      = useState<ComposeTab>("compose");
   const [panel,    setPanel]    = useState<Panel>("compose");
@@ -336,10 +336,10 @@ export function EmailCommunicationModule() {
     finally { setLoadDir(false); }
   };
 
-  const fetchSmtp = async () => {
-    setSmtp("unknown");
-    try { await emailCommApi.testSmtp(); setSmtp("ok"); }
-    catch { setSmtp("error"); }
+  const fetchRelay = async () => {
+    setRelay("unknown");
+    try { await emailCommApi.testSmtp(); setRelay("ok"); }
+    catch { setRelay("error"); }
   };
 
   const fetchHist = async () => {
@@ -351,10 +351,10 @@ export function EmailCommunicationModule() {
 
   useEffect(() => {
     fetchDir();
-    if (currentUser.role === "admin") { fetchSmtp(); fetchHist(); }
+    if (currentUser.role === "admin") { fetchRelay(); fetchHist(); }
   }, []);
 
-  /* ── Suggestion lists (memoised) ── */
+  /* ── Suggestion lists ── */
   const toSuggestions = useMemo(() =>
     dir.filter(u => !toList.some(r => r.email === u.email)),
   [dir, toList]);
@@ -485,82 +485,60 @@ export function EmailCommunicationModule() {
       )}
 
       {/* ── HEADER ── */}
-<header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4">
-  <div className="flex items-center justify-between gap-4">
-    <div className="flex items-center gap-4 min-w-0">
-      <div className="w-11 h-11 bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
-        <Mail className="w-5 h-5 text-white" />
-      </div>
-      <div className="min-w-0">
-        <h1 className="text-base font-black text-slate-900 leading-tight">Email Communication</h1>
-        <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-[11px] text-slate-400">via</span>
-          <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-            quibotechnologies@gmail.com
-          </span>
+      <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-11 h-11 bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <Mail className="w-5 h-5 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-base font-black text-slate-900 leading-tight">Email Communication</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[11px] text-slate-400">via</span>
+                {/* ✅ UPDATED: was "Gmail SMTP" */}
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
+                  RelayMail API
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {currentUser.role === "admin" && (
+              <button
+                onClick={fetchRelay}
+                className={`hidden sm:flex items-center gap-2 text-xs px-3 py-2 rounded-xl border font-bold transition-all ${
+                  relay === "ok"      ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
+                  relay === "error"   ? "bg-red-50 border-red-200 text-red-600" :
+                  "bg-slate-50 border-slate-200 text-slate-500"
+                }`}
+              >
+                {relay === "ok"    ? <Wifi className="w-3.5 h-3.5" /> :
+                 relay === "error" ? <WifiOff className="w-3.5 h-3.5" /> :
+                 <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {relay === "ok" ? "RelayMail Connected" : relay === "error" ? "RelayMail Error" : "Checking…"}
+              </button>
+            )}
+
+            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2">
+              <Users className="w-3.5 h-3.5 text-slate-500" />
+              <span className="text-xs font-black text-slate-700">{dir.length} members</span>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
-    <div className="flex items-center gap-2 flex-shrink-0">
-      {currentUser.role === "admin" && (
-  <>
-    {/* Gmail SMTP Test button */}
-    <button
-      onClick={fetchSmtp}
-      className={`hidden sm:flex items-center gap-2 text-xs px-3 py-2 rounded-xl border font-bold transition-all ${
-        smtp === "ok"    ? "bg-emerald-50 border-emerald-200 text-emerald-700" :
-        smtp === "error" ? "bg-red-50 border-red-200 text-red-600" :
-        "bg-slate-50 border-slate-200 text-slate-500"
-      }`}
-    >
-      {smtp === "ok"    ? <Wifi className="w-3.5 h-3.5" /> :
-       smtp === "error" ? <WifiOff className="w-3.5 h-3.5" /> :
-       <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-      {smtp === "ok" ? "Gmail Connected" : smtp === "error" ? "Gmail Error" : "Checking…"}
-    </button>
-
-    {/* Debug button — only on error */}
-    {smtp === "error" && (
-      <button
-        onClick={async () => {
-          try {
-            const d = await emailCommApi.debugEnv();
-            flash(
-              `Gmail: ${d.GMAIL_USER} | Pass: ${d.GMAIL_APP_PASSWORD}`,
-              "info"
-            );
-          } catch {
-            flash("Could not reach debug-env endpoint", "error");
-          }
-        }}
-        className="hidden sm:flex items-center gap-2 text-xs px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 font-bold transition-all"
-      >
-        <Info className="w-3.5 h-3.5" /> Debug
-      </button>
-    )}
-  </>
-)}
-
-      <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-3 py-2">
-        <Users className="w-3.5 h-3.5 text-slate-500" />
-        <span className="text-xs font-black text-slate-700">{dir.length} members</span>
-      </div>
-    </div>
-  </div>
-
-  {/* Mobile nav */}
-  <div className="flex sm:hidden gap-1 mt-3">
-    {(["compose","history","directory"] as Panel[]).map(p => (
-      <button key={p} onClick={() => setPanel(p)}
-        className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all capitalize ${
-          panel === p ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"
-        }`}>
-        {p}
-      </button>
-    ))}
-  </div>
-</header>
+        {/* Mobile nav */}
+        <div className="flex sm:hidden gap-1 mt-3">
+          {(["compose","history","directory"] as Panel[]).map(p => (
+            <button key={p} onClick={() => setPanel(p)}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all capitalize ${
+                panel === p ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"
+              }`}>
+              {p}
+            </button>
+          ))}
+        </div>
+      </header>
 
       {/* ── BODY ── */}
       <div className="flex flex-1 overflow-hidden">
@@ -622,8 +600,9 @@ export function EmailCommunicationModule() {
                 </div>
               </div>
               <div className="bg-white/10 rounded-xl p-2.5 border border-white/10">
-                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">From</p>
-                <p className="text-[10px] font-mono text-slate-200 break-all leading-relaxed">quibotechnologies@gmail.com</p>
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Service</p>
+                {/* ✅ UPDATED: was "Gmail SMTP" */}
+                <p className="text-[10px] font-mono text-slate-200 break-all leading-relaxed">RelayMail API</p>
               </div>
             </div>
           </div>
@@ -666,7 +645,8 @@ export function EmailCommunicationModule() {
                       </div>
                       <div>
                         <p className="text-xs font-black text-slate-700">Professional Email</p>
-                        <p className="text-[11px] text-slate-400">Recipients receive a branded Quibo Tech HRMS email</p>
+                        {/* ✅ UPDATED: was "via Gmail" */}
+                        <p className="text-[11px] text-slate-400">Recipients receive a branded Quibo Tech HRMS email via RelayMail</p>
                       </div>
                     </div>
 
@@ -719,7 +699,7 @@ export function EmailCommunicationModule() {
                       </div>
                       <div>
                         <p className="text-xs font-black text-slate-700 mb-0.5">Team Broadcast</p>
-                        <p className="text-[11px] text-slate-500 leading-relaxed">Send to all members of selected roles simultaneously. Each gets a personalised branded email.</p>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">Send to all members of selected roles simultaneously. Each gets a personalised branded email via RelayMail.</p>
                       </div>
                     </div>
 
