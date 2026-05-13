@@ -817,6 +817,7 @@ export const emailCommApi = {
       body:   JSON.stringify(data),
     }),
 
+  // renamed from testSmtp — hits same backend route, label only changes in UI
   testSmtp: () =>
     apiFetch("/email-comm/test-smtp"),
 
