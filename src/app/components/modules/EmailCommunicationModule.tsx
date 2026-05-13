@@ -291,10 +291,22 @@ export function EmailCommunicationModule() {
   };
 
   /* ── Only fires on button click, NEVER on mount ── */
-  const fetchRelay = async () => {
+    const fetchRelay = async () => {
     setRelay("checking");
-    try { await emailCommApi.testSmtp(); setRelay("ok"); }
-    catch { setRelay("error"); }
+    try {
+      const data = await emailCommApi.testSmtp();
+      // Backend always returns 200 — check success flag
+      if (data && data.success === true) {
+        setRelay("ok");
+      } else {
+        console.warn("Brevo check failed:", data?.message);
+        flash(data?.message || "Brevo connection failed", "error");
+        setRelay("error");
+      }
+    } catch (err: any) {
+      console.warn("Brevo test error:", err?.message);
+      setRelay("error");
+    }
   };
 
   const fetchHist = async () => {
@@ -308,6 +320,7 @@ export function EmailCommunicationModule() {
   useEffect(() => {
     fetchDir();
     if (currentUser.role === "admin") fetchHist();
+    // deliberately NOT calling fetchRelay here
   }, []);
 
   /* ── Suggestion lists ── */
