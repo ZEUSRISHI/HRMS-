@@ -374,9 +374,11 @@ export const taskApi = {
   },
 };
 
-/* ============================================================
-   PROJECT API
-   ============================================================ */
+// ============================================================
+// ADD THESE METHODS to the existing projectApi object in api.ts
+// Replace the entire projectApi section with this:
+// ============================================================
+
 export const projectApi = {
   create: (data: any) =>
     apiFetch("/projects", { method: "POST", body: JSON.stringify(data) }),
@@ -397,9 +399,10 @@ export const projectApi = {
   delete: (id: string) =>
     apiFetch(`/projects/${id}`, { method: "DELETE" }),
 
+  // ── Documents ──────────────────────────────────────────────
   uploadDocument: (
     id: string,
-    data: { name: string; url: string; fileType: string; size: number }
+    data: { name: string; url: string; fileType: string; size: number; category?: string }
   ) =>
     apiFetch(`/projects/${id}/documents`, {
       method: "POST",
@@ -409,6 +412,32 @@ export const projectApi = {
   deleteDocument: (id: string, docId: string) =>
     apiFetch(`/projects/${id}/documents/${docId}`, { method: "DELETE" }),
 
+  // ── Daily Status ───────────────────────────────────────────
+  submitDailyStatus: (
+    id: string,
+    data: {
+      summary: string;
+      hoursWorked?: number;
+      blockers?: string;
+      nextPlan?: string;
+      mood?: "great" | "good" | "neutral" | "struggling";
+    }
+  ) =>
+    apiFetch(`/projects/${id}/daily-status`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteDailyStatus: (id: string, statusId: string) =>
+    apiFetch(`/projects/${id}/daily-status/${statusId}`, { method: "DELETE" }),
+
+  commentDailyStatus: (id: string, statusId: string, comment: string) =>
+    apiFetch(`/projects/${id}/daily-status/${statusId}/comment`, {
+      method: "PATCH",
+      body: JSON.stringify({ comment }),
+    }),
+
+  // ── Work Submissions (legacy) ──────────────────────────────
   submitWork: (id: string, data: { description: string; hoursWorked: number }) =>
     apiFetch(`/projects/${id}/submissions`, {
       method: "POST",
