@@ -384,15 +384,39 @@ export const projectApi = {
   createManual: (data: any) =>
     apiFetch("/projects/manual", { method: "POST", body: JSON.stringify(data) }),
 
-  getAll:      () => apiFetch("/projects/all"),
-  getMy:       () => apiFetch("/projects/my"),
+  getAll: () => apiFetch("/projects/all"),
+  getMy:  () => apiFetch("/projects/my"),
+
   getManagers: () => apiFetch("/projects/managers"),
   getMembers:  () => apiFetch("/projects/members"),
+  getAllUsers:  () => apiFetch("/projects/all-users"),
 
   update: (id: string, data: any) =>
     apiFetch(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) }),
 
-  delete: (id: string) => apiFetch(`/projects/${id}`, { method: "DELETE" }),
+  delete: (id: string) =>
+    apiFetch(`/projects/${id}`, { method: "DELETE" }),
+
+  uploadDocument: (
+    id: string,
+    data: { name: string; url: string; fileType: string; size: number }
+  ) =>
+    apiFetch(`/projects/${id}/documents`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteDocument: (id: string, docId: string) =>
+    apiFetch(`/projects/${id}/documents/${docId}`, { method: "DELETE" }),
+
+  submitWork: (id: string, data: { description: string; hoursWorked: number }) =>
+    apiFetch(`/projects/${id}/submissions`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteSubmission: (id: string, subId: string) =>
+    apiFetch(`/projects/${id}/submissions/${subId}`, { method: "DELETE" }),
 };
 
 /* ============================================================
