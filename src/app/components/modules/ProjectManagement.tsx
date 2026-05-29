@@ -14,9 +14,8 @@ import {
   Flame, Upload, FileText, Eye, X, Send, ChevronDown, ChevronUp,
   Clock, Paperclip, Shield, CheckCircle2, AlertCircle, Search,
   Lock, RefreshCw, Layers, FolderOpen, Activity, MessageSquare,
-  Smile, Meh, Frown, Coffee, Target, Flag, Zap,
-  Circle, CheckCircle, File, Star, ArrowUpRight,
-  TrendingDown, Award, Briefcase, Hash,
+  Smile, Meh, Frown, Coffee, Target,
+  Circle, CheckCircle, Database,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { projectApi } from "@/services/api";
@@ -119,7 +118,7 @@ const FILE_ICONS: Record<string, string> = {
   "text/plain": "📃", "application/zip": "🗜️",
 };
 const ALLOWED_MIME = Object.keys(FILE_ICONS);
-const MAX_FILE = 10 * 1024 * 1024;
+const MAX_FILE     = 10 * 1024 * 1024;   // 10 MB
 
 /* ══════════════════════════════════════════════════════════
    UTILS
@@ -156,6 +155,13 @@ const getAvatarColor = (name: string) => {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+};
+
+/** Estimate decoded byte size from a base64 data-URL */
+const estimateBase64Bytes = (dataUrl: string): number => {
+  const b64     = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+  const padding = (b64.match(/=+$/) || [""])[0].length;
+  return Math.ceil((b64.length * 3) / 4) - padding;
 };
 
 function exportToCSV(projects: Project[]) {
@@ -429,9 +435,22 @@ function ProjectFormFields({
 }
 
 /* ══════════════════════════════════════════════════════════
-   DOCUMENT PANEL — MNC Grade
-   Admin / Manager / HR: full upload + view + delete
-   Employee: locked screen
+   DOCUMENT PANEL
+   ─────────────────────────────────────────────────────────
+   Upload flow (frontend side):
+     1. User selects or drops a file
+     2. processFile() validates mime type & size
+     3. FileReader.readAsDataURL() converts file → base64 data-URL
+     4. onUpload() passes { name, url (base64), fileType, size, category }
+        up to handleUploadDoc() in ProjectManagement
+     5. projectApi.uploadDocument() POSTs to /projects/:id/documents
+     6. Backend stores url (base64 string) in MongoDB Atlas
+        → projects collection → documents[] array → url field
+   
+   To view in Atlas:
+     Open Atlas UI → Collections → your_db → projects
+     Click a document → documents[] → url field
+     (Value starts with "data:application/pdf;base64,..." etc.)
 ══════════════════════════════════════════════════════════ */
 function DocumentPanel({
   project, canUpload, canView, onUpload, onDelete,
@@ -441,12 +460,12 @@ function DocumentPanel({
   onDelete: (docId: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy]         = useState(false);
-  const [drag, setDrag]         = useState(false);
-  const [error, setError]       = useState("");
+  const [busy,     setBusy]     = useState(false);
+  const [drag,     setDrag]     = useState(false);
+  const [error,    setError]    = useState("");
   const [progress, setProgress] = useState(0);
   const [category, setCategory] = useState<keyof typeof DOC_CATEGORY_CFG>("contract");
-  const [preview, setPreview]   = useState<ProjectDocument | null>(null);
+  const [preview,  setPreview]  = useState<ProjectDocument | null>(null);
 
   /* Employees are locked out */
   if (!canView) return (
@@ -474,6 +493,7 @@ function DocumentPanel({
 
   const processFile = (file: File) => {
     setError("");
+
     if (!ALLOWED_MIME.includes(file.type)) {
       setError(`"${file.type || file.name.split(".").pop()}" is not supported. Use PDF, Word, Excel, PowerPoint, images, or ZIP.`);
       return;
@@ -482,37 +502,58 @@ function DocumentPanel({
       setError(`File too large: ${fmtBytes(file.size)}. Maximum is 10 MB.`);
       return;
     }
+
     setBusy(true);
     setProgress(0);
+
     const iv = setInterval(() => setProgress(p => Math.min(p + 12, 85)), 120);
+
     const reader = new FileReader();
+
     reader.onload = () => {
       clearInterval(iv);
       setProgress(100);
-      onUpload({ name: file.name, url: reader.result as string, fileType: file.type, size: file.size, category });
+
+      const dataUrl    = reader.result as string;
+      // Use accurate byte count from the actual base64 content
+      const actualSize = estimateBase64Bytes(dataUrl);
+
+      onUpload({
+        name:     file.name,
+        url:      dataUrl,       // full base64 data-URL → stored in MongoDB Atlas
+        fileType: file.type,
+        size:     actualSize,    // actual decoded bytes
+        category,
+      });
+
       setTimeout(() => { setBusy(false); setProgress(0); }, 400);
       if (fileRef.current) fileRef.current.value = "";
     };
+
     reader.onerror = () => {
       clearInterval(iv);
       setError("Failed to read file. Please try again.");
-      setBusy(false); setProgress(0);
+      setBusy(false);
+      setProgress(0);
     };
+
     reader.readAsDataURL(file);
   };
 
-  const docs = project.documents ?? [];
+  const docs      = project.documents ?? [];
   const totalSize = docs.reduce((s, d) => s + (d.size || 0), 0);
+  // 14 MB project storage cap (matches backend guard)
+  const storageUsedPct = Math.min(Math.round((totalSize / (14 * 1024 * 1024)) * 100), 100);
 
   return (
     <div className="space-y-5">
+
       {/* Preview Modal */}
       {preview && (
         <div className="fixed inset-0 z-[500] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setPreview(null)}>
           <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden"
             onClick={e => e.stopPropagation()}>
-            {/* Modal Header */}
             <div className="flex items-center gap-4 px-6 py-4 border-b border-gray-100 bg-gray-50/80">
               <div className="w-10 h-10 bg-white rounded-xl border border-gray-200 flex items-center justify-center text-xl shadow-sm">
                 {getFileIcon(preview.fileType)}
@@ -538,7 +579,6 @@ function DocumentPanel({
                 </button>
               </div>
             </div>
-            {/* Modal Body */}
             <div className="flex-1 overflow-auto bg-gray-50 p-4">
               {preview.fileType === "application/pdf" ? (
                 <iframe src={preview.url} className="w-full h-full min-h-[500px] rounded-2xl border border-gray-200 bg-white" title={preview.name} />
@@ -566,7 +606,7 @@ function DocumentPanel({
       {/* Upload section */}
       {canUpload ? (
         <div className="space-y-3">
-          {/* Category selector + stats */}
+          {/* Storage meter + category selector */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Label className="text-xs font-semibold text-gray-600 flex-shrink-0">Category</Label>
@@ -582,8 +622,18 @@ function DocumentPanel({
               </Select>
             </div>
             {docs.length > 0 && (
-              <div className="text-[10px] text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full flex-shrink-0">
-                {docs.length} file{docs.length !== 1 ? "s" : ""} · {fmtBytes(totalSize)}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-1.5 text-[10px] text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                  <Database className="h-2.5 w-2.5" />
+                  {fmtBytes(totalSize)} / 14 MB
+                </div>
+                {/* Storage bar */}
+                <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${storageUsedPct > 80 ? "bg-rose-400" : "bg-indigo-400"}`}
+                    style={{ width: `${storageUsedPct}%` }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -616,9 +666,9 @@ function DocumentPanel({
             </div>
             <div className="text-center px-4">
               <p className="text-sm font-bold text-gray-700">
-                {busy ? `Processing… ${progress}%` : drag ? "Release to upload" : "Click or drag & drop"}
+                {busy ? `Reading file… ${progress}%` : drag ? "Release to upload" : "Click or drag & drop"}
               </p>
-              <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Images, ZIP · Max 10 MB</p>
+              <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Images, ZIP · Max 10 MB · Stored in MongoDB Atlas</p>
             </div>
             {!busy && (
               <div className="flex items-center gap-1.5 flex-wrap justify-center px-4">
@@ -636,6 +686,12 @@ function DocumentPanel({
               <button onClick={() => setError("")}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
+
+          {/* Atlas storage info banner */}
+          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-sky-50 border border-sky-100 rounded-xl text-[10px] text-sky-700">
+            <Database className="h-3 w-3 flex-shrink-0" />
+            <span>Files are stored as base64 in <strong>MongoDB Atlas</strong> → projects → documents[].url</span>
+          </div>
         </div>
       ) : (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -682,6 +738,10 @@ function DocumentPanel({
                           <span className="text-[9px] text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded">{fmtBytes(doc.size || 0)}</span>
                           <span className="text-[9px] text-gray-500">{doc.uploadedBy?.name ?? "Unknown"}</span>
                           <span className="text-[9px] text-gray-400">{fmtDate(doc.uploadedAt)}</span>
+                          {/* Atlas indicator */}
+                          <span className="text-[9px] text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-sky-100">
+                            <Database className="h-2 w-2" /> Atlas
+                          </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -720,10 +780,7 @@ function DocumentPanel({
 }
 
 /* ══════════════════════════════════════════════════════════
-   DAILY STATUS PANEL — MNC Grade
-   Submit: Manager, HR, Employee (assigned)
-   View all: Admin, Manager
-   Employee: sees only own entries
+   DAILY STATUS PANEL
 ══════════════════════════════════════════════════════════ */
 function DailyStatusPanel({
   project, currentUserId, isAdmin, isManager, canSubmit, canViewAll,
@@ -779,7 +836,6 @@ function DailyStatusPanel({
 
   return (
     <div className="space-y-4">
-      {/* Stats bar */}
       {visible.length > 0 && (
         <div className="flex items-center gap-5 px-1 pb-4 border-b border-gray-100 flex-wrap">
           <div className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -815,7 +871,6 @@ function DailyStatusPanel({
         </div>
       )}
 
-      {/* Submit CTA */}
       {canSubmit && !formOpen && (
         submittedToday ? (
           <div className="flex items-center gap-3 px-4 py-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
@@ -838,7 +893,6 @@ function DailyStatusPanel({
         )
       )}
 
-      {/* Submission Form */}
       {formOpen && canSubmit && (
         <div className="border border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-violet-50/30 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -853,7 +907,6 @@ function DailyStatusPanel({
             </button>
           </div>
 
-          {/* Mood selector */}
           <div>
             <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2.5">How are you feeling today?</p>
             <div className="grid grid-cols-4 gap-2">
@@ -871,14 +924,13 @@ function DailyStatusPanel({
             </div>
           </div>
 
-          {/* Summary */}
           <div>
             <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">
               What did you accomplish today? *
             </Label>
             <Textarea
               className="text-xs resize-none bg-white border-indigo-200 focus:border-indigo-400 rounded-xl min-h-[90px]"
-              placeholder="e.g. Completed API integration for the login module, reviewed PR #42, fixed 3 dashboard bugs…"
+              placeholder="e.g. Completed API integration for the login module, reviewed PR #42…"
               value={summary}
               onChange={e => setSummary(e.target.value)}
             />
@@ -886,20 +938,14 @@ function DailyStatusPanel({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">
-                🚧 Blockers / Issues
-              </Label>
-              <Textarea
-                className="text-xs resize-none bg-white border-gray-200 rounded-xl" rows={3}
+              <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">🚧 Blockers</Label>
+              <Textarea className="text-xs resize-none bg-white border-gray-200 rounded-xl" rows={3}
                 placeholder="Any blockers? (leave blank if none)"
                 value={blockers} onChange={e => setBlockers(e.target.value)} />
             </div>
             <div>
-              <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">
-                📅 Tomorrow's Plan
-              </Label>
-              <Textarea
-                className="text-xs resize-none bg-white border-gray-200 rounded-xl" rows={3}
+              <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5 block">📅 Tomorrow's Plan</Label>
+              <Textarea className="text-xs resize-none bg-white border-gray-200 rounded-xl" rows={3}
                 placeholder="What will you work on tomorrow?"
                 value={nextPlan} onChange={e => setNextPlan(e.target.value)} />
             </div>
@@ -929,7 +975,6 @@ function DailyStatusPanel({
         </div>
       )}
 
-      {/* Entries list */}
       {visible.length === 0 ? (
         <div className="text-center py-14 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
           <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-3 border border-gray-100">
@@ -949,7 +994,6 @@ function DailyStatusPanel({
             const moodCfg = MOOD_CFG[ds.mood] ?? MOOD_CFG.good;
             return (
               <div key={ds._id} className="bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-sm transition-all">
-                {/* Entry header */}
                 <div className="flex items-center gap-3 px-4 py-3 bg-gray-50/80">
                   <Avatar name={ds.submittedBy?.name ?? "?"} size="sm" />
                   <div className="flex-1 min-w-0">
@@ -997,14 +1041,12 @@ function DailyStatusPanel({
                   </div>
                 </div>
 
-                {/* Summary preview */}
                 <div className="px-4 py-3">
                   <p className={`text-xs text-gray-700 leading-relaxed ${!isExpanded ? "line-clamp-2" : ""}`}>
                     {ds.summary}
                   </p>
                 </div>
 
-                {/* Expanded content */}
                 {isExpanded && (
                   <div className="px-4 pb-4 space-y-3 border-t border-gray-50 pt-3">
                     {ds.blockers && (
@@ -1068,9 +1110,9 @@ function DailyStatusPanel({
    SUBMISSION FORM
 ══════════════════════════════════════════════════════════ */
 function SubmissionForm({ onSubmit }: { onSubmit: (d: any) => Promise<void> }) {
-  const [open,  setOpen]  = useState(false);
-  const [desc,  setDesc]  = useState("");
-  const [hours, setHours] = useState("");
+  const [open,   setOpen]   = useState(false);
+  const [desc,   setDesc]   = useState("");
+  const [hours,  setHours]  = useState("");
   const [saving, setSaving] = useState(false);
 
   if (!open) return (
@@ -1128,7 +1170,7 @@ function SubmissionForm({ onSubmit }: { onSubmit: (d: any) => Promise<void> }) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   PROJECT CARD — MNC Grade
+   PROJECT CARD
 ══════════════════════════════════════════════════════════ */
 function ProjectCard({
   project, role, currentUserId, isAdmin, isManager, isHR,
@@ -1174,20 +1216,18 @@ function ProjectCard({
   const doneMilestones  = (project.milestones ?? []).filter(m => m.completed).length;
   const totalMilestones = project.milestones?.length ?? 0;
 
-  const tabs: { key: ActiveTab; label: string; icon: React.ReactNode; count?: number; restricted?: boolean }[] = [
-    { key: "overview",    label: "Overview",       icon: <BarChart3 className="h-3 w-3" /> },
-    { key: "team",        label: "Team",           icon: <Users className="h-3 w-3" />,      count: teamCount },
+  const tabs: { key: ActiveTab; label: string; icon: React.ReactNode; count?: number }[] = [
+    { key: "overview",    label: "Overview",     icon: <BarChart3 className="h-3 w-3" /> },
+    { key: "team",        label: "Team",         icon: <Users     className="h-3 w-3" />, count: teamCount },
     ...(canViewDoc ? [{ key: "docs" as ActiveTab, label: "Documents", icon: <FileText className="h-3 w-3" />, count: docCount }] : []),
-    { key: "dailystatus", label: "Daily Status",   icon: <Activity className="h-3 w-3" />,   count: dsCount },
-    { key: "submissions", label: "Submissions",    icon: <Send className="h-3 w-3" />,        count: subCount },
+    { key: "dailystatus", label: "Daily Status", icon: <Activity  className="h-3 w-3" />, count: dsCount },
+    { key: "submissions", label: "Submissions",  icon: <Send      className="h-3 w-3" />, count: subCount },
   ];
 
   return (
     <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden hover:shadow-lg transition-all duration-300 group">
-      {/* Accent bar */}
       <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${sc.accent}cc, ${sc.accent}44)` }} />
 
-      {/* Card header */}
       <div className="px-6 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -1226,7 +1266,6 @@ function ProjectCard({
           </div>
         </div>
 
-        {/* Meta row */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3">
           {project.clientName && (
             <span className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -1256,7 +1295,6 @@ function ProjectCard({
         </div>
       </div>
 
-      {/* Progress + Budget bars */}
       <div className="px-6 pb-4 grid grid-cols-2 gap-6">
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -1283,15 +1321,14 @@ function ProjectCard({
         </div>
       </div>
 
-      {/* Quick-action chips */}
       <div className="px-6 pb-5 flex items-center gap-2 flex-wrap border-t border-gray-50 pt-4">
         {[
-          { label: `${teamCount} member${teamCount !== 1 ? "s" : ""}`,      icon: <Users      className="h-2.5 w-2.5" />, tab: "team"        as ActiveTab, cls: "bg-gray-100 text-gray-600 hover:bg-gray-200"       },
+          { label: `${teamCount} member${teamCount !== 1 ? "s" : ""}`,   icon: <Users     className="h-2.5 w-2.5" />, tab: "team"        as ActiveTab, cls: "bg-gray-100 text-gray-600 hover:bg-gray-200"       },
           ...(canViewDoc ? [
-            { label: `${docCount} doc${docCount !== 1 ? "s" : ""}`,        icon: <Paperclip  className="h-2.5 w-2.5" />, tab: "docs"        as ActiveTab, cls: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"   },
+            { label: `${docCount} doc${docCount !== 1 ? "s" : ""}`,     icon: <Paperclip className="h-2.5 w-2.5" />, tab: "docs"        as ActiveTab, cls: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"   },
           ] : []),
-          { label: `${dsCount} status`,                                      icon: <Activity   className="h-2.5 w-2.5" />, tab: "dailystatus" as ActiveTab, cls: "bg-violet-50 text-violet-600 hover:bg-violet-100"   },
-          { label: `${subCount} submission${subCount !== 1 ? "s" : ""}`,    icon: <Send       className="h-2.5 w-2.5" />, tab: "submissions" as ActiveTab, cls: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" },
+          { label: `${dsCount} status`,                                   icon: <Activity  className="h-2.5 w-2.5" />, tab: "dailystatus" as ActiveTab, cls: "bg-violet-50 text-violet-600 hover:bg-violet-100"   },
+          { label: `${subCount} submission${subCount !== 1 ? "s" : ""}`, icon: <Send      className="h-2.5 w-2.5" />, tab: "submissions" as ActiveTab, cls: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" },
         ].map(b => (
           <button key={b.tab}
             onClick={() => { setExpanded(true); setActiveTab(b.tab); }}
@@ -1305,7 +1342,6 @@ function ProjectCard({
         </button>
       </div>
 
-      {/* Manager inline update */}
       {isManager && (
         <div className="mx-6 mb-5 p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-4">
           <div>
@@ -1323,10 +1359,8 @@ function ProjectCard({
         </div>
       )}
 
-      {/* Expanded panel */}
       {expanded && (
         <div className="border-t border-gray-100">
-          {/* Tab bar */}
           <div className="flex overflow-x-auto bg-gray-50/80 border-b border-gray-100">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -1348,7 +1382,6 @@ function ProjectCard({
           </div>
 
           <div className="p-6">
-            {/* ── OVERVIEW ── */}
             {activeTab === "overview" && (
               <div className="space-y-5">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1430,7 +1463,6 @@ function ProjectCard({
               </div>
             )}
 
-            {/* ── TEAM ── */}
             {activeTab === "team" && (
               <div>
                 {(!project.teamMembers || project.teamMembers.length === 0) ? (
@@ -1464,7 +1496,6 @@ function ProjectCard({
               </div>
             )}
 
-            {/* ── DOCUMENTS ── */}
             {activeTab === "docs" && (
               <DocumentPanel
                 project={project}
@@ -1475,7 +1506,6 @@ function ProjectCard({
               />
             )}
 
-            {/* ── DAILY STATUS ── */}
             {activeTab === "dailystatus" && (
               <DailyStatusPanel
                 project={project}
@@ -1490,7 +1520,6 @@ function ProjectCard({
               />
             )}
 
-            {/* ── SUBMISSIONS ── */}
             {activeTab === "submissions" && (
               <div className="space-y-4">
                 {canSubmit && <SubmissionForm onSubmit={onSubmitWork} />}
@@ -1575,7 +1604,7 @@ export function ProjectManagement() {
   const [manMembers, setManMembers] = useState<string[]>([]);
   const [form,       setForm]       = useState<FormState>(EMPTY_FORM);
   const [manForm,    setManForm]    = useState<FormState>(EMPTY_MANUAL);
-  const [search,     setSearch]     = useState("");
+  const [search,         setSearch]         = useState("");
   const [filterStatus,   setFilterStatus]   = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
 
@@ -1615,7 +1644,7 @@ export function ProjectManagement() {
 
   const toggle = (id: string, manual = false) => {
     if (manual) setManMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
-    else setSelMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
+    else        setSelMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
   };
 
   const resetForm = () => {
@@ -1690,7 +1719,6 @@ export function ProjectManagement() {
     setOpen(true);
   };
 
-  /* Action handlers */
   const handleProgressUpdate = async (id: string, v: number) => {
     try { await projectApi.update(id, { progress: v }); showToast("✅ Progress updated"); await loadProjects(true); }
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
@@ -1700,7 +1728,7 @@ export function ProjectManagement() {
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
   };
   const handleUploadDoc = async (projectId: string, doc: any) => {
-    try { await projectApi.uploadDocument(projectId, doc); showToast("✅ Document uploaded"); await loadProjects(true); }
+    try { await projectApi.uploadDocument(projectId, doc); showToast("✅ Document uploaded to MongoDB Atlas"); await loadProjects(true); }
     catch (err: any) { showToast("❌ " + (err?.message ?? "Upload failed"), "err"); }
   };
   const handleDeleteDoc = async (projectId: string, docId: string) => {
@@ -1734,19 +1762,17 @@ export function ProjectManagement() {
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
   };
 
-  /* Filtering */
   const filtered = projects.filter(p => {
-    const q = search.toLowerCase();
+    const q  = search.toLowerCase();
     const ms = !search ||
       p.name.toLowerCase().includes(q) ||
       p.clientName.toLowerCase().includes(q) ||
       p.managerId?.name?.toLowerCase?.()?.includes(q);
-    const st = filterStatus === "all" || p.status === filterStatus;
+    const st = filterStatus   === "all" || p.status   === filterStatus;
     const pr = filterPriority === "all" || p.priority === filterPriority;
     return ms && st && pr;
   });
 
-  /* Stats */
   const totalBudget = projects.reduce((s, p) => s + p.budget, 0);
   const totalSpent  = projects.reduce((s, p) => s + p.spent, 0);
   const burnRate    = totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(1) : "0";
@@ -1787,7 +1813,7 @@ export function ProjectManagement() {
             </DialogHeader>
             <div className="text-xs bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 text-amber-700 flex items-center gap-2">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-              Saved directly to MongoDB with your specified record date.
+              Saved directly to MongoDB Atlas with your specified record date.
             </div>
             <ProjectFormFields
               form={manForm} setForm={setManForm}
