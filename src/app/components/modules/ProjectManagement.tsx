@@ -15,7 +15,8 @@ import {
   Clock, Paperclip, Shield, CheckCircle2, AlertCircle, Search,
   Lock, RefreshCw, Layers, FolderOpen, Activity, MessageSquare,
   Smile, Meh, Frown, Coffee, Target,
-  Circle, CheckCircle, Database,
+  Circle, CheckCircle, Database, CalendarClock, CalendarCheck,
+  CalendarX, Timer,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { projectApi } from "@/services/api";
@@ -118,7 +119,47 @@ const FILE_ICONS: Record<string, string> = {
   "text/plain": "📃", "application/zip": "🗜️",
 };
 const ALLOWED_MIME = Object.keys(FILE_ICONS);
-const MAX_FILE     = 10 * 1024 * 1024;   // 10 MB
+const MAX_FILE     = 10 * 1024 * 1024; // 10 MB
+
+/* ══════════════════════════════════════════════════════════
+   STATUS-BASED PROGRESS RULES
+   planning:     10–25%
+   in-progress:  50–75%
+   on-hold:      any
+   completed:    100%
+══════════════════════════════════════════════════════════ */
+const STATUS_PROGRESS_RANGE: Record<ProjectStatus, { min: number; max: number; color: string }> = {
+  planning:      { min: 10,  max: 25,  color: "from-slate-400 to-slate-500"   },
+  "in-progress": { min: 50,  max: 75,  color: "from-indigo-400 to-indigo-500" },
+  completed:     { min: 100, max: 100, color: "from-emerald-400 to-emerald-500"},
+  "on-hold":     { min: 0,   max: 100, color: "from-amber-400 to-amber-500"   },
+};
+
+/** Returns effective display progress clamped to status range */
+function effectiveProgress(status: ProjectStatus, raw: number): number {
+  if (status === "completed") return 100;
+  const { min, max } = STATUS_PROGRESS_RANGE[status];
+  return Math.min(Math.max(raw, min), max);
+}
+
+function progressBarColor(status: ProjectStatus): string {
+  return STATUS_PROGRESS_RANGE[status].color;
+}
+
+/* ══════════════════════════════════════════════════════════
+   DATE HELPERS
+══════════════════════════════════════════════════════════ */
+function getRemainingDays(deadline: string): { days: number; overdue: boolean; text: string } | null {
+  if (!deadline) return null;
+  const dl   = new Date(deadline);
+  const now  = new Date();
+  now.setHours(0, 0, 0, 0);
+  dl.setHours(0, 0, 0, 0);
+  const diff = Math.round((dl.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diff < 0) return { days: Math.abs(diff), overdue: true,  text: `${Math.abs(diff)}d overdue` };
+  if (diff === 0) return { days: 0,             overdue: false, text: "Due today" };
+  return { days: diff, overdue: false, text: `${diff}d left` };
+}
 
 /* ══════════════════════════════════════════════════════════
    UTILS
@@ -137,10 +178,8 @@ const initials = (n: string) =>
 
 const getFileIcon = (t: string) => FILE_ICONS[t] ?? "📎";
 
-const PROGRESS_COLOR = (p: number) =>
-  p >= 80 ? "from-emerald-400 to-emerald-500" :
-  p >= 50 ? "from-indigo-400 to-indigo-500" :
-  p >= 25 ? "from-amber-400 to-amber-500" : "from-rose-400 to-rose-500";
+const BUDGET_COLOR = (pct: number) =>
+  pct > 85 ? "from-rose-400 to-rose-500" : "from-orange-400 to-orange-500";
 
 const AVATAR_COLORS = [
   "bg-indigo-100 text-indigo-700",
@@ -157,7 +196,6 @@ const getAvatarColor = (name: string) => {
   return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
 };
 
-/** Estimate decoded byte size from a base64 data-URL */
 const estimateBase64Bytes = (dataUrl: string): number => {
   const b64     = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
   const padding = (b64.match(/=+$/) || [""])[0].length;
@@ -436,21 +474,6 @@ function ProjectFormFields({
 
 /* ══════════════════════════════════════════════════════════
    DOCUMENT PANEL
-   ─────────────────────────────────────────────────────────
-   Upload flow (frontend side):
-     1. User selects or drops a file
-     2. processFile() validates mime type & size
-     3. FileReader.readAsDataURL() converts file → base64 data-URL
-     4. onUpload() passes { name, url (base64), fileType, size, category }
-        up to handleUploadDoc() in ProjectManagement
-     5. projectApi.uploadDocument() POSTs to /projects/:id/documents
-     6. Backend stores url (base64 string) in MongoDB Atlas
-        → projects collection → documents[] array → url field
-   
-   To view in Atlas:
-     Open Atlas UI → Collections → your_db → projects
-     Click a document → documents[] → url field
-     (Value starts with "data:application/pdf;base64,..." etc.)
 ══════════════════════════════════════════════════════════ */
 function DocumentPanel({
   project, canUpload, canView, onUpload, onDelete,
@@ -467,7 +490,6 @@ function DocumentPanel({
   const [category, setCategory] = useState<keyof typeof DOC_CATEGORY_CFG>("contract");
   const [preview,  setPreview]  = useState<ProjectDocument | null>(null);
 
-  /* Employees are locked out */
   if (!canView) return (
     <div className="flex flex-col items-center gap-5 py-16 text-center">
       <div className="relative">
@@ -493,7 +515,6 @@ function DocumentPanel({
 
   const processFile = (file: File) => {
     setError("");
-
     if (!ALLOWED_MIME.includes(file.type)) {
       setError(`"${file.type || file.name.split(".").pop()}" is not supported. Use PDF, Word, Excel, PowerPoint, images, or ZIP.`);
       return;
@@ -502,52 +523,33 @@ function DocumentPanel({
       setError(`File too large: ${fmtBytes(file.size)}. Maximum is 10 MB.`);
       return;
     }
-
     setBusy(true);
     setProgress(0);
-
     const iv = setInterval(() => setProgress(p => Math.min(p + 12, 85)), 120);
-
     const reader = new FileReader();
-
     reader.onload = () => {
       clearInterval(iv);
       setProgress(100);
-
       const dataUrl    = reader.result as string;
-      // Use accurate byte count from the actual base64 content
       const actualSize = estimateBase64Bytes(dataUrl);
-
-      onUpload({
-        name:     file.name,
-        url:      dataUrl,       // full base64 data-URL → stored in MongoDB Atlas
-        fileType: file.type,
-        size:     actualSize,    // actual decoded bytes
-        category,
-      });
-
+      onUpload({ name: file.name, url: dataUrl, fileType: file.type, size: actualSize, category });
       setTimeout(() => { setBusy(false); setProgress(0); }, 400);
       if (fileRef.current) fileRef.current.value = "";
     };
-
     reader.onerror = () => {
       clearInterval(iv);
       setError("Failed to read file. Please try again.");
-      setBusy(false);
-      setProgress(0);
+      setBusy(false); setProgress(0);
     };
-
     reader.readAsDataURL(file);
   };
 
-  const docs      = project.documents ?? [];
-  const totalSize = docs.reduce((s, d) => s + (d.size || 0), 0);
-  // 14 MB project storage cap (matches backend guard)
+  const docs          = project.documents ?? [];
+  const totalSize     = docs.reduce((s, d) => s + (d.size || 0), 0);
   const storageUsedPct = Math.min(Math.round((totalSize / (14 * 1024 * 1024)) * 100), 100);
 
   return (
     <div className="space-y-5">
-
       {/* Preview Modal */}
       {preview && (
         <div className="fixed inset-0 z-[500] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
@@ -566,10 +568,7 @@ function DocumentPanel({
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    const a = Object.assign(document.createElement("a"), { href: preview.url, download: preview.name });
-                    a.click();
-                  }}
+                  onClick={() => { const a = Object.assign(document.createElement("a"), { href: preview.url, download: preview.name }); a.click(); }}
                   className="flex items-center gap-1.5 h-9 px-4 text-xs font-bold bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">
                   <Download className="h-3.5 w-3.5" /> Download
                 </button>
@@ -589,10 +588,7 @@ function DocumentPanel({
                   <span className="text-6xl">{getFileIcon(preview.fileType)}</span>
                   <p className="text-sm text-gray-600 font-medium">Preview not available for this file type</p>
                   <button
-                    onClick={() => {
-                      const a = Object.assign(document.createElement("a"), { href: preview.url, download: preview.name });
-                      a.click();
-                    }}
+                    onClick={() => { const a = Object.assign(document.createElement("a"), { href: preview.url, download: preview.name }); a.click(); }}
                     className="flex items-center gap-2 h-10 px-5 text-sm font-bold bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors">
                     <Download className="h-4 w-4" /> Download to View
                   </button>
@@ -603,17 +599,13 @@ function DocumentPanel({
         </div>
       )}
 
-      {/* Upload section */}
       {canUpload ? (
         <div className="space-y-3">
-          {/* Storage meter + category selector */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Label className="text-xs font-semibold text-gray-600 flex-shrink-0">Category</Label>
               <Select value={category} onValueChange={v => setCategory(v as keyof typeof DOC_CATEGORY_CFG)}>
-                <SelectTrigger className="h-8 text-xs flex-1 rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 text-xs flex-1 rounded-xl"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(DOC_CATEGORY_CFG).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v.icon} {v.label}</SelectItem>
@@ -627,12 +619,9 @@ function DocumentPanel({
                   <Database className="h-2.5 w-2.5" />
                   {fmtBytes(totalSize)} / 14 MB
                 </div>
-                {/* Storage bar */}
                 <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${storageUsedPct > 80 ? "bg-rose-400" : "bg-indigo-400"}`}
-                    style={{ width: `${storageUsedPct}%` }}
-                  />
+                  <div className={`h-full rounded-full transition-all ${storageUsedPct > 80 ? "bg-rose-400" : "bg-indigo-400"}`}
+                    style={{ width: `${storageUsedPct}%` }} />
                 </div>
               </div>
             )}
@@ -642,7 +631,6 @@ function DocumentPanel({
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.zip"
             onChange={e => { const f = e.target.files?.[0]; if (f) processFile(f); }} />
 
-          {/* Drop zone */}
           <div
             onDragOver={e => { e.preventDefault(); setDrag(true); }}
             onDragLeave={() => setDrag(false)}
@@ -668,11 +656,11 @@ function DocumentPanel({
               <p className="text-sm font-bold text-gray-700">
                 {busy ? `Reading file… ${progress}%` : drag ? "Release to upload" : "Click or drag & drop"}
               </p>
-              <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Images, ZIP · Max 10 MB · Stored in MongoDB Atlas</p>
+              <p className="text-xs text-gray-400 mt-1">PDF, Word, Excel, PowerPoint, Images, ZIP · Max 10 MB</p>
             </div>
             {!busy && (
               <div className="flex items-center gap-1.5 flex-wrap justify-center px-4">
-                {["📄 PDF", "📝 DOC", "📊 XLS", "📑 PPT", "🖼️ IMG", "🗜️ ZIP"].map(t => (
+                {["📄 PDF","📝 DOC","📊 XLS","📑 PPT","🖼️ IMG","🗜️ ZIP"].map(t => (
                   <span key={t} className="text-[9px] px-2 py-0.5 bg-white border border-gray-200 rounded-full text-gray-500 font-medium">{t}</span>
                 ))}
               </div>
@@ -687,7 +675,6 @@ function DocumentPanel({
             </div>
           )}
 
-          {/* Atlas storage info banner */}
           <div className="flex items-center gap-2 px-3.5 py-2.5 bg-sky-50 border border-sky-100 rounded-xl text-[10px] text-sky-700">
             <Database className="h-3 w-3 flex-shrink-0" />
             <span>Files are stored as base64 in <strong>MongoDB Atlas</strong> → projects → documents[].url</span>
@@ -700,7 +687,6 @@ function DocumentPanel({
         </div>
       )}
 
-      {/* Document list */}
       {docs.length === 0 ? (
         <div className="text-center py-14 border-2 border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
           <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-3 border border-gray-100">
@@ -738,23 +724,18 @@ function DocumentPanel({
                           <span className="text-[9px] text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded">{fmtBytes(doc.size || 0)}</span>
                           <span className="text-[9px] text-gray-500">{doc.uploadedBy?.name ?? "Unknown"}</span>
                           <span className="text-[9px] text-gray-400">{fmtDate(doc.uploadedAt)}</span>
-                          {/* Atlas indicator */}
                           <span className="text-[9px] text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-sky-100">
                             <Database className="h-2 w-2" /> Atlas
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setPreview(doc)}
+                        <button onClick={() => setPreview(doc)}
                           className="flex items-center gap-1 h-7 px-2.5 text-[10px] font-bold rounded-lg text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
                           <Eye className="h-3 w-3" /> View
                         </button>
                         <button
-                          onClick={() => {
-                            const a = Object.assign(document.createElement("a"), { href: doc.url, download: doc.name });
-                            a.click();
-                          }}
+                          onClick={() => { const a = Object.assign(document.createElement("a"), { href: doc.url, download: doc.name }); a.click(); }}
                           className="h-7 w-7 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors"
                           title="Download">
                           <Download className="h-3.5 w-3.5" />
@@ -781,6 +762,9 @@ function DocumentPanel({
 
 /* ══════════════════════════════════════════════════════════
    DAILY STATUS PANEL
+   FIX: All roles except admin can submit.
+        Admin can VIEW all but not submit (backend blocks it).
+        isAdmin is passed so the submit button is hidden for admins.
 ══════════════════════════════════════════════════════════ */
 function DailyStatusPanel({
   project, currentUserId, isAdmin, isManager, canSubmit, canViewAll,
@@ -811,7 +795,7 @@ function DailyStatusPanel({
     : allEntries.filter(d => d.submittedBy?._id === currentUserId);
 
   const totalHours = visible.reduce((s, d) => s + (d.hoursWorked || 0), 0);
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr   = new Date().toISOString().split("T")[0];
   const submittedToday = canSubmit && visible.some(d =>
     new Date(d.date).toISOString().split("T")[0] === todayStr &&
     d.submittedBy?._id === currentUserId
@@ -871,7 +855,8 @@ function DailyStatusPanel({
         </div>
       )}
 
-      {canSubmit && !formOpen && (
+      {/* Submit button — hidden for admins (backend blocks admin submissions) */}
+      {canSubmit && !isAdmin && !formOpen && (
         submittedToday ? (
           <div className="flex items-center gap-3 px-4 py-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl">
             <div className="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -893,7 +878,14 @@ function DailyStatusPanel({
         )
       )}
 
-      {formOpen && canSubmit && (
+      {isAdmin && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-100 rounded-xl">
+          <Shield className="h-4 w-4 text-rose-400 flex-shrink-0" />
+          <p className="text-xs text-rose-700">Admins can view all submissions but cannot submit daily status updates.</p>
+        </div>
+      )}
+
+      {formOpen && canSubmit && !isAdmin && (
         <div className="border border-indigo-200 bg-gradient-to-br from-indigo-50/80 to-violet-50/30 rounded-2xl p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div>
@@ -1109,11 +1101,18 @@ function DailyStatusPanel({
 /* ══════════════════════════════════════════════════════════
    SUBMISSION FORM
 ══════════════════════════════════════════════════════════ */
-function SubmissionForm({ onSubmit }: { onSubmit: (d: any) => Promise<void> }) {
+function SubmissionForm({ onSubmit, isAdmin }: { onSubmit: (d: any) => Promise<void>; isAdmin: boolean }) {
   const [open,   setOpen]   = useState(false);
   const [desc,   setDesc]   = useState("");
   const [hours,  setHours]  = useState("");
   const [saving, setSaving] = useState(false);
+
+  if (isAdmin) return (
+    <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-100 rounded-xl">
+      <Shield className="h-4 w-4 text-rose-400 flex-shrink-0" />
+      <p className="text-xs text-rose-700">Admins cannot submit work. Use the Admin panel to manage submissions.</p>
+    </div>
+  );
 
   if (!open) return (
     <button onClick={() => setOpen(true)}
@@ -1170,6 +1169,280 @@ function SubmissionForm({ onSubmit }: { onSubmit: (d: any) => Promise<void> }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   PROJECT OVERVIEW TAB
+   Shows: Budget, Start Date (createdAt), End Date (deadline),
+   Remaining days real-time, progress stats, milestones
+══════════════════════════════════════════════════════════ */
+function ProjectOverviewTab({ project }: { project: Project }) {
+  const teamCount      = project.teamMembers?.length ?? 0;
+  const budgetPct      = project.budget > 0 ? Math.min(Math.round((project.spent / project.budget) * 100), 100) : 0;
+  const remaining      = getRemainingDays(project.deadline);
+  const dispProgress   = effectiveProgress(project.status, project.progress);
+  const doneMilestones  = (project.milestones ?? []).filter(m => m.completed).length;
+  const totalMilestones = project.milestones?.length ?? 0;
+
+  /* Real-time date info */
+  const startDate = project.createdAt ? fmtDate(project.createdAt) : "—";
+  const endDate   = project.deadline  ? fmtDate(project.deadline)  : "—";
+
+  /* Total project duration in days */
+  let totalDays: number | null = null;
+  let elapsedDays: number | null = null;
+  let elapsedPct = 0;
+  if (project.createdAt && project.deadline) {
+    const start = new Date(project.createdAt);
+    const end   = new Date(project.deadline);
+    const now   = new Date();
+    totalDays   = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    elapsedDays = Math.round((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    elapsedPct  = totalDays > 0 ? Math.min(Math.round((elapsedDays / totalDays) * 100), 100) : 0;
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* ── Key Metrics ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Budget */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+          <div className="w-9 h-9 bg-sky-50 rounded-xl flex items-center justify-center mb-3">
+            <Wallet className="h-4 w-4 text-sky-500" />
+          </div>
+          <p className="text-xl font-bold text-gray-900">
+            {project.budget >= 100000
+              ? `₹${(project.budget / 100000).toFixed(1)}L`
+              : `₹${project.budget.toLocaleString()}`}
+          </p>
+          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Budget</p>
+          <p className="text-[9px] text-gray-300 mt-0.5">Allocated</p>
+        </div>
+
+        {/* Spent */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+          <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center mb-3">
+            <TrendingUp className="h-4 w-4 text-orange-500" />
+          </div>
+          <p className={`text-xl font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-900"}`}>
+            {project.spent >= 100000
+              ? `₹${(project.spent / 100000).toFixed(1)}L`
+              : `₹${project.spent.toLocaleString()}`}
+          </p>
+          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Spent</p>
+          <p className={`text-[9px] mt-0.5 font-medium ${budgetPct > 85 ? "text-rose-400" : "text-gray-300"}`}>
+            {budgetPct}% used
+          </p>
+        </div>
+
+        {/* Progress */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+          <div className="w-9 h-9 bg-emerald-50 rounded-xl flex items-center justify-center mb-3">
+            <BarChart3 className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="text-xl font-bold text-gray-900">{dispProgress}%</p>
+          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Progress</p>
+          <p className="text-[9px] text-gray-300 mt-0.5">Complete</p>
+        </div>
+
+        {/* Team */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+          <div className="w-9 h-9 bg-violet-50 rounded-xl flex items-center justify-center mb-3">
+            <Users className="h-4 w-4 text-violet-500" />
+          </div>
+          <p className="text-xl font-bold text-gray-900">{teamCount}</p>
+          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Team</p>
+          <p className="text-[9px] text-gray-300 mt-0.5">Members</p>
+        </div>
+      </div>
+
+      {/* ── Timeline (Start / End / Remaining) ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-3">
+        <h4 className="text-xs font-bold text-gray-700 flex items-center gap-2">
+          <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center">
+            <CalendarClock className="h-3.5 w-3.5 text-indigo-500" />
+          </div>
+          Project Timeline
+        </h4>
+
+        <div className="grid grid-cols-3 gap-3">
+          {/* Start Date */}
+          <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Calendar className="h-3 w-3 text-gray-400" />
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Start Date</span>
+            </div>
+            <p className="text-xs font-bold text-gray-800">{startDate}</p>
+          </div>
+
+          {/* End Date */}
+          <div className={`rounded-xl p-3 border ${
+            remaining?.overdue
+              ? "bg-rose-50 border-rose-100"
+              : project.status === "completed"
+                ? "bg-emerald-50 border-emerald-100"
+                : "bg-gray-50 border-gray-100"
+          }`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <CalendarCheck className={`h-3 w-3 ${remaining?.overdue ? "text-rose-400" : "text-gray-400"}`} />
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Deadline</span>
+            </div>
+            <p className={`text-xs font-bold ${remaining?.overdue ? "text-rose-700" : project.status === "completed" ? "text-emerald-700" : "text-gray-800"}`}>
+              {endDate}
+            </p>
+          </div>
+
+          {/* Remaining */}
+          <div className={`rounded-xl p-3 border ${
+            !remaining
+              ? "bg-gray-50 border-gray-100"
+              : project.status === "completed"
+                ? "bg-emerald-50 border-emerald-100"
+                : remaining.overdue
+                  ? "bg-rose-50 border-rose-200"
+                  : remaining.days <= 7
+                    ? "bg-amber-50 border-amber-200"
+                    : "bg-sky-50 border-sky-100"
+          }`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              {project.status === "completed"
+                ? <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                : remaining?.overdue
+                  ? <CalendarX className="h-3 w-3 text-rose-400" />
+                  : <Timer className="h-3 w-3 text-sky-400" />
+              }
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Remaining</span>
+            </div>
+            <p className={`text-xs font-bold ${
+              project.status === "completed"
+                ? "text-emerald-700"
+                : remaining?.overdue
+                  ? "text-rose-700"
+                  : remaining?.days !== undefined && remaining.days <= 7
+                    ? "text-amber-700"
+                    : "text-sky-700"
+            }`}>
+              {project.status === "completed"
+                ? "Done ✓"
+                : remaining
+                  ? remaining.text
+                  : "No deadline"
+              }
+            </p>
+          </div>
+        </div>
+
+        {/* Timeline progress bar — elapsed vs total */}
+        {totalDays !== null && totalDays > 0 && project.status !== "completed" && (
+          <div className="pt-1">
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-[9px] text-gray-400 font-medium">Time elapsed</span>
+              <span className="text-[9px] font-bold text-gray-500">{Math.min(elapsedDays!, totalDays)} / {totalDays} days</span>
+            </div>
+            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ${
+                  elapsedPct > 90 && remaining?.overdue
+                    ? "bg-gradient-to-r from-rose-400 to-rose-500"
+                    : elapsedPct > 75
+                      ? "bg-gradient-to-r from-amber-400 to-amber-500"
+                      : "bg-gradient-to-r from-sky-400 to-sky-500"
+                }`}
+                style={{ width: `${elapsedPct}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-1">
+              <span className="text-[9px] text-gray-400">{startDate}</span>
+              <span className="text-[9px] text-gray-400">{endDate}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Budget Bar ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-2">
+        <div className="flex justify-between items-center">
+          <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+            <Wallet className="h-3.5 w-3.5 text-orange-400" /> Budget Usage
+          </h4>
+          <span className={`text-xs font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-700"}`}>{budgetPct}%</span>
+        </div>
+        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full bg-gradient-to-r ${BUDGET_COLOR(budgetPct)} transition-all duration-700`}
+            style={{ width: `${budgetPct}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-400">
+          <span>₹{project.spent.toLocaleString()} spent</span>
+          <span>₹{project.budget.toLocaleString()} total</span>
+        </div>
+      </div>
+
+      {/* ── Milestones ── */}
+      {totalMilestones > 0 && (
+        <div>
+          <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
+            <div className="w-6 h-6 bg-amber-50 rounded-lg flex items-center justify-center">
+              <Target className="h-3.5 w-3.5 text-amber-500" />
+            </div>
+            Milestones
+            <span className="text-[10px] text-gray-400 font-normal">{doneMilestones}/{totalMilestones}</span>
+          </h4>
+          <div className="space-y-2">
+            {project.milestones.map(m => (
+              <div key={m._id} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-colors
+                ${m.completed ? "bg-emerald-50 border-emerald-100" : "bg-white border-gray-100"}`}>
+                {m.completed
+                  ? <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                  : <Circle      className="h-4 w-4 text-gray-300 flex-shrink-0" />
+                }
+                <span className={`text-xs flex-1 ${m.completed ? "line-through text-gray-400" : "text-gray-700 font-medium"}`}>
+                  {m.title}
+                </span>
+                {m.dueDate && (
+                  <span className="text-[10px] text-gray-400 flex-shrink-0">{m.dueDate}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Recent Activity ── */}
+      {(project.dailyStatuses?.length ?? 0) > 0 && (
+        <div>
+          <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
+            <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Activity className="h-3.5 w-3.5 text-indigo-500" />
+            </div>
+            Recent Activity
+          </h4>
+          <div className="space-y-2">
+            {[...project.dailyStatuses].reverse().slice(0, 3).map(ds => (
+              <div key={ds._id}
+                className="flex items-start gap-3 px-3.5 py-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                <Avatar name={ds.submittedBy?.name ?? "?"} size="xs" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-bold text-gray-800">{ds.submittedBy?.name}</p>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border ${MOOD_CFG[ds.mood]?.bg} ${MOOD_CFG[ds.mood]?.color}`}>
+                      {MOOD_CFG[ds.mood]?.icon}
+                    </span>
+                    {ds.hoursWorked > 0 && (
+                      <span className="text-[9px] text-violet-600 font-semibold">{ds.hoursWorked}h</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-gray-500 truncate mt-0.5">{ds.summary}</p>
+                </div>
+                <span className="text-[9px] text-gray-400 flex-shrink-0">{fmtDate(ds.date)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
    PROJECT CARD
 ══════════════════════════════════════════════════════════ */
 function ProjectCard({
@@ -1199,20 +1472,27 @@ function ProjectCard({
   const canViewDoc = isAdmin || isManager || isHR;
   const canUpload  = isAdmin || isManager || isHR;
   const canViewAll = isAdmin || isManager;
-  const canSubmit  = !isAdmin && (isManager || isHR || isEmployee);
+  // FIX: admin cannot submit daily status (backend returns 403)
+  // manager, hr, employee can submit if they are assigned
+  const canSubmit  = !isAdmin;
 
   const sc = STATUS_CFG[project.status] ?? STATUS_CFG["planning"];
   const pc = PRIORITY_CFG[project.priority] ?? PRIORITY_CFG["medium"];
-  const budgetPct = project.budget > 0 ? Math.min(Math.round((project.spent / project.budget) * 100), 100) : 0;
 
-  const docCount  = project.documents?.length ?? 0;
-  const dsCount   = canViewAll
+  // FIX: use status-based effective progress
+  const dispProgress = effectiveProgress(project.status, project.progress);
+  const progColor    = progressBarColor(project.status);
+  const budgetPct    = project.budget > 0 ? Math.min(Math.round((project.spent / project.budget) * 100), 100) : 0;
+
+  const remaining  = getRemainingDays(project.deadline);
+  const docCount   = project.documents?.length ?? 0;
+  const dsCount    = canViewAll
     ? (project.dailyStatuses?.length ?? 0)
     : (project.dailyStatuses ?? []).filter(d => d.submittedBy?._id === currentUserId).length;
-  const subCount  = canViewAll
+  const subCount   = canViewAll
     ? (project.workSubmissions?.length ?? 0)
     : (project.workSubmissions ?? []).filter(s => s.submittedBy?._id === currentUserId).length;
-  const teamCount = project.teamMembers?.length ?? 0;
+  const teamCount  = project.teamMembers?.length ?? 0;
   const doneMilestones  = (project.milestones ?? []).filter(m => m.completed).length;
   const totalMilestones = project.milestones?.length ?? 0;
 
@@ -1226,6 +1506,7 @@ function ProjectCard({
 
   return (
     <div className="bg-white border border-gray-200 rounded-3xl overflow-hidden hover:shadow-lg transition-all duration-300 group">
+      {/* Status accent bar */}
       <div className="h-1.5 w-full" style={{ background: `linear-gradient(90deg, ${sc.accent}cc, ${sc.accent}44)` }} />
 
       <div className="px-6 pt-5 pb-4">
@@ -1266,6 +1547,7 @@ function ProjectCard({
           </div>
         </div>
 
+        {/* Meta info: client, deadline, manager, milestones, remaining */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3">
           {project.clientName && (
             <span className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -1276,7 +1558,7 @@ function ProjectCard({
           {project.deadline && (
             <span className="flex items-center gap-1.5 text-xs text-gray-500">
               <Calendar className="h-3.5 w-3.5 text-gray-400" />
-              {project.deadline}
+              {fmtDate(project.deadline)}
             </span>
           )}
           {project.managerId?.name && (
@@ -1291,20 +1573,44 @@ function ProjectCard({
               {doneMilestones}/{totalMilestones} milestones
             </span>
           )}
+          {/* Real-time remaining days chip */}
+          {remaining && project.status !== "completed" && (
+            <span className={`flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full font-bold border
+              ${remaining.overdue
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : remaining.days <= 7
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-sky-50 text-sky-700 border-sky-200"
+              }`}>
+              {remaining.overdue
+                ? <CalendarX className="h-2.5 w-2.5" />
+                : <Timer className="h-2.5 w-2.5" />
+              }
+              {remaining.text}
+            </span>
+          )}
+          {project.status === "completed" && (
+            <span className="flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle2 className="h-2.5 w-2.5" /> Completed
+            </span>
+          )}
           <span className="ml-auto text-[10px] text-gray-300">{fmtDate(project.createdAt)}</span>
         </div>
       </div>
 
+      {/* Progress + Budget bars */}
       <div className="px-6 pb-4 grid grid-cols-2 gap-6">
         <div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Progress</span>
-            <span className="text-xs font-bold text-gray-800">{project.progress}%</span>
+            <span className="text-xs font-bold text-gray-800">{dispProgress}%</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full bg-gradient-to-r ${PROGRESS_COLOR(project.progress)} transition-all duration-700`}
-              style={{ width: `${project.progress}%` }} />
+            {/* FIX: color tied to project status */}
+            <div className={`h-full rounded-full bg-gradient-to-r ${progColor} transition-all duration-700`}
+              style={{ width: `${dispProgress}%` }} />
           </div>
+          <p className="text-[9px] text-gray-400 mt-1">{sc.label} range: {STATUS_PROGRESS_RANGE[project.status].min}–{STATUS_PROGRESS_RANGE[project.status].max}%</p>
         </div>
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -1312,7 +1618,7 @@ function ProjectCard({
             <span className={`text-xs font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-800"}`}>{budgetPct}%</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full bg-gradient-to-r ${budgetPct > 85 ? "from-rose-400 to-rose-500" : "from-orange-400 to-orange-500"} transition-all duration-700`}
+            <div className={`h-full rounded-full bg-gradient-to-r ${BUDGET_COLOR(budgetPct)} transition-all duration-700`}
               style={{ width: `${budgetPct}%` }} />
           </div>
           <p className="text-[10px] text-gray-400 mt-1 text-right">
@@ -1321,14 +1627,15 @@ function ProjectCard({
         </div>
       </div>
 
+      {/* Quick action pills */}
       <div className="px-6 pb-5 flex items-center gap-2 flex-wrap border-t border-gray-50 pt-4">
         {[
-          { label: `${teamCount} member${teamCount !== 1 ? "s" : ""}`,   icon: <Users     className="h-2.5 w-2.5" />, tab: "team"        as ActiveTab, cls: "bg-gray-100 text-gray-600 hover:bg-gray-200"       },
+          { label: `${teamCount} member${teamCount !== 1 ? "s" : ""}`, icon: <Users     className="h-2.5 w-2.5" />, tab: "team"        as ActiveTab, cls: "bg-gray-100 text-gray-600 hover:bg-gray-200"       },
           ...(canViewDoc ? [
-            { label: `${docCount} doc${docCount !== 1 ? "s" : ""}`,     icon: <Paperclip className="h-2.5 w-2.5" />, tab: "docs"        as ActiveTab, cls: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"   },
+            { label: `${docCount} doc${docCount !== 1 ? "s" : ""}`,   icon: <Paperclip className="h-2.5 w-2.5" />, tab: "docs"        as ActiveTab, cls: "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"   },
           ] : []),
-          { label: `${dsCount} status`,                                   icon: <Activity  className="h-2.5 w-2.5" />, tab: "dailystatus" as ActiveTab, cls: "bg-violet-50 text-violet-600 hover:bg-violet-100"   },
-          { label: `${subCount} submission${subCount !== 1 ? "s" : ""}`, icon: <Send      className="h-2.5 w-2.5" />, tab: "submissions" as ActiveTab, cls: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" },
+          { label: `${dsCount} status`,                                 icon: <Activity  className="h-2.5 w-2.5" />, tab: "dailystatus" as ActiveTab, cls: "bg-violet-50 text-violet-600 hover:bg-violet-100"   },
+          { label: `${subCount} submission${subCount !== 1 ? "s":""}`, icon: <Send      className="h-2.5 w-2.5" />, tab: "submissions" as ActiveTab, cls: "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" },
         ].map(b => (
           <button key={b.tab}
             onClick={() => { setExpanded(true); setActiveTab(b.tab); }}
@@ -1342,6 +1649,7 @@ function ProjectCard({
         </button>
       </div>
 
+      {/* Manager inline controls */}
       {isManager && (
         <div className="mx-6 mb-5 p-4 bg-gray-50 rounded-2xl border border-gray-100 grid grid-cols-2 gap-4">
           <div>
@@ -1359,6 +1667,7 @@ function ProjectCard({
         </div>
       )}
 
+      {/* Expanded detail tabs */}
       {expanded && (
         <div className="border-t border-gray-100">
           <div className="flex overflow-x-auto bg-gray-50/80 border-b border-gray-100">
@@ -1382,86 +1691,8 @@ function ProjectCard({
           </div>
 
           <div className="p-6">
-            {activeTab === "overview" && (
-              <div className="space-y-5">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {[
-                    { label: "Budget",   value: `₹${project.budget.toLocaleString()}`,  sub: "Allocated",     icon: <Wallet     className="h-4 w-4 text-sky-500" />,     bg: "bg-sky-50"     },
-                    { label: "Spent",    value: `₹${project.spent.toLocaleString()}`,   sub: `${budgetPct}% used`, icon: <TrendingUp className="h-4 w-4 text-orange-500" />, bg: "bg-orange-50"  },
-                    { label: "Progress", value: `${project.progress}%`,                sub: "Complete",      icon: <BarChart3  className="h-4 w-4 text-emerald-500" />, bg: "bg-emerald-50" },
-                    { label: "Team",     value: String(teamCount),                     sub: "Members",       icon: <Users      className="h-4 w-4 text-violet-500" />,  bg: "bg-violet-50"  },
-                  ].map((s, i) => (
-                    <div key={i} className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
-                      <div className={`w-9 h-9 ${s.bg} rounded-xl flex items-center justify-center mb-3`}>{s.icon}</div>
-                      <p className="text-xl font-bold text-gray-900">{s.value}</p>
-                      <p className="text-[10px] text-gray-500 font-medium mt-0.5">{s.label}</p>
-                      <p className="text-[9px] text-gray-300 mt-0.5">{s.sub}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {totalMilestones > 0 && (
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
-                      <div className="w-6 h-6 bg-amber-50 rounded-lg flex items-center justify-center">
-                        <Target className="h-3.5 w-3.5 text-amber-500" />
-                      </div>
-                      Milestones
-                      <span className="text-[10px] text-gray-400 font-normal">{doneMilestones}/{totalMilestones}</span>
-                    </h4>
-                    <div className="space-y-2">
-                      {project.milestones.map(m => (
-                        <div key={m._id} className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-colors
-                          ${m.completed ? "bg-emerald-50 border-emerald-100" : "bg-white border-gray-100"}`}>
-                          {m.completed
-                            ? <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
-                            : <Circle      className="h-4 w-4 text-gray-300 flex-shrink-0" />
-                          }
-                          <span className={`text-xs flex-1 ${m.completed ? "line-through text-gray-400" : "text-gray-700 font-medium"}`}>
-                            {m.title}
-                          </span>
-                          {m.dueDate && (
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">{m.dueDate}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {(project.dailyStatuses?.length ?? 0) > 0 && (
-                  <div>
-                    <h4 className="text-xs font-bold text-gray-700 mb-3 flex items-center gap-2">
-                      <div className="w-6 h-6 bg-indigo-50 rounded-lg flex items-center justify-center">
-                        <Activity className="h-3.5 w-3.5 text-indigo-500" />
-                      </div>
-                      Recent Activity
-                    </h4>
-                    <div className="space-y-2">
-                      {[...project.dailyStatuses].reverse().slice(0, 3).map(ds => (
-                        <div key={ds._id}
-                          className="flex items-start gap-3 px-3.5 py-2.5 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                          <Avatar name={ds.submittedBy?.name ?? "?"} size="xs" />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-xs font-bold text-gray-800">{ds.submittedBy?.name}</p>
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold border ${MOOD_CFG[ds.mood]?.bg} ${MOOD_CFG[ds.mood]?.color}`}>
-                                {MOOD_CFG[ds.mood]?.icon}
-                              </span>
-                              {ds.hoursWorked > 0 && (
-                                <span className="text-[9px] text-violet-600 font-semibold">{ds.hoursWorked}h</span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-gray-500 truncate mt-0.5">{ds.summary}</p>
-                          </div>
-                          <span className="text-[9px] text-gray-400 flex-shrink-0">{fmtDate(ds.date)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* FIX: Overview now shows budget, start date, end date, remaining days */}
+            {activeTab === "overview" && <ProjectOverviewTab project={project} />}
 
             {activeTab === "team" && (
               <div>
@@ -1522,7 +1753,14 @@ function ProjectCard({
 
             {activeTab === "submissions" && (
               <div className="space-y-4">
-                {canSubmit && <SubmissionForm onSubmit={onSubmitWork} />}
+                {/* FIX: pass isAdmin so admin sees info message instead of submit button */}
+                {canSubmit && <SubmissionForm onSubmit={onSubmitWork} isAdmin={isAdmin} />}
+                {isAdmin && !canSubmit && (
+                  <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 border border-rose-100 rounded-xl">
+                    <Shield className="h-4 w-4 text-rose-400 flex-shrink-0" />
+                    <p className="text-xs text-rose-700">Admins cannot submit work entries.</p>
+                  </div>
+                )}
                 {(() => {
                   const subs = canViewAll
                     ? (project.workSubmissions ?? [])
@@ -1642,6 +1880,13 @@ export function ProjectManagement() {
     Promise.all([loadProjects(), loadUsers()]);
   }, [currentUser]);
 
+  // FIX: also need to reload when window is focused in case data changed
+  useEffect(() => {
+    const onFocus = () => loadProjects(true);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [loadProjects]);
+
   const toggle = (id: string, manual = false) => {
     if (manual) setManMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
     else        setSelMembers(p => p.includes(id) ? p.filter(m => m !== id) : [...p, id]);
@@ -1727,35 +1972,69 @@ export function ProjectManagement() {
     try { await projectApi.update(id, { spent: v }); showToast("✅ Spent updated"); await loadProjects(true); }
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
   };
+
+  // FIX: uploadDocument — ensure the API call completes and errors surface properly
   const handleUploadDoc = async (projectId: string, doc: any) => {
-    try { await projectApi.uploadDocument(projectId, doc); showToast("✅ Document uploaded to MongoDB Atlas"); await loadProjects(true); }
-    catch (err: any) { showToast("❌ " + (err?.message ?? "Upload failed"), "err"); }
+    try {
+      await projectApi.uploadDocument(projectId, doc);
+      showToast("✅ Document uploaded");
+      await loadProjects(true);
+    } catch (err: any) {
+      // Surface the actual backend error message
+      const msg = err?.message ?? err?.data?.message ?? "Upload failed";
+      showToast("❌ " + msg, "err");
+    }
   };
+
   const handleDeleteDoc = async (projectId: string, docId: string) => {
     if (!window.confirm("Permanently delete this document?")) return;
     try { await projectApi.deleteDocument(projectId, docId); showToast("✅ Document deleted"); await loadProjects(true); }
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
   };
+
+  // FIX: daily status submit — always await and surface errors
   const handleSubmitDailyStatus = async (projectId: string, data: any): Promise<void> => {
-    await projectApi.submitDailyStatus(projectId, data);
-    showToast("✅ Daily status submitted");
-    await loadProjects(true);
+    try {
+      await projectApi.submitDailyStatus(projectId, data);
+      showToast("✅ Daily status submitted");
+      await loadProjects(true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.data?.message ?? "Submission failed";
+      showToast("❌ " + msg, "err");
+      throw err; // re-throw so the form knows it failed
+    }
   };
+
   const handleDeleteDailyStatus = async (projectId: string, id: string) => {
     if (!window.confirm("Delete this status entry?")) return;
     try { await projectApi.deleteDailyStatus(projectId, id); showToast("✅ Entry deleted"); await loadProjects(true); }
     catch (err: any) { showToast("❌ " + (err?.message ?? "Error"), "err"); }
   };
+
   const handleCommentDailyStatus = async (projectId: string, statusId: string, comment: string): Promise<void> => {
-    await projectApi.commentDailyStatus(projectId, statusId, comment);
-    showToast("✅ Note saved");
-    await loadProjects(true);
+    try {
+      await projectApi.commentDailyStatus(projectId, statusId, comment);
+      showToast("✅ Note saved");
+      await loadProjects(true);
+    } catch (err: any) {
+      showToast("❌ " + (err?.message ?? "Error"), "err");
+      throw err;
+    }
   };
+
+  // FIX: work submission — always await and surface errors
   const handleSubmitWork = async (projectId: string, data: any): Promise<void> => {
-    await projectApi.submitWork(projectId, data);
-    showToast("✅ Submission saved");
-    await loadProjects(true);
+    try {
+      await projectApi.submitWork(projectId, data);
+      showToast("✅ Submission saved");
+      await loadProjects(true);
+    } catch (err: any) {
+      const msg = err?.message ?? err?.data?.message ?? "Submission failed";
+      showToast("❌ " + msg, "err");
+      throw err;
+    }
   };
+
   const handleDeleteSubmission = async (projectId: string, subId: string) => {
     if (!window.confirm("Delete this submission?")) return;
     try { await projectApi.deleteSubmission(projectId, subId); showToast("✅ Deleted"); await loadProjects(true); }
@@ -1777,7 +2056,7 @@ export function ProjectManagement() {
   const totalSpent  = projects.reduce((s, p) => s + p.spent, 0);
   const burnRate    = totalBudget > 0 ? ((totalSpent / totalBudget) * 100).toFixed(1) : "0";
   const avgProgress = projects.length > 0
-    ? Math.round(projects.reduce((s, p) => s + p.progress, 0) / projects.length) : 0;
+    ? Math.round(projects.reduce((s, p) => s + effectiveProgress(p.status, p.progress), 0) / projects.length) : 0;
   const byStatus = Object.keys(STATUS_CFG).reduce((a, k) => {
     a[k] = projects.filter(p => p.status === k).length; return a;
   }, {} as Record<string, number>);
@@ -1856,7 +2135,7 @@ export function ProjectManagement() {
           <div>
             <h1 className="text-xl font-bold text-gray-900 flex items-center gap-3">
               <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-md shadow-orange-200">
-                <FolderOpen className="h-4.5 w-4.5 text-white" />
+                <FolderOpen className="h-4 w-4 text-white" />
               </div>
               Project Management
             </h1>
