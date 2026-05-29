@@ -374,11 +374,15 @@ export const taskApi = {
   },
 };
 
-// ============================================================
-// ADD THESE METHODS to the existing projectApi object in api.ts
-// Replace the entire projectApi section with this:
-// ============================================================
-
+/* ============================================================
+   PROJECT API
+   ─────────────────────────────────────────────────────────
+   Document storage flow:
+     uploadDocument() → POST /projects/:id/documents
+     → controller reads base64 from req.body.url
+     → pushed into project.documents[] in MongoDB Atlas
+     → stored under: projects collection → documents[] → url field
+   ============================================================ */
 export const projectApi = {
   create: (data: any) =>
     apiFetch("/projects", { method: "POST", body: JSON.stringify(data) }),
@@ -399,7 +403,13 @@ export const projectApi = {
   delete: (id: string) =>
     apiFetch(`/projects/${id}`, { method: "DELETE" }),
 
-  // ── Documents ──────────────────────────────────────────────
+  /* ── Documents ──────────────────────────────────────────────
+     data.url must be a full base64 data-URL, e.g.:
+       "data:application/pdf;base64,JVBERi0xLjQ..."
+     This is stored verbatim in MongoDB Atlas.
+     To view in Atlas UI: projects → <doc> → documents[] → url
+     (Atlas UI truncates the value but full data is stored)
+  ── */
   uploadDocument: (
     id: string,
     data: { name: string; url: string; fileType: string; size: number; category?: string }
@@ -412,7 +422,7 @@ export const projectApi = {
   deleteDocument: (id: string, docId: string) =>
     apiFetch(`/projects/${id}/documents/${docId}`, { method: "DELETE" }),
 
-  // ── Daily Status ───────────────────────────────────────────
+  /* ── Daily Status ─────────────────────────────────────────── */
   submitDailyStatus: (
     id: string,
     data: {
@@ -437,7 +447,7 @@ export const projectApi = {
       body: JSON.stringify({ comment }),
     }),
 
-  // ── Work Submissions (legacy) ──────────────────────────────
+  /* ── Work Submissions (legacy) ──────────────────────────── */
   submitWork: (id: string, data: { description: string; hoursWorked: number }) =>
     apiFetch(`/projects/${id}/submissions`, {
       method: "POST",
@@ -870,7 +880,6 @@ export const emailCommApi = {
       body:   JSON.stringify(data),
     }),
 
-  // renamed from testSmtp — hits same backend route, label only changes in UI
   testSmtp: () =>
     apiFetch("/email-comm/test-smtp"),
 
