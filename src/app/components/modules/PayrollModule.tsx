@@ -1,8 +1,6 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Button } from "../ui/button";
-import { Badge } from "../ui/badge";
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
@@ -11,894 +9,1412 @@ import {
   Dialog, DialogContent, DialogHeader,
   DialogTitle, DialogTrigger,
 } from "../ui/dialog";
-import { Input }  from "../ui/input";
-import { Label }  from "../ui/label";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
 import {
-  Select, SelectContent, SelectItem,
-  SelectTrigger, SelectValue,
-} from "../ui/select";
-import {
-  Trash, Download,
-  Plus, RefreshCw, Users, TrendingUp,
-  Search, Edit2,
-  CheckCircle, Clock, AlertCircle, Zap,
+  Trash, Download, Plus, RefreshCw, Users, TrendingUp,
+  Search, Edit2, CheckCircle, Clock, AlertCircle, Zap,
+  Mail, CreditCard, History, BarChart3, LogIn, LogOut,
+  UserCheck, UserX, Activity, Wallet,
+  ArrowUpRight, ArrowDownRight, Building2, Shield,
 } from "lucide-react";
-import { useAuth }    from "../../contexts/AuthContext";
-import { payrollApi } from "@/services/api";
-import { format }     from "date-fns";
+import { useAuth } from "../../contexts/AuthContext";
+import { payrollApi, attendanceApi } from "@/services/api";
+import { format } from "date-fns";
 
-/* ─── Types ──────────────────────────────────────────────────── */
-interface Allowances {
-  hra: number; travel: number; medical: number; special: number; other: number;
-}
-interface Deductions {
-  pf: number; esi: number; tds: number; leaveDeduction: number; other: number;
-}
+/* ─── Types ─────────────────────────────────────────────── */
 interface PayrollRecord {
-  _id: string;
-  userId: { _id: string; name: string; email: string; role: string; department?: string } | null;
-  month: string;
+  _id:          string;
+  userId:       { _id: string; name: string; email: string; role: string; department?: string } | null;
+  month:        string;
   periodStart?: string;
-  periodEnd?: string;
-  role: string;
-  workingDays: number;
-  presentDays: number;
-  leaveDays: number;
-  paidLeaveDays: number;
-  basicSalary: number;
-  allowances: Allowances;
-  deductions: Deductions;
-  grossSalary: number;
-  totalDeductions: number;
-  netSalary: number;
-  status: "draft" | "pending" | "processed" | "paid";
+  periodEnd?:   string;
+  role:         string;
+  workingDays:  number;
+  presentDays:  number;
+  leaveDays:    number;
+  paidLeaveDays:number;
+  basicSalary:  number;   // full month basic
+  earnedBasic:  number;   // prorated
+  grossSalary:  number;   // = earnedBasic
+  netSalary:    number;   // = earnedBasic
+  status:       "draft" | "pending" | "processed" | "paid";
   paymentDate?: string;
   paymentMode?: string;
-  remarks?: string;
+  remarks?:     string;
 }
 
-/* ─── Helpers ─────────────────────────────────────────────────── */
+interface AttendanceRecord {
+  _id:      string;
+  userId?:  { _id: string; name: string; role: string; email?: string; department?: string };
+  date:     string;
+  checkIn?: string;
+  checkOut?:string;
+  tagline?: string;
+}
+
+interface UserRecord {
+  _id:         string;
+  name:        string;
+  role:        string;
+  email?:      string;
+  department?: string;
+}
+
+/* ─── Helpers ──────────────────────────────────────────── */
 const fmt = (n: number) =>
   "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
-const statusColor: Record<string, string> = {
-  draft:     "bg-gray-100 text-gray-700",
-  pending:   "bg-yellow-100 text-yellow-700",
-  processed: "bg-blue-100 text-blue-700",
-  paid:      "bg-green-100 text-green-700",
+const fmtK = (n: number) => {
+  if (n >= 100000) return "₹" + (n / 100000).toFixed(1) + "L";
+  if (n >= 1000)   return "₹" + (n / 1000).toFixed(1)   + "K";
+  return fmt(n);
 };
 
-const statusIcon: Record<string, React.ReactElement> = {
-  draft:     <AlertCircle className="h-3 w-3" />,
-  pending:   <Clock        className="h-3 w-3" />,
-  processed: <CheckCircle  className="h-3 w-3" />,
-  paid:      <Zap          className="h-3 w-3" />,
+/* ─── Client-side salary preview (mirrors backend calcSalary) ── */
+const calcLive = (
+  basicSalary:   number,
+  workingDays:   number,
+  presentDays:   number,
+  leaveDays:     number,
+  paidLeaveDays: number
+) => {
+  const wDays  = Math.max(1, workingDays  || 26);
+  const pDays  = Math.max(0, presentDays  || 0);
+  const lDays  = Math.max(0, leaveDays    || 0);
+  const plDays = Math.max(0, paidLeaveDays|| 1);
+  const basic  = Math.max(0, basicSalary  || 0);
+
+  const perDay           = basic / wDays;
+  const effectivePaid    = Math.min(lDays, plDays);
+  const paidDays         = pDays + effectivePaid;
+  const earnedBasic      = Math.round(perDay * paidDays);
+  const unpaidLeave      = Math.max(0, lDays - plDays);
+  const absentDays       = Math.max(0, wDays - pDays - lDays);
+
+  return { earnedBasic, netSalary: earnedBasic, perDay, paidDays, unpaidLeave, absentDays };
 };
 
-/* ─── Blank form ──────────────────────────────────────────────── */
-const blankForm = {
-  userId: "", month: "", basicSalary: "",
-  paidLeaveDays: "1", paymentMode: "bank_transfer", remarks: "",
-  extraAllowances: { special: "", other: "" },
-  extraDeductions: { tds: "", other: "" },
+const statusConfig: Record<string, { color: string; bg: string; dot: string }> = {
+  draft:     { color: "text-slate-600",   bg: "bg-slate-100",   dot: "bg-slate-400"   },
+  pending:   { color: "text-amber-700",   bg: "bg-amber-50",    dot: "bg-amber-400"   },
+  processed: { color: "text-blue-700",    bg: "bg-blue-50",     dot: "bg-blue-500"    },
+  paid:      { color: "text-emerald-700", bg: "bg-emerald-50",  dot: "bg-emerald-500" },
 };
 
-/* ═══════════════════════════════════════════════════════════════ */
+const roleConfig: Record<string, { bg: string; text: string }> = {
+  admin:    { bg: "bg-rose-100",    text: "text-rose-700"    },
+  hr:       { bg: "bg-violet-100",  text: "text-violet-700"  },
+  manager:  { bg: "bg-blue-100",    text: "text-blue-700"    },
+  employee: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  intern:   { bg: "bg-gray-100",    text: "text-gray-600"    },
+};
+
+/* ─── Sub-components ───────────────────────────────────── */
+const StatCard = ({ label, value, sub, icon, gradient, trend }: {
+  label: string; value: string; sub?: string; icon: React.ReactNode;
+  gradient: string; trend?: "up" | "down" | "neutral";
+}) => (
+  <div className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 ${gradient}`}>
+    <div className="flex items-start justify-between mb-2 sm:mb-3">
+      <div className="p-2 sm:p-2.5 bg-white/20 rounded-xl">{icon}</div>
+      {trend && trend !== "neutral" && (
+        <div className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full bg-white/20 ${trend === "up" ? "text-emerald-100" : "text-red-100"}`}>
+          {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+        </div>
+      )}
+    </div>
+    <p className="text-xl sm:text-2xl font-black text-white tracking-tight">{value}</p>
+    <p className="text-xs sm:text-sm text-white/70 font-medium mt-0.5">{label}</p>
+    {sub && <p className="text-[10px] sm:text-xs text-white/50 mt-1">{sub}</p>}
+    <div className="absolute -bottom-3 -right-3 w-16 h-16 bg-white/5 rounded-full pointer-events-none" />
+    <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-white/5 rounded-full pointer-events-none" />
+  </div>
+);
+
+const TabBtn = ({ active, onClick, icon, label }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
+}) => (
+  <button onClick={onClick}
+    className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all
+      ${active ? "bg-white text-slate-900 shadow-md" : "text-slate-500 hover:text-slate-700 hover:bg-white/50"}`}>
+    {icon}<span className="hidden sm:inline">{label}</span>
+  </button>
+);
+
+const AttBadge = ({ present, total }: { present: number; total: number }) => {
+  const pct   = total > 0 ? Math.round((present / total) * 100) : 0;
+  const color = pct >= 90 ? "text-emerald-600 bg-emerald-50 border-emerald-200"
+              : pct >= 75 ? "text-amber-600 bg-amber-50 border-amber-200"
+              :             "text-red-600 bg-red-50 border-red-200";
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full border ${color}`}>
+      <Activity className="h-2.5 w-2.5" />{present}/{total}d · {pct}%
+    </span>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════ */
 export function PayrollModule() {
   const { currentUser } = useAuth();
   const role    = ((currentUser as any)?._doc?.role ?? (currentUser as any)?.role ?? "").toLowerCase().trim();
   const isAdmin = role === "admin";
+  const isHR    = role === "hr";
 
-  const [records,      setRecords]      = useState<PayrollRecord[]>([]);
-  const [loading,      setLoading]      = useState(true);
-  const [toast,        setToast]        = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const [search,       setSearch]       = useState("");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterRole,   setFilterRole]   = useState("all");
-  const [reportType,   setReportType]   = useState<"monthly" | "weekly" | "custom">("monthly");
-  const [reportMonth,  setReportMonth]  = useState(format(new Date(), "yyyy-MM"));
-  const [reportStart,  setReportStart]  = useState("");
-  const [reportEnd,    setReportEnd]    = useState("");
+  /* ── Core state ── */
+  const [records,       setRecords]       = useState<PayrollRecord[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [toast,         setToast]         = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
+  const [saving,        setSaving]        = useState(false);
+  const [sending,       setSending]       = useState<string | null>(null);
+  const [activeTab,     setActiveTab]     = useState<"records" | "attendance" | "analytics">("records");
 
-  /* dialogs */
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editRecord, setEditRecord] = useState<PayrollRecord | null>(null);
-  const [editForm,   setEditForm]   = useState<any>({});
-  const [bulkOpen,   setBulkOpen]   = useState(false);
-  const [bulkMonth,  setBulkMonth]  = useState(format(new Date(), "yyyy-MM"));
-  const [createForm, setCreateForm] = useState({ ...blankForm });
+  /* ── Filters ── */
+  const [search,        setSearch]        = useState("");
+  const [filterStatus,  setFilterStatus]  = useState("all");
+  const [filterRole,    setFilterRole]    = useState("all");
+  const [filterMonth,   setFilterMonth]   = useState("all");
 
-  /* ── toast ── */
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
+  /* ── Attendance ── */
+  const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
+  const [allUsers,      setAllUsers]      = useState<UserRecord[]>([]);
+  const [attLoading,    setAttLoading]    = useState(false);
+  const [attMonth,      setAttMonth]      = useState(format(new Date(), "yyyy-MM"));
+  const [attSearch,     setAttSearch]     = useState("");
+  const [attRoleFilter, setAttRoleFilter] = useState("all");
+
+  /* ── Dialogs ── */
+  const [createOpen,     setCreateOpen]     = useState(false);
+  const [bulkOpen,       setBulkOpen]       = useState(false);
+  const [backfillOpen,   setBackfillOpen]   = useState(false);
+  const [backfillMonths, setBackfillMonths] = useState("");
+  const [bulkMonth,      setBulkMonth]      = useState(format(new Date(), "yyyy-MM"));
+
+  /* ── Create form ── */
+  const [createUserId,   setCreateUserId]   = useState("");
+  const [createMonth,    setCreateMonth]    = useState("");
+  const [createBasic,    setCreateBasic]    = useState("");
+  const [createPaidLeave,setCreatePaidLeave]= useState("1");
+  const [createMode,     setCreateMode]     = useState("bank_transfer");
+  const [createRemarks,  setCreateRemarks]  = useState("");
+
+  /* ── Edit payroll dialog ── */
+  const [editRecord,     setEditRecord]     = useState<PayrollRecord | null>(null);
+  const [editBasic,      setEditBasic]      = useState("");
+  const [editWorking,    setEditWorking]    = useState("");
+  const [editPresent,    setEditPresent]    = useState("");
+  const [editLeave,      setEditLeave]      = useState("");
+  const [editPaidLeave,  setEditPaidLeave]  = useState("");
+  const [editStatus,     setEditStatus]     = useState("");
+  const [editMode,       setEditMode]       = useState("");
+  const [editRemarks,    setEditRemarks]    = useState("");
+
+  /* ── Edit attendance dialog ── */
+  const [editAttId,      setEditAttId]      = useState<string | null>(null);
+  const [editAttName,    setEditAttName]    = useState("");
+  const [attWorking,     setAttWorking]     = useState("");
+  const [attPresent,     setAttPresent]     = useState("");
+  const [attLeave,       setAttLeave]       = useState("");
+
+  /* ── Mark paid dialog ── */
+  const [paidDialog,     setPaidDialog]     = useState<PayrollRecord | null>(null);
+  const [paidDate,       setPaidDate]       = useState(format(new Date(), "yyyy-MM-dd"));
+  const [paidMode,       setPaidMode]       = useState("bank_transfer");
+
+  /* ── Report ── */
+  const [reportType,     setReportType]     = useState<"monthly" | "custom">("monthly");
+  const [reportMonth,    setReportMonth]    = useState(format(new Date(), "yyyy-MM"));
+  const [reportStart,    setReportStart]    = useState("");
+  const [reportEnd,      setReportEnd]      = useState("");
+
+  /* ── Toast ── */
+  const showToast = useCallback((msg: string, type: "success" | "error" | "info" = "success") => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+    setTimeout(() => setToast(null), 4500);
+  }, []);
 
-  /* ── load ── */
-  const loadPayroll = async () => {
+  /* ── Load payroll ── */
+  const loadPayroll = useCallback(async () => {
     try {
       setLoading(true);
-      const r = (
-        (currentUser as any)?._doc?.role ??
-        (currentUser as any)?.role ??
-        ""
-      ).toLowerCase().trim();
-      const data = (r === "admin" || r === "hr")
-        ? await payrollApi.getAll()
-        : await payrollApi.getMy();
+      const r    = ((currentUser as any)?._doc?.role ?? (currentUser as any)?.role ?? "").toLowerCase().trim();
+      const data = (r === "admin" || r === "hr") ? await payrollApi.getAll() : await payrollApi.getMy();
       setRecords(data.records || []);
     } catch (err: any) {
       showToast("Failed to load payroll: " + err.message, "error");
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser, showToast]);
 
-  useEffect(() => { if (currentUser) loadPayroll(); }, [currentUser]);
+  /* ── Load attendance ── */
+  const loadAttendance = useCallback(async () => {
+    if (!isAdmin && !isHR) return;
+    try {
+      setAttLoading(true);
+      const [attRes, usersRes] = await Promise.all([
+        attendanceApi.getAll(),
+        attendanceApi.getUsersList(),
+      ]);
+      setAllAttendance(attRes.records || []);
+      setAllUsers(usersRes.users     || []);
+    } catch {
+      showToast("Failed to load attendance", "error");
+    } finally {
+      setAttLoading(false);
+    }
+  }, [isAdmin, isHR, showToast]);
 
-  /* ── filtered records ── */
-  const filtered = useMemo(() => {
-    return records.filter((r) => {
-      const name  = r.userId?.name?.toLowerCase() || "";
-      const email = r.userId?.email?.toLowerCase() || "";
-      const q     = search.toLowerCase();
-      const matchSearch = !q || name.includes(q) || email.includes(q) || r.month.includes(q);
-      const matchStatus = filterStatus === "all" || r.status === filterStatus;
-      const matchRole   = filterRole   === "all" || r.role   === filterRole;
-      return matchSearch && matchStatus && matchRole;
-    });
-  }, [records, search, filterStatus, filterRole]);
+  useEffect(() => {
+    if (currentUser) { loadPayroll(); loadAttendance(); }
+  }, [currentUser]);
 
-  /* ── stats ── */
+  useEffect(() => {
+    if (!isAdmin && !isHR) return;
+    const id = setInterval(() => loadAttendance(), 60000);
+    return () => clearInterval(id);
+  }, [isAdmin, isHR, loadAttendance]);
+
+  /* ── Derived ── */
+  const uniqueMonths = useMemo(() =>
+    [...new Set(records.map(r => r.month))].sort().reverse(), [records]);
+
+  const filtered = useMemo(() =>
+    records.filter(r => {
+      const q = search.toLowerCase();
+      return (
+        (!q || r.userId?.name?.toLowerCase().includes(q) || r.userId?.email?.toLowerCase().includes(q) || r.month.includes(q)) &&
+        (filterStatus === "all" || r.status === filterStatus) &&
+        (filterRole   === "all" || r.role   === filterRole)   &&
+        (filterMonth  === "all" || r.month  === filterMonth)
+      );
+    }), [records, search, filterStatus, filterRole, filterMonth]);
+
+  const todayStr        = format(new Date(), "yyyy-MM-dd");
+  const todayAttendance = useMemo(() => allAttendance.filter(r => r.date === todayStr), [allAttendance, todayStr]);
+  const presentToday    = todayAttendance.filter(r => r.checkIn).length;
+  const checkedOut      = todayAttendance.filter(r => r.checkIn && r.checkOut).length;
+  const notYet          = allUsers.length - presentToday;
+
+  /* ── Attendance monthly summary ── */
+  const attSummary = useMemo(() => {
+  const [y, m]      = attMonth.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const monthPrefix = attMonth + "-";
+
+  const workingDays = Array.from({ length: daysInMonth }, (_, i) =>
+    new Date(y, m - 1, i + 1).getDay() !== 0 ? 1 : 0
+  ).reduce((a: number, b) => a + b, 0);
+
+  const passedWorkingDays = Array.from({ length: daysInMonth }, (_, i) => {
+    const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`;
+    return new Date(y, m - 1, i + 1).getDay() !== 0 && dateStr <= todayStr ? 1 : 0;
+  }).reduce((a: number, b) => a + b, 0);
+
+  const summary: Record<string, any> = {};
+  allUsers.forEach(u => {
+    summary[u._id] = { userId: u._id, name: u.name, role: u.role, department: u.department,
+      presentDays: 0, leaveDays: 0, workingDays, absentDays: 0 };
+  });
+  allAttendance.forEach(r => {
+    if (!r.date.startsWith(monthPrefix) || r.date > todayStr) return;
+    const uid = r.userId?._id;
+    if (!uid || !summary[uid]) return;
+    if (r.checkIn) summary[uid].presentDays++;
+  });
+  Object.values(summary).forEach((s: any) => {
+    s.absentDays = Math.max(0, passedWorkingDays - s.presentDays - s.leaveDays);
+  });
+  return Object.values(summary);
+}, [allAttendance, allUsers, attMonth, todayStr]);
+
+  const filteredAtt = useMemo(() =>
+    attSummary.filter((s: any) => {
+      const q = attSearch.toLowerCase();
+      return (
+        (!q || s.name.toLowerCase().includes(q) || (s.department || "").toLowerCase().includes(q)) &&
+        (attRoleFilter === "all" || s.role === attRoleFilter)
+      );
+    }), [attSummary, attSearch, attRoleFilter]);
+
   const stats = useMemo(() => ({
-    totalNetPaid:      records.filter(r => r.status === "paid").reduce((s, r) => s + r.netSalary, 0),
-    totalNetProcessed: records.filter(r => r.status === "processed").reduce((s, r) => s + r.netSalary, 0),
-    totalPending:      records.filter(r => ["draft", "pending"].includes(r.status)).reduce((s, r) => s + r.netSalary, 0),
-    headcount:         new Set(records.map(r => r.userId?._id)).size,
+    totalPaid:      records.filter(r => r.status === "paid").reduce((s, r) => s + r.netSalary, 0),
+    totalProcessed: records.filter(r => r.status === "processed").reduce((s, r) => s + r.netSalary, 0),
+    totalPending:   records.filter(r => ["draft","pending"].includes(r.status)).reduce((s, r) => s + r.netSalary, 0),
+    totalGross:     records.reduce((s, r) => s + r.grossSalary, 0),
+    headcount:      new Set(records.map(r => r.userId?._id)).size,
+    paidCount:      records.filter(r => r.status === "paid").length,
+    draftCount:     records.filter(r => r.status === "draft").length,
   }), [records]);
 
-  /* ── CREATE ── */
+  /* ─── Live preview for edit dialog ── */
+  const liveEdit = editRecord ? calcLive(
+    Number(editBasic),
+    Number(editWorking),
+    Number(editPresent),
+    Number(editLeave),
+    Number(editPaidLeave),
+  ) : null;
+
+  /* ─── Live preview for attendance edit dialog ── */
+  const liveAtt = editAttId ? (() => {
+    const rec = records.find(r => r._id === editAttId);
+    if (!rec) return null;
+    return calcLive(rec.basicSalary, Number(attWorking), Number(attPresent), Number(attLeave), rec.paidLeaveDays);
+  })() : null;
+
+  /* ─── Live preview for create dialog ── */
+  const liveCreate = createBasic ? calcLive(
+    Number(createBasic), 26, 26, 0, Number(createPaidLeave)
+  ) : null;
+
+  /* ══ HANDLERS ══ */
+
   const handleCreate = async () => {
-    const { userId, month, basicSalary } = createForm;
-    if (!userId || !month || !basicSalary)
-      return showToast("User ID, month and basic salary are required", "error");
+    if (!createUserId || !createMonth || !createBasic)
+      return showToast("Employee, month and basic salary required", "error");
     try {
       await payrollApi.create({
-        userId,
-        month,
-        basicSalary:     Number(basicSalary),
-        paidLeaveDays:   Number(createForm.paidLeaveDays || 1),
-        paymentMode:     createForm.paymentMode,
-        remarks:         createForm.remarks,
-        extraAllowances: {
-          special: Number(createForm.extraAllowances.special || 0),
-          other:   Number(createForm.extraAllowances.other   || 0),
-        },
-        extraDeductions: {
-          tds:   Number(createForm.extraDeductions.tds   || 0),
-          other: Number(createForm.extraDeductions.other || 0),
-        },
+        userId:       createUserId,
+        month:        createMonth,
+        basicSalary:  Number(createBasic),
+        paidLeaveDays:Number(createPaidLeave || 1),
+        paymentMode:  createMode,
+        remarks:      createRemarks,
       });
-      showToast("Payroll record created successfully");
+      showToast("Payroll record created ✓");
       setCreateOpen(false);
-      setCreateForm({ ...blankForm });
-      await loadPayroll();
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
+      setCreateUserId(""); setCreateMonth(""); setCreateBasic("");
+      setCreatePaidLeave("1"); setCreateMode("bank_transfer"); setCreateRemarks("");
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
   };
 
-  /* ── BULK GENERATE ── */
-  const handleBulkGenerate = async () => {
-    if (!window.confirm(`Auto-generate payroll for all employees for ${bulkMonth}?`)) return;
+  const handleBulk = async () => {
+    if (!window.confirm(`Bulk generate payroll for ${bulkMonth}?`)) return;
     try {
       const res = await payrollApi.bulk({ month: bulkMonth, paidLeaveDays: 1 });
       showToast(`Created: ${res.created}, Skipped: ${res.skipped}`);
       setBulkOpen(false);
-      await loadPayroll();
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
   };
 
-  /* ── PROCESS ── */
+  const handleBackfill = async () => {
+    const months = backfillMonths.split(",").map(s => s.trim()).filter(Boolean);
+    if (!months.length) return showToast("Enter at least one month", "error");
+    if (!window.confirm(`Backfill for ${months.join(", ")}?`)) return;
+    try {
+      const res = await payrollApi.backfill({ months });
+      showToast(`Done: ${res.summary?.map((s: any) => `${s.month}: +${s.created}`).join(", ")}`);
+      setBackfillOpen(false); setBackfillMonths("");
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
+  };
+
   const handleProcess = async () => {
-    if (!window.confirm("Process all draft/pending payrolls?")) return;
+    if (!window.confirm("Process all draft/pending payrolls? Emails will be sent.")) return;
     try {
       const res = await payrollApi.process();
-      showToast(res.message || "Payrolls processed");
-      await loadPayroll();
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
+      showToast(res.message || "Processed ✓");
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
   };
 
-  /* ── EDIT ── */
   const openEdit = (rec: PayrollRecord) => {
     setEditRecord(rec);
-    setEditForm({
-      presentDays:      rec.presentDays,
-      leaveDays:        rec.leaveDays,
-      status:           rec.status,
-      paymentMode:      rec.paymentMode || "bank_transfer",
-      remarks:          rec.remarks || "",
-      tds:              rec.deductions?.tds || 0,
-      otherDeduction:   rec.deductions?.other || 0,
-      specialAllowance: rec.allowances?.special || 0,
-    });
+    setEditBasic(String(rec.basicSalary));
+    setEditWorking(String(rec.workingDays));
+    setEditPresent(String(rec.presentDays));
+    setEditLeave(String(rec.leaveDays));
+    setEditPaidLeave(String(rec.paidLeaveDays || 1));
+    setEditStatus(rec.status);
+    setEditMode(rec.paymentMode || "bank_transfer");
+    setEditRemarks(rec.remarks || "");
   };
 
   const handleEdit = async () => {
     if (!editRecord) return;
+    setSaving(true);
+    const calc = calcLive(
+      Number(editBasic), Number(editWorking),
+      Number(editPresent), Number(editLeave), Number(editPaidLeave)
+    );
     try {
       await payrollApi.update(editRecord._id, {
-        presentDays: Number(editForm.presentDays),
-        leaveDays:   Number(editForm.leaveDays),
-        status:      editForm.status,
-        paymentMode: editForm.paymentMode,
-        remarks:     editForm.remarks,
-        deductions:  { tds: Number(editForm.tds), other: Number(editForm.otherDeduction) },
-        allowances:  { special: Number(editForm.specialAllowance) },
-      });
-      showToast("Record updated successfully");
+        basicSalary:   Number(editBasic),
+        workingDays:   Number(editWorking),
+        presentDays:   Number(editPresent),
+        leaveDays:     Number(editLeave),
+        paidLeaveDays: Number(editPaidLeave),
+        status:        editStatus as any,
+        paymentMode:   editMode,
+        remarks:       editRemarks,
+      } as any);
+
+      // Optimistic update
+      setRecords(prev => prev.map(r => r._id !== editRecord._id ? r : {
+        ...r,
+        basicSalary:   Number(editBasic),
+        workingDays:   Number(editWorking),
+        presentDays:   Number(editPresent),
+        leaveDays:     Number(editLeave),
+        paidLeaveDays: Number(editPaidLeave),
+        earnedBasic:   calc.earnedBasic,
+        grossSalary:   calc.earnedBasic,
+        netSalary:     calc.netSalary,
+        status:        editStatus as PayrollRecord["status"],
+        paymentMode:   editMode,
+        remarks:       editRemarks,
+      }));
+
+      showToast("Saved & recalculated ✓");
       setEditRecord(null);
-      await loadPayroll();
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setSaving(false); }
   };
 
-  /* ── DELETE ── */
+  const openEditAtt = (rec: PayrollRecord) => {
+    setEditAttId(rec._id);
+    setEditAttName(rec.userId?.name || "");
+    setAttWorking(String(rec.workingDays));
+    setAttPresent(String(rec.presentDays));
+    setAttLeave(String(rec.leaveDays));
+  };
+
+  const handleEditAtt = async () => {
+    if (!editAttId) return;
+    setSaving(true);
+    const rec  = records.find(r => r._id === editAttId);
+    const calc = rec ? calcLive(rec.basicSalary, Number(attWorking), Number(attPresent), Number(attLeave), rec.paidLeaveDays) : null;
+    try {
+      await payrollApi.update(editAttId, {
+        workingDays: Number(attWorking),
+        presentDays: Number(attPresent),
+        leaveDays:   Number(attLeave),
+      } as any);
+
+      setRecords(prev => prev.map(r => r._id !== editAttId ? r : {
+        ...r,
+        workingDays:  Number(attWorking),
+        presentDays:  Number(attPresent),
+        leaveDays:    Number(attLeave),
+        ...(calc ? { earnedBasic: calc.earnedBasic, grossSalary: calc.earnedBasic, netSalary: calc.netSalary } : {}),
+      }));
+
+      showToast("Attendance updated & salary recalculated ✓");
+      setEditAttId(null);
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  const handleMarkPaid = async () => {
+    if (!paidDialog) return;
+    try {
+      await payrollApi.markPaid(paidDialog._id, { paymentDate: paidDate, paymentMode: paidMode });
+      showToast("Marked paid & email sent ✓");
+      setPaidDialog(null);
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
+  };
+
+  const handleResend = async (id: string) => {
+    setSending(id);
+    try {
+      await payrollApi.resend(id);
+      showToast("Payslip resent ✓");
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setSending(null); }
+  };
+
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Delete this payroll record?")) return;
+    if (!window.confirm("Delete this record?")) return;
     try {
       await payrollApi.delete(id);
-      showToast("Record deleted");
-      await loadPayroll();
-    } catch (err: any) {
-      showToast(err.message, "error");
-    }
+      setRecords(prev => prev.filter(r => r._id !== id));
+      showToast("Deleted");
+      loadPayroll();
+    } catch (err: any) { showToast(err.message, "error"); }
   };
 
-  /* ── DOWNLOAD CSV REPORT ── */
   const downloadReport = () => {
     let data = [...records];
-
-    if (reportType === "monthly") {
-      data = data.filter(r => r.month === reportMonth);
-    } else if ((reportType === "weekly" || reportType === "custom") && reportStart && reportEnd) {
-      const s = new Date(reportStart);
-      const e = new Date(reportEnd);
-      data = data.filter(r => {
-        const d = new Date(r.periodStart || r.month + "-01");
-        return d >= s && d <= e;
-      });
+    if (reportType === "monthly") data = data.filter(r => r.month === reportMonth);
+    else if (reportStart && reportEnd) {
+      const s = new Date(reportStart), e = new Date(reportEnd);
+      data = data.filter(r => { const d = new Date(r.periodStart || r.month + "-01"); return d >= s && d <= e; });
     }
-
     if (!data.length) return showToast("No records for selected period", "error");
-
-    const headers = [
-      "Employee", "Email", "Role", "Month",
-      "Period Start", "Period End",
-      "Working Days", "Present Days", "Leave Days",
-      "Basic Salary", "HRA", "Travel", "Medical", "Special Allowance", "Other Allowance",
-      "Gross Salary", "PF", "ESI", "TDS", "Leave Deduction", "Other Deduction",
-      "Total Deductions", "Net Salary", "Status", "Payment Date", "Payment Mode",
-    ];
-
+    const headers = ["Employee","Email","Role","Month","Working Days","Present Days","Leave Days","Paid Leave Days","Basic Salary","Earned Basic","Net Salary","Status","Payment Date","Payment Mode","Remarks"];
     const rows = data.map(r => [
-      r.userId?.name  || "-",
-      r.userId?.email || "-",
-      r.role          || "-",
-      r.month,
-      r.periodStart ? format(new Date(r.periodStart), "dd MMM yyyy") : "-",
-      r.periodEnd   ? format(new Date(r.periodEnd),   "dd MMM yyyy") : "-",
-      r.workingDays, r.presentDays, r.leaveDays,
-      r.basicSalary,
-      r.allowances?.hra      || 0,
-      r.allowances?.travel   || 0,
-      r.allowances?.medical  || 0,
-      r.allowances?.special  || 0,
-      r.allowances?.other    || 0,
-      r.grossSalary,
-      r.deductions?.pf              || 0,
-      r.deductions?.esi             || 0,
-      r.deductions?.tds             || 0,
-      r.deductions?.leaveDeduction  || 0,
-      r.deductions?.other           || 0,
-      r.totalDeductions,
-      r.netSalary,
-      r.status,
+      r.userId?.name||"-", r.userId?.email||"-", r.role||"-", r.month,
+      r.workingDays, r.presentDays, r.leaveDays, r.paidLeaveDays,
+      r.basicSalary, r.earnedBasic, r.netSalary, r.status,
       r.paymentDate ? format(new Date(r.paymentDate), "dd MMM yyyy") : "-",
-      r.paymentMode || "-",
+      r.paymentMode||"-", r.remarks||"-",
     ]);
-
-    const csv = [headers, ...rows]
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-
+    const csv = [headers, ...rows].map(row =>
+      row.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")
+    ).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href  = url;
-    link.download = `payroll_${reportType}_${format(new Date(), "yyyyMMdd")}.csv`;
+    link.download = `payroll_${format(new Date(), "yyyyMMdd")}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast(`Report downloaded (${data.length} records)`);
+    showToast(`Downloaded ${data.length} records`);
   };
 
-  /* ── PAYSLIP HTML ── */
-  const downloadPayslip = (rec: PayrollRecord) => {
-    const name = rec.userId?.name || "Employee";
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8"/>
-  <title>Payslip – ${name} – ${rec.month}</title>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;padding:30px}
-    .slip{max-width:760px;margin:auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1)}
-    .header{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);color:#fff;padding:28px 36px;display:flex;justify-content:space-between;align-items:center}
-    .company{font-size:22px;font-weight:700;letter-spacing:.5px}
-    .payslip-label{background:#f97316;color:#fff;padding:6px 18px;border-radius:20px;font-size:13px;font-weight:600}
-    .meta{padding:20px 36px;background:#f8fafc;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;border-bottom:1px solid #e2e8f0}
-    .meta-item label{font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.5px}
-    .meta-item span{font-size:14px;font-weight:600;color:#1e293b;display:block;margin-top:2px}
-    .body{padding:28px 36px;display:grid;grid-template-columns:1fr 1fr;gap:28px}
-    .section h3{font-size:13px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
-    .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed #f1f5f9;font-size:13px}
-    .row:last-child{border-bottom:none}
-    .row .label{color:#475569}
-    .row .val{font-weight:600;color:#1e293b}
-    .row.earn .val{color:#16a34a}
-    .row.dedu .val{color:#dc2626}
-    .net{margin:0 36px 28px;background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:10px;padding:20px 28px;display:flex;justify-content:space-between;align-items:center}
-    .net .label{color:#94a3b8;font-size:13px}
-    .net .amount{color:#fff;font-size:26px;font-weight:700}
-    .footer{text-align:center;padding:16px;font-size:11px;color:#94a3b8;background:#f8fafc;border-top:1px solid #e2e8f0}
-    .badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600}
-    .badge.processed,.badge.paid{background:#dcfce7;color:#16a34a}
-    .badge.pending{background:#fef9c3;color:#a16207}
-    .badge.draft{background:#f1f5f9;color:#64748b}
-    @media print{body{padding:0;background:#fff}.slip{box-shadow:none;border-radius:0}}
-  </style>
-</head>
-<body>
-  <div class="slip">
-    <div class="header">
-      <div>
-        <div class="company">🏢 HRMS System</div>
-        <div style="color:#94a3b8;font-size:13px;margin-top:4px">Employee Pay Statement</div>
-      </div>
-      <div class="payslip-label">PAYSLIP</div>
-    </div>
-    <div class="meta">
-      <div class="meta-item"><label>Employee</label><span>${name}</span></div>
-      <div class="meta-item"><label>Role</label><span style="text-transform:capitalize">${rec.role || "-"}</span></div>
-      <div class="meta-item"><label>Email</label><span>${rec.userId?.email || "-"}</span></div>
-      <div class="meta-item">
-        <label>Pay Period</label>
-        <span>
-          ${rec.periodStart
-            ? format(new Date(rec.periodStart), "dd MMM")
-            : "01 " + rec.month.split("-")[1] + " " + rec.month.split("-")[0]}
-          –
-          ${rec.periodEnd
-            ? format(new Date(rec.periodEnd), "dd MMM yyyy")
-            : rec.month}
-        </span>
-      </div>
-      <div class="meta-item"><label>Working Days</label><span>${rec.workingDays || "-"} days</span></div>
-      <div class="meta-item"><label>Present / Leave</label><span>${rec.presentDays || 0} / ${rec.leaveDays || 0} days</span></div>
-    </div>
-    <div class="body">
-      <div class="section">
-        <h3>💰 Earnings</h3>
-        <div class="row earn"><span class="label">Basic Salary</span><span class="val">${fmt(rec.basicSalary)}</span></div>
-        <div class="row earn"><span class="label">HRA</span><span class="val">+${fmt(rec.allowances?.hra)}</span></div>
-        <div class="row earn"><span class="label">Travel Allowance</span><span class="val">+${fmt(rec.allowances?.travel)}</span></div>
-        <div class="row earn"><span class="label">Medical Allowance</span><span class="val">+${fmt(rec.allowances?.medical)}</span></div>
-        ${rec.allowances?.special ? `<div class="row earn"><span class="label">Special Allowance</span><span class="val">+${fmt(rec.allowances.special)}</span></div>` : ""}
-        ${rec.allowances?.other   ? `<div class="row earn"><span class="label">Other Allowance</span><span class="val">+${fmt(rec.allowances.other)}</span></div>`   : ""}
-        <div class="row" style="margin-top:8px;font-weight:700">
-          <span class="label">Gross Salary</span>
-          <span class="val" style="color:#2563eb">${fmt(rec.grossSalary)}</span>
-        </div>
-      </div>
-      <div class="section">
-        <h3>📉 Deductions</h3>
-        <div class="row dedu"><span class="label">Provident Fund (12%)</span><span class="val">-${fmt(rec.deductions?.pf)}</span></div>
-        <div class="row dedu"><span class="label">ESI</span><span class="val">-${fmt(rec.deductions?.esi)}</span></div>
-        ${rec.deductions?.tds            ? `<div class="row dedu"><span class="label">TDS</span><span class="val">-${fmt(rec.deductions.tds)}</span></div>`                         : ""}
-        ${rec.deductions?.leaveDeduction ? `<div class="row dedu"><span class="label">Leave Deduction</span><span class="val">-${fmt(rec.deductions.leaveDeduction)}</span></div>` : ""}
-        ${rec.deductions?.other          ? `<div class="row dedu"><span class="label">Other Deduction</span><span class="val">-${fmt(rec.deductions.other)}</span></div>`          : ""}
-        <div class="row" style="margin-top:8px;font-weight:700">
-          <span class="label">Total Deductions</span>
-          <span class="val" style="color:#dc2626">-${fmt(rec.totalDeductions)}</span>
-        </div>
-      </div>
-    </div>
-    <div class="net">
-      <div>
-        <div class="label">Net Take-Home Salary</div>
-        <div style="color:#94a3b8;font-size:12px;margin-top:2px">
-          Status: <span class="badge ${rec.status}">${rec.status.toUpperCase()}</span>
-          ${rec.paymentDate ? " · Paid on " + format(new Date(rec.paymentDate), "dd MMM yyyy") : ""}
-        </div>
-      </div>
-      <div class="amount">${fmt(rec.netSalary)}</div>
-    </div>
-    <div class="footer">
-      This is a computer-generated payslip. No signature required. · Generated ${format(new Date(), "dd MMM yyyy, hh:mm a")}
-    </div>
-  </div>
-  <script>window.onload=()=>window.print()</script>
-</body>
-</html>`;
-
-    const blob = new Blob([html], { type: "text/html" });
-    const url  = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-  };
-
-  /* ─── GUARDS ─────────────────────────────────────────────────── */
-  if (!currentUser || !isAdmin) return (
-    <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
-      🔒 Access restricted to administrators.
+  /* ── Guards ── */
+  if (!currentUser || (!isAdmin && !isHR)) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
+      <Shield className="h-10 w-10 opacity-30" />
+      <p className="text-sm font-medium">Access restricted to administrators.</p>
     </div>
   );
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-      <p className="text-sm text-gray-400">Loading payroll data…</p>
+      <div className="w-10 h-10 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+      <p className="text-sm text-slate-400 font-medium">Loading payroll data…</p>
     </div>
   );
 
-  /* ─── RENDER ─────────────────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════════════════════ */
   return (
-    <div className="space-y-5 px-2 sm:px-0">
+    <div className="space-y-4 sm:space-y-6 pb-10 px-3 sm:px-0">
 
-      {/* ── Toast ── */}
+      {/* Toast */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl text-sm font-medium transition-all
-          ${toast.type === "error" ? "bg-red-600 text-white" : "bg-emerald-600 text-white"}`}>
-          {toast.type === "error" ? "❌" : "✅"} {toast.msg}
+        <div className={`fixed top-4 right-4 z-[200] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold max-w-sm border backdrop-blur-sm
+          ${toast.type==="error"?"bg-white border-red-200 text-red-700":toast.type==="info"?"bg-white border-blue-200 text-blue-700":"bg-white border-emerald-200 text-emerald-700"}`}>
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-black
+            ${toast.type==="error"?"bg-red-100 text-red-600":toast.type==="info"?"bg-blue-100 text-blue-600":"bg-emerald-100 text-emerald-600"}`}>
+            {toast.type==="error"?"✕":toast.type==="info"?"i":"✓"}
+          </div>
+          <span className="flex-1 text-xs sm:text-sm">{toast.msg}</span>
         </div>
       )}
 
-      {/* ── Header ── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Payroll Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Salary computation · Payslips · Analytics</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-
-          {/* Bulk Generate */}
-          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="gap-1.5 text-xs sm:text-sm h-9">
-                <Zap className="h-3.5 w-3.5" /> Auto-Generate
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm">
-              <DialogHeader><DialogTitle>Bulk Generate Payroll</DialogTitle></DialogHeader>
-              <div className="space-y-4 mt-2">
-                <div>
-                  <Label>Month</Label>
-                  <Input type="month" value={bulkMonth}
-                    onChange={e => setBulkMonth(e.target.value)} />
-                </div>
-                <p className="text-xs text-gray-500">
-                  Auto-creates payroll for all active employees using their basicSalary, attendance and leave data.
-                </p>
-                <Button className="w-full" onClick={handleBulkGenerate}>Generate</Button>
+      {/* Header */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-11 sm:h-11 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center shadow-lg shadow-orange-500/30">
+                <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Add Single */}
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <Button className="gap-1.5 text-xs sm:text-sm h-9 bg-orange-500 hover:bg-orange-600">
-                <Plus className="h-3.5 w-3.5" /> Add Payroll
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Create Payroll Record</DialogTitle></DialogHeader>
-              <div className="space-y-3 mt-2">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <Label>User ID *</Label>
-                    <Input placeholder="MongoDB _id" value={createForm.userId}
-                      onChange={e => setCreateForm({ ...createForm, userId: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Month * (YYYY-MM)</Label>
-                    <Input type="month" value={createForm.month}
-                      onChange={e => setCreateForm({ ...createForm, month: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Basic Salary *</Label>
-                    <Input type="number" placeholder="0" value={createForm.basicSalary}
-                      onChange={e => setCreateForm({ ...createForm, basicSalary: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Paid Leave Days</Label>
-                    <Input type="number" placeholder="1" value={createForm.paidLeaveDays}
-                      onChange={e => setCreateForm({ ...createForm, paidLeaveDays: e.target.value })} />
-                  </div>
-                  <div>
-                    <Label>Payment Mode</Label>
-                    <Select value={createForm.paymentMode}
-                      onValueChange={v => setCreateForm({ ...createForm, paymentMode: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                        <SelectItem value="cheque">Cheque</SelectItem>
-                        <SelectItem value="cash">Cash</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Extra Allowances</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Special Allowance</Label>
-                    <Input type="number" placeholder="0"
-                      value={createForm.extraAllowances.special}
-                      onChange={e => setCreateForm({
-                        ...createForm,
-                        extraAllowances: { ...createForm.extraAllowances, special: e.target.value },
-                      })} />
-                  </div>
-                  <div>
-                    <Label>Other Allowance</Label>
-                    <Input type="number" placeholder="0"
-                      value={createForm.extraAllowances.other}
-                      onChange={e => setCreateForm({
-                        ...createForm,
-                        extraAllowances: { ...createForm.extraAllowances, other: e.target.value },
-                      })} />
-                  </div>
-                </div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Extra Deductions</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>TDS</Label>
-                    <Input type="number" placeholder="0"
-                      value={createForm.extraDeductions.tds}
-                      onChange={e => setCreateForm({
-                        ...createForm,
-                        extraDeductions: { ...createForm.extraDeductions, tds: e.target.value },
-                      })} />
-                  </div>
-                  <div>
-                    <Label>Other Deduction</Label>
-                    <Input type="number" placeholder="0"
-                      value={createForm.extraDeductions.other}
-                      onChange={e => setCreateForm({
-                        ...createForm,
-                        extraDeductions: { ...createForm.extraDeductions, other: e.target.value },
-                      })} />
-                  </div>
-                </div>
-                <div>
-                  <Label>Remarks</Label>
-                  <Input placeholder="Optional note" value={createForm.remarks}
-                    onChange={e => setCreateForm({ ...createForm, remarks: e.target.value })} />
-                </div>
-                <Button className="w-full bg-orange-500 hover:bg-orange-600" onClick={handleCreate}>
-                  Create Record
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Process All */}
-          <Button variant="outline" className="gap-1.5 text-xs sm:text-sm h-9" onClick={handleProcess}>
-            <CheckCircle className="h-3.5 w-3.5" /> Process All
-          </Button>
-
-          {/* Refresh */}
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={loadPayroll}>
-            <RefreshCw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: "Total Paid",      value: fmt(stats.totalNetPaid),      icon: <CheckCircle className="h-4 w-4" />, color: "text-emerald-600", bg: "bg-emerald-50" },
-          { label: "To Be Processed", value: fmt(stats.totalNetProcessed), icon: <TrendingUp   className="h-4 w-4" />, color: "text-blue-600",    bg: "bg-blue-50"    },
-          { label: "Pending/Draft",   value: fmt(stats.totalPending),      icon: <Clock        className="h-4 w-4" />, color: "text-orange-600",  bg: "bg-orange-50"  },
-          { label: "Headcount",       value: stats.headcount + " emp",     icon: <Users        className="h-4 w-4" />, color: "text-purple-600",  bg: "bg-purple-50"  },
-        ].map((s) => (
-          <Card key={s.label} className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs text-gray-500">{s.label}</p>
-                  <p className={`text-lg font-bold mt-1 ${s.color}`}>{s.value}</p>
-                </div>
-                <div className={`p-2 rounded-lg ${s.bg} ${s.color}`}>{s.icon}</div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* ── Report Download Section ── */}
-      <Card className="border-0 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Download className="h-4 w-4 text-orange-500" /> Download Report
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
-            <div>
-              <Label className="text-xs">Report Type</Label>
-              <Select value={reportType} onValueChange={(v: any) => setReportType(v)}>
-                <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {reportType === "monthly" && (
               <div>
-                <Label className="text-xs">Month</Label>
-                <Input type="month" value={reportMonth} className="h-8 text-xs w-36"
-                  onChange={e => setReportMonth(e.target.value)} />
+                <h1 className="text-lg sm:text-2xl font-black text-white">Payroll Management</h1>
+                <p className="text-slate-400 text-xs sm:text-sm">Quibo Technologies · Basic Salary</p>
               </div>
-            )}
+            </div>
+            <button onClick={() => { loadPayroll(); loadAttendance(); }}
+              className="p-2.5 text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all flex-shrink-0">
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
 
-            {(reportType === "weekly" || reportType === "custom") && (
-              <>
+          <div className="flex flex-wrap gap-2">
+            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />{presentToday} present today
+            </span>
+            <span className="text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">{records.length} records</span>
+            <span className="text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">{stats.headcount} employees</span>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {/* Backfill */}
+            <Dialog open={backfillOpen} onOpenChange={setBackfillOpen}>
+              <DialogTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all">
+                  <History className="h-3.5 w-3.5" /> Backfill
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm mx-4 rounded-2xl">
+                <DialogHeader><DialogTitle className="text-base font-black">Backfill Historical Payroll</DialogTitle></DialogHeader>
+                <div className="space-y-4 mt-2">
+                  <div>
+                    <Label className="text-xs font-semibold">Months (comma-separated)</Label>
+                    <Input className="mt-1.5 rounded-xl" placeholder="2026-01,2026-02"
+                      value={backfillMonths} onChange={e => setBackfillMonths(e.target.value)} />
+                  </div>
+                  <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    Creates "paid" records for past months. Skips existing records.
+                  </p>
+                  <Button className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-xl" onClick={handleBackfill}>Run Backfill</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Bulk */}
+            <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+              <DialogTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all">
+                  <Zap className="h-3.5 w-3.5" /> Auto-Generate
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm mx-4 rounded-2xl">
+                <DialogHeader><DialogTitle className="text-base font-black">Bulk Generate Payroll</DialogTitle></DialogHeader>
+                <div className="space-y-4 mt-2">
+                  <div>
+                    <Label className="text-xs font-semibold">Month</Label>
+                    <Input type="month" className="mt-1.5 rounded-xl" value={bulkMonth} onChange={e => setBulkMonth(e.target.value)} />
+                  </div>
+                  <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    Creates draft payrolls for all active employees using their profile basicSalary + attendance.
+                  </p>
+                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl" onClick={handleBulk}>Generate</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Add */}
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-all shadow-lg shadow-orange-500/30">
+                  <Plus className="h-3.5 w-3.5" /> Add Record
+                </button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md mx-4 rounded-2xl">
+                <DialogHeader><DialogTitle className="text-base font-black">Create Payroll Record</DialogTitle></DialogHeader>
+                <div className="space-y-4 mt-3">
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-700">Employee *</Label>
+                    <select className="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      value={createUserId} onChange={e => setCreateUserId(e.target.value)}>
+                      <option value="">— Select Employee —</option>
+                      {allUsers.map(u => (
+                        <option key={u._id} value={u._id}>{u.name} ({u.role}{u.department ? ` · ${u.department}` : ""})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-700">Month *</Label>
+                      <Input type="month" className="mt-1.5 rounded-xl border-slate-200"
+                        value={createMonth} onChange={e => setCreateMonth(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-700">Basic Salary *</Label>
+                      <div className="relative mt-1.5">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">₹</span>
+                        <Input type="number" placeholder="0" className="pl-6 rounded-xl border-slate-200"
+                          value={createBasic} onChange={e => setCreateBasic(e.target.value)} />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-700">Paid Leave Days</Label>
+                      <Input type="number" placeholder="1" className="mt-1.5 rounded-xl border-slate-200"
+                        value={createPaidLeave} onChange={e => setCreatePaidLeave(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-700">Payment Mode</Label>
+                      <select className="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                        value={createMode} onChange={e => setCreateMode(e.target.value)}>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="cash">Cash</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Live preview */}
+                  {liveCreate && Number(createBasic) > 0 && (
+                    <div className="bg-slate-800 rounded-xl p-3 text-center">
+                      <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Preview (26 working days assumed)</p>
+                      <p className="text-lg font-black text-orange-300">{fmt(liveCreate.earnedBasic)} net</p>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-700">Remarks</Label>
+                    <Input placeholder="Optional note…" className="mt-1.5 rounded-xl border-slate-200"
+                      value={createRemarks} onChange={e => setCreateRemarks(e.target.value)} />
+                  </div>
+
+                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-11 font-semibold" onClick={handleCreate}>
+                    Create Record
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Process */}
+            <button onClick={handleProcess}
+              className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-emerald-300 bg-emerald-900/30 hover:bg-emerald-900/50 rounded-xl border border-emerald-800/60 transition-all">
+              <CheckCircle className="h-3.5 w-3.5" /> Process & Email
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats strips */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard label="Present Today" value={String(presentToday)} icon={<UserCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" trend="up" />
+        <StatCard label="Checked Out"   value={String(checkedOut)}   icon={<LogOut   className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-blue-500 to-blue-600"    trend="neutral" />
+        <StatCard label="Not Yet In"    value={String(notYet)}       icon={<UserX    className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-amber-500 to-orange-500"  trend="down" />
+        <StatCard label="Total Staff"   value={String(allUsers.length)} icon={<Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-slate-600 to-slate-700"   trend="neutral" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="Total Paid"      value={fmtK(stats.totalPaid)}      sub={`${stats.paidCount} records`}   icon={<CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-600 to-teal-700"  trend="up" />
+        <StatCard label="Processed"       value={fmtK(stats.totalProcessed)} sub="awaiting payment"               icon={<TrendingUp  className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-violet-500 to-purple-600" trend="neutral" />
+        <StatCard label="Pending / Draft" value={fmtK(stats.totalPending)}   sub={`${stats.draftCount} drafts`}   icon={<Clock       className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-orange-500 to-red-500"    trend="down" />
+        <StatCard label="Total Gross"     value={fmtK(stats.totalGross)}     sub={`${stats.headcount} employees`} icon={<Building2   className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-slate-700 to-slate-800"   trend="neutral" />
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-slate-100 rounded-2xl p-1">
+        <TabBtn active={activeTab==="records"}    onClick={()=>setActiveTab("records")}    icon={<Wallet   className="h-3.5 w-3.5 sm:h-4 sm:w-4"/>} label="Payroll Records" />
+        <TabBtn active={activeTab==="attendance"} onClick={()=>setActiveTab("attendance")} icon={<Activity className="h-3.5 w-3.5 sm:h-4 sm:w-4"/>} label="Live Attendance" />
+        <TabBtn active={activeTab==="analytics"}  onClick={()=>setActiveTab("analytics")}  icon={<BarChart3 className="h-3.5 w-3.5 sm:h-4 sm:w-4"/>} label="Analytics" />
+      </div>
+
+      {/* ══ TAB: ATTENDANCE ══ */}
+      {activeTab === "attendance" && (
+        <div className="space-y-4">
+          {/* Today live */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <h3 className="text-sm sm:text-base font-black text-slate-800">Today's Live Attendance</h3>
+                <span className="text-xs text-slate-400 hidden sm:inline">{format(new Date(), "d MMM yyyy")}</span>
+              </div>
+              <button onClick={loadAttendance} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 transition-all">
+                <RefreshCw className={`h-4 w-4 text-slate-500 ${attLoading ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+            <div className="p-4 sm:p-6">
+              {attLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-7 h-7 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {allUsers.map(u => {
+                    const rec   = todayAttendance.find(r => r.userId?._id === u._id);
+                    const isIn  = !!rec?.checkIn;
+                    const isOut = !!rec?.checkOut;
+                    const rc    = roleConfig[u.role] || roleConfig.employee;
+                    return (
+                      <div key={u._id} className={`rounded-2xl border p-4 transition-all hover:shadow-md
+                        ${isOut ? "border-slate-200 bg-slate-50" : isIn ? "border-emerald-200 bg-emerald-50/40" : "border-red-100 bg-red-50/20"}`}>
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white font-black text-sm flex-shrink-0">
+                              {u.name[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-slate-800 truncate">{u.name}</p>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${rc.bg} ${rc.text}`}>{u.role}</span>
+                            </div>
+                          </div>
+                          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 ${isOut ? "bg-slate-400" : isIn ? "bg-emerald-500 animate-pulse" : "bg-red-400"}`} />
+                        </div>
+                        <div className="flex gap-3 text-xs mb-2">
+                          <span className={`flex items-center gap-1 font-mono font-semibold ${isIn ? "text-emerald-600" : "text-slate-300"}`}>
+                            <LogIn className="h-3 w-3" />{isIn ? rec!.checkIn : "—"}
+                          </span>
+                          <span className={`flex items-center gap-1 font-mono font-semibold ${isOut ? "text-slate-600" : "text-slate-300"}`}>
+                            <LogOut className="h-3 w-3" />{isOut ? rec!.checkOut : "—"}
+                          </span>
+                        </div>
+                        {rec?.tagline && <p className="text-[10px] text-slate-400 italic mb-2 truncate">"{rec.tagline}"</p>}
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full
+                          ${isOut ? "bg-slate-100 text-slate-600" : isIn ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                          {isOut ? "✓ Completed" : isIn ? "● Working" : "✕ Absent"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Monthly summary */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-orange-500" />
+                  <h3 className="text-sm sm:text-base font-black text-slate-800">Monthly Summary</h3>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <Input type="month" value={attMonth} className="h-8 text-xs w-36 rounded-xl border-slate-200"
+                    onChange={e => setAttMonth(e.target.value)} />
+                  <select value={attRoleFilter} onChange={e => setAttRoleFilter(e.target.value)}
+                    className="h-8 text-xs border border-slate-200 rounded-xl px-2 bg-white">
+                    <option value="all">All Roles</option>
+                    <option value="admin">Admin</option>
+                    <option value="hr">HR</option>
+                    <option value="manager">Manager</option>
+                    <option value="employee">Employee</option>
+                  </select>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <Input placeholder="Search…" value={attSearch} className="h-8 text-xs pl-8 w-32 rounded-xl border-slate-200"
+                      onChange={e => setAttSearch(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table className="min-w-[600px]">
+                <TableHeader>
+                  <TableRow className="bg-slate-50 border-b border-slate-100">
+                    {["Employee", "Working", "Present", "Absent", "Leave", "Rate", "Payroll", "Edit"].map(h => (
+                      <TableHead key={h} className="text-[11px] font-black text-slate-500 uppercase tracking-wide py-3">{h}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAtt.length === 0 ? (
+                    <TableRow><TableCell colSpan={8} className="text-center text-slate-400 py-12">No data for {attMonth}.</TableCell></TableRow>
+                  ) : (filteredAtt as any[]).map(s => {
+                    const pct         = s.workingDays > 0 ? Math.round((s.presentDays / s.workingDays) * 100) : 0;
+                    const barColor    = pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500";
+                    const rc          = roleConfig[s.role] || roleConfig.employee;
+                    const linkedPay   = records.find(r => r.userId?._id === s.userId && r.month === attMonth);
+                    return (
+                      <TableRow key={s.userId} className="hover:bg-orange-50/20 transition-colors border-b border-slate-50">
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white font-black text-xs flex-shrink-0">
+                              {s.name[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-xs font-semibold text-slate-800">{s.name}</p>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rc.bg} ${rc.text}`}>{s.role}</span>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-600">{s.workingDays}d</TableCell>
+                        <TableCell><span className="text-xs font-bold text-emerald-600">{s.presentDays}d</span></TableCell>
+                        <TableCell><span className="text-xs font-bold text-red-500">{s.absentDays}d</span></TableCell>
+                        <TableCell><span className="text-xs font-bold text-amber-600">{s.leaveDays}d</span></TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 min-w-[70px]">
+                            <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className={`text-[10px] font-black ${pct >= 90 ? "text-emerald-600" : pct >= 75 ? "text-amber-600" : "text-red-600"}`}>{pct}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {linkedPay
+                            ? <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700 flex items-center gap-1 w-fit"><CheckCircle className="h-2.5 w-2.5" /> Linked</span>
+                            : <span className="text-[10px] text-slate-400">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          {linkedPay && (
+                            <button className="p-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 transition-all" onClick={() => openEditAtt(linkedPay)}>
+                              <Edit2 className="h-3.5 w-3.5 text-orange-500" />
+                            </button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="px-4 sm:px-6 py-3 border-t border-slate-100 text-[11px] text-slate-400">
+              {filteredAtt.length} employees · {attMonth} · Auto-refreshes every 60s
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ TAB: ANALYTICS ══ */}
+      {activeTab === "analytics" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: "Total Net Paid",  value: fmtK(stats.totalPaid),      icon: "✅", g: "from-emerald-500 to-teal-600"  },
+              { label: "Processed Queue", value: fmtK(stats.totalProcessed), icon: "⚙️", g: "from-amber-500 to-orange-500"  },
+              { label: "Pending Amount",  value: fmtK(stats.totalPending),   icon: "⏳", g: "from-slate-500 to-slate-600"   },
+              { label: "Total Gross",     value: fmtK(stats.totalGross),     icon: "💼", g: "from-slate-700 to-slate-800"   },
+              { label: "Paid Records",    value: String(stats.paidCount),    icon: "💳", g: "from-blue-500 to-blue-600"     },
+              { label: "Draft Records",   value: String(stats.draftCount),   icon: "📝", g: "from-rose-500 to-rose-600"     },
+              { label: "Total Records",   value: String(records.length),     icon: "📊", g: "from-violet-500 to-purple-600" },
+              { label: "Employees",       value: String(stats.headcount),    icon: "👥", g: "from-indigo-500 to-indigo-600" },
+            ].map(s => (
+              <div key={s.label} className={`bg-gradient-to-br ${s.g} rounded-2xl p-4 sm:p-5 relative overflow-hidden`}>
+                <div className="text-xl sm:text-2xl mb-2">{s.icon}</div>
+                <p className="text-xl sm:text-2xl font-black text-white">{s.value}</p>
+                <p className="text-[11px] sm:text-xs text-white/70 font-medium mt-1">{s.label}</p>
+                <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-white/10 rounded-full pointer-events-none" />
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
+            <h3 className="text-sm font-black text-slate-800 mb-4">Net Salary by Role</h3>
+            <div className="space-y-3">
+              {["admin", "hr", "manager", "employee", "intern"].map(r => {
+                const recs  = records.filter(rec => rec.role === r);
+                if (!recs.length) return null;
+                const total = recs.reduce((s, rec) => s + rec.netSalary, 0);
+                const pct   = stats.totalPaid > 0 ? Math.round((total / stats.totalPaid) * 100) : 0;
+                const rc    = roleConfig[r] || roleConfig.employee;
+                return (
+                  <div key={r} className="flex items-center gap-3">
+                    <span className={`text-[10px] sm:text-xs font-black px-2.5 py-1.5 rounded-xl capitalize w-20 text-center flex-shrink-0 ${rc.bg} ${rc.text}`}>{r}</span>
+                    <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-xs sm:text-sm font-black text-slate-700 w-16 sm:w-20 text-right flex-shrink-0">{fmtK(total)}</span>
+                    <span className="text-[10px] text-slate-400 w-8 text-right flex-shrink-0">{recs.length}e</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {(["draft", "pending", "processed", "paid"] as const).map(s => {
+              const sc  = statusConfig[s];
+              const cnt = records.filter(r => r.status === s).length;
+              const amt = records.filter(r => r.status === s).reduce((a, r) => a + r.netSalary, 0);
+              return (
+                <div key={s} className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1.5 rounded-full mb-3 ${sc.bg} ${sc.color}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </div>
+                  <p className="text-2xl font-black text-slate-800">{cnt}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">records</p>
+                  <p className="text-sm font-bold text-slate-600 mt-2">{fmtK(amt)}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ══ TAB: RECORDS ══ */}
+      {activeTab === "records" && (
+        <div className="space-y-4">
+          {/* Report / Export */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Report Type</p>
+                <select className="h-9 text-xs border border-slate-200 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  value={reportType} onChange={(e: any) => setReportType(e.target.value)}>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              {reportType === "monthly" && (
                 <div>
-                  <Label className="text-xs">From</Label>
-                  <Input type="date" value={reportStart} className="h-8 text-xs w-36"
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Month</p>
+                  <Input type="month" value={reportMonth} className="h-9 text-xs w-36 rounded-xl border-slate-200"
+                    onChange={e => setReportMonth(e.target.value)} />
+                </div>
+              )}
+              {reportType === "custom" && (<>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">From</p>
+                  <Input type="date" value={reportStart} className="h-9 text-xs w-36 rounded-xl border-slate-200"
                     onChange={e => setReportStart(e.target.value)} />
                 </div>
                 <div>
-                  <Label className="text-xs">To</Label>
-                  <Input type="date" value={reportEnd} className="h-8 text-xs w-36"
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">To</p>
+                  <Input type="date" value={reportEnd} className="h-9 text-xs w-36 rounded-xl border-slate-200"
                     onChange={e => setReportEnd(e.target.value)} />
                 </div>
-              </>
-            )}
-
-            <Button onClick={downloadReport} className="h-8 text-xs gap-1.5 bg-orange-500 hover:bg-orange-600">
-              <Download className="h-3.5 w-3.5" /> Export CSV
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Filters ── */}
-      <div className="flex flex-col sm:flex-row gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
-          <Input placeholder="Search employee…" value={search}
-            className="pl-8 h-9 text-sm"
-            onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-full sm:w-36 h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="processed">Processed</SelectItem>
-            <SelectItem value="paid">Paid</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterRole} onValueChange={setFilterRole}>
-          <SelectTrigger className="w-full sm:w-36 h-9 text-sm"><SelectValue placeholder="Role" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="hr">HR</SelectItem>
-            <SelectItem value="manager">Manager</SelectItem>
-            <SelectItem value="employee">Employee</SelectItem>
-            <SelectItem value="intern">Intern</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* ── Table ── */}
-      <Card className="border-0 shadow-sm">
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table className="min-w-[900px]">
-              <TableHeader>
-                <TableRow className="bg-gray-50 border-b">
-                  <TableHead className="text-xs">Employee</TableHead>
-                  <TableHead className="text-xs">Month / Period</TableHead>
-                  <TableHead className="text-xs">Attendance</TableHead>
-                  <TableHead className="text-xs">Basic</TableHead>
-                  <TableHead className="text-xs">Gross</TableHead>
-                  <TableHead className="text-xs">Deductions</TableHead>
-                  <TableHead className="text-xs font-bold">Net Salary</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center text-gray-400 py-16 text-sm">
-                      No payroll records found.
-                    </TableCell>
-                  </TableRow>
-                ) : filtered.map((rec) => (
-                  <TableRow key={rec._id} className="hover:bg-orange-50/40 transition-colors">
-
-                    {/* Employee */}
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {(rec.userId?.name || "?")[0].toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-semibold truncate max-w-[100px]">
-                            {rec.userId?.name || "-"}
-                          </div>
-                          <div className="text-[10px] text-gray-400 truncate max-w-[100px] capitalize">
-                            {rec.role}
-                          </div>
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    {/* Month */}
-                    <TableCell>
-                      <div className="text-xs font-semibold">{rec.month}</div>
-                      {rec.periodStart && (
-                        <div className="text-[10px] text-gray-400">
-                          {format(new Date(rec.periodStart), "d MMM")}
-                          {" – "}
-                          {format(new Date(rec.periodEnd!), "d MMM yyyy")}
-                        </div>
-                      )}
-                    </TableCell>
-
-                    {/* Attendance */}
-                    <TableCell>
-                      <div className="text-xs">
-                        <span className="text-green-600 font-medium">{rec.presentDays}P</span>
-                        {" / "}
-                        <span className="text-red-500">{rec.leaveDays}L</span>
-                        {" / "}
-                        <span className="text-gray-400">{rec.workingDays}W</span>
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="text-xs">{fmt(rec.basicSalary)}</TableCell>
-                    <TableCell className="text-xs text-blue-600 font-medium">{fmt(rec.grossSalary)}</TableCell>
-                    <TableCell className="text-xs text-red-500">-{fmt(rec.totalDeductions)}</TableCell>
-                    <TableCell>
-                      <span className="text-sm font-bold text-emerald-600">{fmt(rec.netSalary)}</span>
-                    </TableCell>
-
-                    {/* Status badge */}
-                    <TableCell>
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full ${statusColor[rec.status]}`}>
-                        {statusIcon[rec.status]}
-                        {rec.status.charAt(0).toUpperCase() + rec.status.slice(1)}
-                      </span>
-                    </TableCell>
-
-                    {/* Actions */}
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          title="Download Payslip" onClick={() => downloadPayslip(rec)}>
-                          <Download className="h-3.5 w-3.5 text-blue-500" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          title="Edit" onClick={() => openEdit(rec)}>
-                          <Edit2 className="h-3.5 w-3.5 text-orange-500" />
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0"
-                          title="Delete" onClick={() => handleDelete(rec._id)}>
-                          <Trash className="h-3.5 w-3.5 text-red-500" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {filtered.length > 0 && (
-            <div className="px-4 py-3 border-t text-xs text-gray-400">
-              Showing {filtered.length} of {records.length} records
+              </>)}
+              <button onClick={downloadReport}
+                className="flex items-center gap-2 h-9 px-4 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-all">
+                <Download className="h-3.5 w-3.5" /> Export CSV
+              </button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
 
-      {/* ── Edit Dialog ── */}
-      {editRecord && (
-        <Dialog open={!!editRecord} onOpenChange={() => setEditRecord(null)}>
-          <DialogContent className="max-w-md">
+          {/* Filters */}
+          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input placeholder="Search employee…" value={search} className="pl-9 h-9 text-sm rounded-xl border-slate-200"
+                onChange={e => setSearch(e.target.value)} />
+            </div>
+            {[
+              { value: filterMonth,  set: setFilterMonth,  opts: [["all","All Months"], ...uniqueMonths.map(m=>[m,m])] },
+              { value: filterStatus, set: setFilterStatus, opts: [["all","All Status"],["draft","Draft"],["pending","Pending"],["processed","Processed"],["paid","Paid"]] },
+              { value: filterRole,   set: setFilterRole,   opts: [["all","All Roles"],["admin","Admin"],["hr","HR"],["manager","Manager"],["employee","Employee"],["intern","Intern"]] },
+            ].map(({ value, set, opts }, i) => (
+              <select key={i} value={value} onChange={e => set(e.target.value)}
+                className="h-9 text-sm border border-slate-200 rounded-xl px-3 bg-white focus:outline-none focus:ring-2 focus:ring-orange-400 w-full sm:w-auto">
+                {opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            ))}
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table className="min-w-[860px]">
+                <TableHeader>
+                  <TableRow className="bg-slate-50 border-b border-slate-200">
+                    {["Employee","Month","Attendance","Full Basic","Earned / Net","Status","Actions"].map(h => (
+                      <TableHead key={h} className="text-[10px] font-black text-slate-500 uppercase tracking-wider py-3">{h}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-slate-400 py-16">
+                        <div className="flex flex-col items-center gap-3">
+                          <Wallet className="h-10 w-10 opacity-20" />
+                          <p className="text-sm font-semibold">No payroll records found</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : filtered.map(rec => {
+                    const sc     = statusConfig[rec.status] || statusConfig.draft;
+                    const rc     = roleConfig[rec.role]     || roleConfig.employee;
+                    const pct    = rec.workingDays > 0 ? Math.round((rec.presentDays / rec.workingDays) * 100) : 0;
+                    const todayR = todayAttendance.find(r => r.userId?._id === rec.userId?._id);
+                    return (
+                      <TableRow key={rec._id} className="hover:bg-orange-50/20 transition-colors border-b border-slate-50 last:border-0">
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-black text-sm flex-shrink-0">
+                              {(rec.userId?.name || "?")[0].toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate max-w-[100px]">{rec.userId?.name || "—"}</p>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${rc.bg} ${rc.text}`}>{rec.role}</span>
+                                {todayR?.checkIn && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-0.5">
+                                    <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />in
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <p className="text-xs font-bold text-slate-700">{rec.month}</p>
+                          {rec.periodStart && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                              {format(new Date(rec.periodStart), "d MMM")}–{format(new Date(rec.periodEnd!), "d MMM")}
+                            </p>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <AttBadge present={rec.presentDays} total={rec.workingDays} />
+                          <div className="flex gap-2 text-[10px] mt-1">
+                            <span className="text-emerald-600 font-bold">{rec.presentDays}P</span>
+                            <span className="text-amber-500">{rec.leaveDays}L</span>
+                            <span className="text-slate-400">{rec.workingDays}W</span>
+                          </div>
+                          <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden mt-1">
+                            <div className={`h-full rounded-full ${pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs font-semibold text-slate-700 py-3">
+                          {fmt(rec.basicSalary)}
+                          <p className="text-[10px] text-slate-400 mt-0.5">full month</p>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <span className="text-sm font-black text-emerald-600">{fmt(rec.netSalary)}</span>
+                          <p className="text-[10px] text-slate-400 mt-0.5">earned basic</p>
+                          {rec.paymentDate && (
+                            <p className="text-[10px] text-slate-400">{format(new Date(rec.paymentDate), "d MMM yy")}</p>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-full ${sc.bg} ${sc.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
+                            {rec.status.charAt(0).toUpperCase() + rec.status.slice(1)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex gap-1">
+                            <button title="Resend Payslip" disabled={sending === rec._id}
+                              className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 transition-all disabled:opacity-50"
+                              onClick={() => handleResend(rec._id)}>
+                              {sending === rec._id
+                                ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-purple-500" />
+                                : <Mail className="h-3.5 w-3.5 text-purple-500" />}
+                            </button>
+                            {rec.status !== "paid" && (
+                              <button title="Mark as Paid"
+                                className="p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition-all"
+                                onClick={() => { setPaidDialog(rec); setPaidDate(format(new Date(), "yyyy-MM-dd")); setPaidMode(rec.paymentMode || "bank_transfer"); }}>
+                                <CreditCard className="h-3.5 w-3.5 text-emerald-600" />
+                              </button>
+                            )}
+                            <button title="Edit Attendance"
+                              className="p-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 transition-all"
+                              onClick={() => openEditAtt(rec)}>
+                              <Activity className="h-3.5 w-3.5 text-blue-500" />
+                            </button>
+                            <button title="Edit Payroll"
+                              className="p-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 transition-all"
+                              onClick={() => openEdit(rec)}>
+                              <Edit2 className="h-3.5 w-3.5 text-orange-500" />
+                            </button>
+                            <button title="Delete"
+                              className="p-1.5 rounded-xl bg-red-50 hover:bg-red-100 transition-all"
+                              onClick={() => handleDelete(rec._id)}>
+                              <Trash className="h-3.5 w-3.5 text-red-500" />
+                            </button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            {filtered.length > 0 && (
+              <div className="px-4 sm:px-6 py-3.5 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                <span className="text-xs text-slate-500 font-medium">
+                  <span className="font-bold text-slate-700">{filtered.length}</span> of {records.length} records
+                </span>
+                <span className="text-xs text-slate-500">
+                  Total net: <span className="font-bold text-emerald-600">{fmt(filtered.reduce((s, r) => s + r.netSalary, 0))}</span>
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ EDIT ATTENDANCE DIALOG ══ */}
+      {editAttId && (
+        <Dialog open={!!editAttId} onOpenChange={() => setEditAttId(null)}>
+          <DialogContent className="max-w-md mx-4 rounded-2xl">
             <DialogHeader>
-              <DialogTitle>Edit Payroll — {editRecord.userId?.name}</DialogTitle>
+              <DialogTitle className="flex items-center gap-2 text-sm sm:text-base">
+                <Activity className="h-4 w-4 text-blue-500" />
+                Edit Attendance — {editAttName}
+              </DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 mt-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Present Days</Label>
-                  <Input type="number" value={editForm.presentDays}
-                    onChange={e => setEditForm({ ...editForm, presentDays: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Leave Days</Label>
-                  <Input type="number" value={editForm.leaveDays}
-                    onChange={e => setEditForm({ ...editForm, leaveDays: e.target.value })} />
-                </div>
-                <div>
-                  <Label>TDS Deduction</Label>
-                  <Input type="number" value={editForm.tds}
-                    onChange={e => setEditForm({ ...editForm, tds: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Other Deduction</Label>
-                  <Input type="number" value={editForm.otherDeduction}
-                    onChange={e => setEditForm({ ...editForm, otherDeduction: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Special Allowance</Label>
-                  <Input type="number" value={editForm.specialAllowance}
-                    onChange={e => setEditForm({ ...editForm, specialAllowance: e.target.value })} />
-                </div>
-                <div>
-                  <Label>Status</Label>
-                  <Select value={editForm.status}
-                    onValueChange={v => setEditForm({ ...editForm, status: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="processed">Processed</SelectItem>
-                      <SelectItem value="paid">Paid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>Payment Mode</Label>
-                  <Select value={editForm.paymentMode}
-                    onValueChange={v => setEditForm({ ...editForm, paymentMode: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="cheque">Cheque</SelectItem>
-                      <SelectItem value="cash">Cash</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="space-y-4 mt-2">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 text-xs text-blue-700">
+                ℹ️ Changing attendance will <strong>automatically recalculate</strong> earned salary.
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "Working Days", val: attWorking, set: setAttWorking },
+                  { label: "Present Days", val: attPresent, set: setAttPresent },
+                  { label: "Leave Days",   val: attLeave,   set: setAttLeave   },
+                ].map(f => (
+                  <div key={f.label}>
+                    <Label className="text-xs font-semibold text-slate-700">{f.label}</Label>
+                    <Input type="number" min="0" className="mt-1.5 rounded-xl border-slate-200"
+                      value={f.val} onChange={e => f.set(e.target.value)} />
+                  </div>
+                ))}
+              </div>
+              {(() => {
+                const w   = Number(attWorking) || 1;
+                const p   = Number(attPresent) || 0;
+                const l   = Number(attLeave)   || 0;
+                const pct = Math.round((p / w) * 100);
+                const abs = Math.max(0, w - p - l);
+                return (
+                  <>
+                    <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-xs border border-slate-200">
+                      <div className="flex justify-between"><span className="text-slate-500">Attendance rate</span><span className="font-bold">{pct}%</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Absent days</span><span className="font-bold text-red-500">{abs}d</span></div>
+                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                    {liveAtt && (
+                      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-3 border border-slate-700 text-center">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block mr-1.5 animate-pulse" />Salary Preview
+                        </p>
+                        <p className="text-lg font-black text-orange-300">{fmt(liveAtt.earnedBasic)}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">{liveAtt.paidDays} paid days × {fmt(Math.round(liveAtt.perDay))}/day</p>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+              <div className="flex gap-2">
+                <Button disabled={saving} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl" onClick={handleEditAtt}>
+                  {saving ? <><RefreshCw className="h-3.5 w-3.5 animate-spin mr-2" />Saving…</> : "Update & Recalculate"}
+                </Button>
+                <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setEditAttId(null)}>Cancel</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ══ MARK PAID DIALOG ══ */}
+      {paidDialog && (
+        <Dialog open={!!paidDialog} onOpenChange={() => setPaidDialog(null)}>
+          <DialogContent className="max-w-sm mx-4 rounded-2xl">
+            <DialogHeader><DialogTitle className="text-sm sm:text-base font-black">Mark as Paid — {paidDialog.userId?.name}</DialogTitle></DialogHeader>
+            <div className="space-y-4 mt-2">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-center">
+                <p className="text-xs text-emerald-100 mb-1">Net Salary</p>
+                <p className="text-3xl font-black text-white">{fmt(paidDialog.netSalary)}</p>
+                <p className="text-xs text-emerald-200 mt-1">{paidDialog.month}</p>
               </div>
               <div>
-                <Label>Remarks</Label>
-                <Input value={editForm.remarks}
-                  onChange={e => setEditForm({ ...editForm, remarks: e.target.value })} />
+                <Label className="text-xs font-semibold text-slate-700">Payment Date</Label>
+                <Input type="date" className="mt-1.5 rounded-xl border-slate-200" value={paidDate} onChange={e => setPaidDate(e.target.value)} />
               </div>
+              <div>
+                <Label className="text-xs font-semibold text-slate-700">Payment Mode</Label>
+                <select className="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  value={paidMode} onChange={e => setPaidMode(e.target.value)}>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="cash">Cash</option>
+                </select>
+              </div>
+              <p className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-50 rounded-xl p-3 border border-slate-200">
+                <Mail className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />
+                Payslip will be sent to <strong className="truncate">{paidDialog.userId?.email}</strong>
+              </p>
+              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-11 font-semibold" onClick={handleMarkPaid}>
+                <CreditCard className="h-4 w-4 mr-2" /> Mark Paid & Send Email
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ══ EDIT PAYROLL DIALOG ══ */}
+      {editRecord && (
+        <Dialog open={!!editRecord} onOpenChange={() => setEditRecord(null)}>
+          <DialogContent className="max-w-lg mx-4 max-h-[90vh] overflow-y-auto rounded-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-sm sm:text-base font-black">
+                Edit Payroll — {editRecord.userId?.name}
+                <span className="ml-2 text-xs font-normal text-slate-400">{editRecord.month}</span>
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-2">
+
+              {/* Live preview */}
+              {liveEdit && (
+                <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Preview</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-slate-700/50 rounded-xl p-3 text-center">
+                      <p className="text-[10px] text-slate-400 mb-1">Per Day</p>
+                      <p className="text-sm font-black text-white">{fmt(Math.round(liveEdit.perDay))}</p>
+                    </div>
+                    <div className="bg-blue-900/40 rounded-xl p-3 text-center border border-blue-800/40">
+                      <p className="text-[10px] text-blue-400 mb-1">Paid Days</p>
+                      <p className="text-sm font-black text-blue-300">{liveEdit.paidDays}d</p>
+                    </div>
+                    <div className="bg-orange-900/40 rounded-xl p-3 text-center border border-orange-800/40">
+                      <p className="text-[10px] text-orange-400 mb-1">Net Salary</p>
+                      <p className="text-base font-black text-orange-300">{fmt(liveEdit.netSalary)}</p>
+                    </div>
+                  </div>
+                  {(liveEdit.unpaidLeave > 0 || liveEdit.absentDays > 0) && (
+                    <div className="mt-3 pt-3 border-t border-slate-700 flex gap-4 text-[10px]">
+                      {liveEdit.unpaidLeave > 0 && <span className="text-amber-400">⚠ {liveEdit.unpaidLeave} unpaid leave day(s)</span>}
+                      {liveEdit.absentDays  > 0 && <span className="text-red-400">✕ {liveEdit.absentDays} absent day(s)</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Basic salary */}
+              <div className="bg-orange-50 rounded-2xl p-4 border border-orange-200 space-y-3">
+                <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">💰 Basic Salary</p>
+                <div>
+                  <Label className="text-xs font-semibold text-slate-600">Full Month Basic Salary</Label>
+                  <div className="relative mt-1.5">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-semibold">₹</span>
+                    <Input type="number" min="0" className="pl-6 rounded-xl border-orange-200 bg-white focus:ring-orange-400"
+                      value={editBasic} onChange={e => setEditBasic(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Attendance */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">📅 Attendance</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: "Working Days", val: editWorking,   set: setEditWorking   },
+                    { label: "Present Days", val: editPresent,   set: setEditPresent   },
+                    { label: "Leave Days",   val: editLeave,     set: setEditLeave     },
+                    { label: "Paid Leave",   val: editPaidLeave, set: setEditPaidLeave },
+                  ].map(f => (
+                    <div key={f.label}>
+                      <Label className="text-xs font-semibold text-slate-600">{f.label}</Label>
+                      <Input type="number" min="0" className="mt-1.5 rounded-xl border-slate-200 bg-white"
+                        value={f.val} onChange={e => f.set(e.target.value)} />
+                    </div>
+                  ))}
+                </div>
+                {(() => {
+                  const w   = Number(editWorking) || 1;
+                  const p   = Number(editPresent) || 0;
+                  const pct = Math.round((p / w) * 100);
+                  return (
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-300 ${pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className={`text-[10px] font-black ${pct >= 90 ? "text-emerald-600" : pct >= 75 ? "text-amber-600" : "text-red-600"}`}>{pct}% attendance</span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Meta */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">Status</Label>
+                  <select className="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    value={editStatus} onChange={e => setEditStatus(e.target.value)}>
+                    <option value="draft">Draft</option>
+                    <option value="pending">Pending</option>
+                    <option value="processed">Processed</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-slate-700">Payment Mode</Label>
+                  <select className="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    value={editMode} onChange={e => setEditMode(e.target.value)}>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-xs font-semibold text-slate-700">Remarks</Label>
+                  <Input className="mt-1.5 rounded-xl border-slate-200" placeholder="Optional note…"
+                    value={editRemarks} onChange={e => setEditRemarks(e.target.value)} />
+                </div>
+              </div>
+
               <div className="flex gap-2">
-                <Button className="flex-1 bg-orange-500 hover:bg-orange-600" onClick={handleEdit}>
-                  Save Changes
+                <Button disabled={saving} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-11 font-semibold" onClick={handleEdit}>
+                  {saving ? <><RefreshCw className="h-3.5 w-3.5 animate-spin mr-2" />Saving…</> : "Save & Recalculate"}
                 </Button>
-                <Button variant="outline" className="flex-1" onClick={() => setEditRecord(null)}>
-                  Cancel
-                </Button>
+                <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setEditRecord(null)}>Cancel</Button>
               </div>
             </div>
           </DialogContent>
