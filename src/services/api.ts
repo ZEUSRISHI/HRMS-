@@ -376,12 +376,6 @@ export const taskApi = {
 
 /* ============================================================
    PROJECT API
-   ─────────────────────────────────────────────────────────
-   Document storage flow:
-     uploadDocument() → POST /projects/:id/documents
-     → controller reads base64 from req.body.url
-     → pushed into project.documents[] in MongoDB Atlas
-     → stored under: projects collection → documents[] → url field
    ============================================================ */
 export const projectApi = {
   create: (data: any) =>
@@ -403,13 +397,6 @@ export const projectApi = {
   delete: (id: string) =>
     apiFetch(`/projects/${id}`, { method: "DELETE" }),
 
-  /* ── Documents ──────────────────────────────────────────────
-     data.url must be a full base64 data-URL, e.g.:
-       "data:application/pdf;base64,JVBERi0xLjQ..."
-     This is stored verbatim in MongoDB Atlas.
-     To view in Atlas UI: projects → <doc> → documents[] → url
-     (Atlas UI truncates the value but full data is stored)
-  ── */
   uploadDocument: (
     id: string,
     data: { name: string; url: string; fileType: string; size: number; category?: string }
@@ -422,7 +409,6 @@ export const projectApi = {
   deleteDocument: (id: string, docId: string) =>
     apiFetch(`/projects/${id}/documents/${docId}`, { method: "DELETE" }),
 
-  /* ── Daily Status ─────────────────────────────────────────── */
   submitDailyStatus: (
     id: string,
     data: {
@@ -447,7 +433,6 @@ export const projectApi = {
       body: JSON.stringify({ comment }),
     }),
 
-  /* ── Work Submissions (legacy) ──────────────────────────── */
   submitWork: (id: string, data: { description: string; hoursWorked: number }) =>
     apiFetch(`/projects/${id}/submissions`, {
       method: "POST",
@@ -506,9 +491,12 @@ export const payrollApi = {
       body: JSON.stringify(data || {}),
     }),
 
+  // ── FIX: added workingDays and paidLeaveDays to the update type ──
   update: (id: string, data: {
+    workingDays?:  number;
     presentDays?:  number;
     leaveDays?:    number;
+    paidLeaveDays?: number;
     status?:       string;
     paymentMode?:  string;
     remarks?:      string;
@@ -521,6 +509,21 @@ export const payrollApi = {
     }),
 
   delete: (id: string) => apiFetch(`/payroll/${id}`, { method: "DELETE" }),
+
+  markPaid: (id: string, data: { paymentDate: string; paymentMode: string }) =>
+    apiFetch(`/payroll/${id}/paid`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  resend: (id: string) =>
+    apiFetch(`/payroll/${id}/resend`, { method: "POST" }),
+
+  backfill: (data: { months: string[] }) =>
+    apiFetch("/payroll/backfill", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 /* ============================================================
