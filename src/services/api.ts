@@ -454,6 +454,7 @@ export const payrollApi = {
     paidLeaveDays?:   number;
     paymentMode?:     string;
     remarks?:         string;
+    employeeId?:      string;
     extraAllowances?: { special?: number; other?: number };
     extraDeductions?: { tds?: number; other?: number };
   }) =>
@@ -491,17 +492,17 @@ export const payrollApi = {
       body: JSON.stringify(data || {}),
     }),
 
-  // ── FIX: added workingDays and paidLeaveDays to the update type ──
   update: (id: string, data: {
-    workingDays?:  number;
-    presentDays?:  number;
-    leaveDays?:    number;
+    workingDays?:   number;
+    presentDays?:   number;
+    leaveDays?:     number;
     paidLeaveDays?: number;
-    status?:       string;
-    paymentMode?:  string;
-    remarks?:      string;
-    allowances?:   { special?: number; other?: number };
-    deductions?:   { tds?: number; other?: number };
+    basicSalary?:   number;
+    status?:        string;
+    paymentMode?:   string;
+    remarks?:       string;
+    allowances?:    { special?: number; other?: number };
+    deductions?:    { tds?: number; other?: number };
   }) =>
     apiFetch(`/payroll/${id}`, {
       method: "PUT",
