@@ -22,7 +22,6 @@ import { useAuth } from "../../contexts/AuthContext";
 import { payrollApi, attendanceApi } from "@/services/api";
 import { format } from "date-fns";
 
-/* ─── Types ─────────────────────────────────────────────── */
 interface PayrollRecord {
   _id:          string;
   userId:       { _id: string; name: string; email: string; role: string; department?: string } | null;
@@ -34,10 +33,10 @@ interface PayrollRecord {
   presentDays:  number;
   leaveDays:    number;
   paidLeaveDays:number;
-  basicSalary:  number;   // full month basic
-  earnedBasic:  number;   // prorated
-  grossSalary:  number;   // = earnedBasic
-  netSalary:    number;   // = earnedBasic
+  basicSalary:  number;
+  earnedBasic:  number;
+  grossSalary:  number;
+  netSalary:    number;
   status:       "draft" | "pending" | "processed" | "paid";
   paymentDate?: string;
   paymentMode?: string;
@@ -61,7 +60,6 @@ interface UserRecord {
   department?: string;
 }
 
-/* ─── Helpers ──────────────────────────────────────────── */
 const fmt = (n: number) =>
   "₹" + (n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
 
@@ -71,7 +69,6 @@ const fmtK = (n: number) => {
   return fmt(n);
 };
 
-/* ─── Client-side salary preview (mirrors backend calcSalary) ── */
 const calcLive = (
   basicSalary:   number,
   workingDays:   number,
@@ -84,14 +81,12 @@ const calcLive = (
   const lDays  = Math.max(0, leaveDays    || 0);
   const plDays = Math.max(0, paidLeaveDays|| 1);
   const basic  = Math.max(0, basicSalary  || 0);
-
   const perDay           = basic / wDays;
   const effectivePaid    = Math.min(lDays, plDays);
   const paidDays         = pDays + effectivePaid;
   const earnedBasic      = Math.round(perDay * paidDays);
   const unpaidLeave      = Math.max(0, lDays - plDays);
   const absentDays       = Math.max(0, wDays - pDays - lDays);
-
   return { earnedBasic, netSalary: earnedBasic, perDay, paidDays, unpaidLeave, absentDays };
 };
 
@@ -110,7 +105,6 @@ const roleConfig: Record<string, { bg: string; text: string }> = {
   intern:   { bg: "bg-gray-100",    text: "text-gray-600"    },
 };
 
-/* ─── Sub-components ───────────────────────────────────── */
 const StatCard = ({ label, value, sub, icon, gradient, trend }: {
   label: string; value: string; sub?: string; icon: React.ReactNode;
   gradient: string; trend?: "up" | "down" | "neutral";
@@ -154,14 +148,12 @@ const AttBadge = ({ present, total }: { present: number; total: number }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════════════ */
 export function PayrollModule() {
   const { currentUser } = useAuth();
   const role    = ((currentUser as any)?._doc?.role ?? (currentUser as any)?.role ?? "").toLowerCase().trim();
   const isAdmin = role === "admin";
   const isHR    = role === "hr";
 
-  /* ── Core state ── */
   const [records,       setRecords]       = useState<PayrollRecord[]>([]);
   const [loading,       setLoading]       = useState(true);
   const [toast,         setToast]         = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
@@ -169,13 +161,11 @@ export function PayrollModule() {
   const [sending,       setSending]       = useState<string | null>(null);
   const [activeTab,     setActiveTab]     = useState<"records" | "attendance" | "analytics">("records");
 
-  /* ── Filters ── */
   const [search,        setSearch]        = useState("");
   const [filterStatus,  setFilterStatus]  = useState("all");
   const [filterRole,    setFilterRole]    = useState("all");
   const [filterMonth,   setFilterMonth]   = useState("all");
 
-  /* ── Attendance ── */
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
   const [allUsers,      setAllUsers]      = useState<UserRecord[]>([]);
   const [attLoading,    setAttLoading]    = useState(false);
@@ -183,22 +173,20 @@ export function PayrollModule() {
   const [attSearch,     setAttSearch]     = useState("");
   const [attRoleFilter, setAttRoleFilter] = useState("all");
 
-  /* ── Dialogs ── */
   const [createOpen,     setCreateOpen]     = useState(false);
   const [bulkOpen,       setBulkOpen]       = useState(false);
   const [backfillOpen,   setBackfillOpen]   = useState(false);
   const [backfillMonths, setBackfillMonths] = useState("");
   const [bulkMonth,      setBulkMonth]      = useState(format(new Date(), "yyyy-MM"));
 
-  /* ── Create form ── */
-  const [createUserId,   setCreateUserId]   = useState("");
-  const [createMonth,    setCreateMonth]    = useState("");
-  const [createBasic,    setCreateBasic]    = useState("");
-  const [createPaidLeave,setCreatePaidLeave]= useState("1");
-  const [createMode,     setCreateMode]     = useState("bank_transfer");
-  const [createRemarks,  setCreateRemarks]  = useState("");
+  const [createUserId,    setCreateUserId]    = useState("");
+  const [createMonth,     setCreateMonth]     = useState("");
+  const [createBasic,     setCreateBasic]     = useState("");
+  const [createPaidLeave, setCreatePaidLeave] = useState("1");
+  const [createMode,      setCreateMode]      = useState("bank_transfer");
+  const [createRemarks,   setCreateRemarks]   = useState("");
+  const [createEmployeeId, setCreateEmployeeId] = useState("");
 
-  /* ── Edit payroll dialog ── */
   const [editRecord,     setEditRecord]     = useState<PayrollRecord | null>(null);
   const [editBasic,      setEditBasic]      = useState("");
   const [editWorking,    setEditWorking]    = useState("");
@@ -209,31 +197,26 @@ export function PayrollModule() {
   const [editMode,       setEditMode]       = useState("");
   const [editRemarks,    setEditRemarks]    = useState("");
 
-  /* ── Edit attendance dialog ── */
   const [editAttId,      setEditAttId]      = useState<string | null>(null);
   const [editAttName,    setEditAttName]    = useState("");
   const [attWorking,     setAttWorking]     = useState("");
   const [attPresent,     setAttPresent]     = useState("");
   const [attLeave,       setAttLeave]       = useState("");
 
-  /* ── Mark paid dialog ── */
   const [paidDialog,     setPaidDialog]     = useState<PayrollRecord | null>(null);
   const [paidDate,       setPaidDate]       = useState(format(new Date(), "yyyy-MM-dd"));
   const [paidMode,       setPaidMode]       = useState("bank_transfer");
 
-  /* ── Report ── */
   const [reportType,     setReportType]     = useState<"monthly" | "custom">("monthly");
   const [reportMonth,    setReportMonth]    = useState(format(new Date(), "yyyy-MM"));
   const [reportStart,    setReportStart]    = useState("");
   const [reportEnd,      setReportEnd]      = useState("");
 
-  /* ── Toast ── */
   const showToast = useCallback((msg: string, type: "success" | "error" | "info" = "success") => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4500);
   }, []);
 
-  /* ── Load payroll ── */
   const loadPayroll = useCallback(async () => {
     try {
       setLoading(true);
@@ -247,7 +230,6 @@ export function PayrollModule() {
     }
   }, [currentUser, showToast]);
 
-  /* ── Load attendance ── */
   const loadAttendance = useCallback(async () => {
     if (!isAdmin && !isHR) return;
     try {
@@ -275,7 +257,6 @@ export function PayrollModule() {
     return () => clearInterval(id);
   }, [isAdmin, isHR, loadAttendance]);
 
-  /* ── Derived ── */
   const uniqueMonths = useMemo(() =>
     [...new Set(records.map(r => r.month))].sort().reverse(), [records]);
 
@@ -296,37 +277,33 @@ export function PayrollModule() {
   const checkedOut      = todayAttendance.filter(r => r.checkIn && r.checkOut).length;
   const notYet          = allUsers.length - presentToday;
 
-  /* ── Attendance monthly summary ── */
   const attSummary = useMemo(() => {
-  const [y, m]      = attMonth.split("-").map(Number);
-  const daysInMonth = new Date(y, m, 0).getDate();
-  const monthPrefix = attMonth + "-";
-
-  const workingDays = Array.from({ length: daysInMonth }, (_, i) =>
-    new Date(y, m - 1, i + 1).getDay() !== 0 ? 1 : 0
-  ).reduce((a: number, b) => a + b, 0);
-
-  const passedWorkingDays = Array.from({ length: daysInMonth }, (_, i) => {
-    const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`;
-    return new Date(y, m - 1, i + 1).getDay() !== 0 && dateStr <= todayStr ? 1 : 0;
-  }).reduce((a: number, b) => a + b, 0);
-
-  const summary: Record<string, any> = {};
-  allUsers.forEach(u => {
-    summary[u._id] = { userId: u._id, name: u.name, role: u.role, department: u.department,
-      presentDays: 0, leaveDays: 0, workingDays, absentDays: 0 };
-  });
-  allAttendance.forEach(r => {
-    if (!r.date.startsWith(monthPrefix) || r.date > todayStr) return;
-    const uid = r.userId?._id;
-    if (!uid || !summary[uid]) return;
-    if (r.checkIn) summary[uid].presentDays++;
-  });
-  Object.values(summary).forEach((s: any) => {
-    s.absentDays = Math.max(0, passedWorkingDays - s.presentDays - s.leaveDays);
-  });
-  return Object.values(summary);
-}, [allAttendance, allUsers, attMonth, todayStr]);
+    const [y, m]      = attMonth.split("-").map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const monthPrefix = attMonth + "-";
+    const workingDays = Array.from({ length: daysInMonth }, (_, i) =>
+      new Date(y, m - 1, i + 1).getDay() !== 0 ? 1 : 0
+    ).reduce((a: number, b) => a + b, 0);
+    const passedWorkingDays = Array.from({ length: daysInMonth }, (_, i) => {
+      const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`;
+      return new Date(y, m - 1, i + 1).getDay() !== 0 && dateStr <= todayStr ? 1 : 0;
+    }).reduce((a: number, b) => a + b, 0);
+    const summary: Record<string, any> = {};
+    allUsers.forEach(u => {
+      summary[u._id] = { userId: u._id, name: u.name, role: u.role, department: u.department,
+        presentDays: 0, leaveDays: 0, workingDays, absentDays: 0 };
+    });
+    allAttendance.forEach(r => {
+      if (!r.date.startsWith(monthPrefix) || r.date > todayStr) return;
+      const uid = r.userId?._id;
+      if (!uid || !summary[uid]) return;
+      if (r.checkIn) summary[uid].presentDays++;
+    });
+    Object.values(summary).forEach((s: any) => {
+      s.absentDays = Math.max(0, passedWorkingDays - s.presentDays - s.leaveDays);
+    });
+    return Object.values(summary);
+  }, [allAttendance, allUsers, attMonth, todayStr]);
 
   const filteredAtt = useMemo(() =>
     attSummary.filter((s: any) => {
@@ -347,45 +324,39 @@ export function PayrollModule() {
     draftCount:     records.filter(r => r.status === "draft").length,
   }), [records]);
 
-  /* ─── Live preview for edit dialog ── */
   const liveEdit = editRecord ? calcLive(
-    Number(editBasic),
-    Number(editWorking),
-    Number(editPresent),
-    Number(editLeave),
-    Number(editPaidLeave),
+    Number(editBasic), Number(editWorking), Number(editPresent),
+    Number(editLeave), Number(editPaidLeave),
   ) : null;
 
-  /* ─── Live preview for attendance edit dialog ── */
   const liveAtt = editAttId ? (() => {
     const rec = records.find(r => r._id === editAttId);
     if (!rec) return null;
     return calcLive(rec.basicSalary, Number(attWorking), Number(attPresent), Number(attLeave), rec.paidLeaveDays);
   })() : null;
 
-  /* ─── Live preview for create dialog ── */
   const liveCreate = createBasic ? calcLive(
     Number(createBasic), 26, 26, 0, Number(createPaidLeave)
   ) : null;
-
-  /* ══ HANDLERS ══ */
 
   const handleCreate = async () => {
     if (!createUserId || !createMonth || !createBasic)
       return showToast("Employee, month and basic salary required", "error");
     try {
       await payrollApi.create({
-        userId:       createUserId,
-        month:        createMonth,
-        basicSalary:  Number(createBasic),
-        paidLeaveDays:Number(createPaidLeave || 1),
-        paymentMode:  createMode,
-        remarks:      createRemarks,
+        userId:        createUserId,
+        month:         createMonth,
+        basicSalary:   Number(createBasic),
+        paidLeaveDays: Number(createPaidLeave || 1),
+        paymentMode:   createMode,
+        remarks:       createRemarks,
+        employeeId:    createEmployeeId,
       });
       showToast("Payroll record created ✓");
       setCreateOpen(false);
       setCreateUserId(""); setCreateMonth(""); setCreateBasic("");
       setCreatePaidLeave("1"); setCreateMode("bank_transfer"); setCreateRemarks("");
+      setCreateEmployeeId("");
       loadPayroll();
     } catch (err: any) { showToast(err.message, "error"); }
   };
@@ -451,8 +422,6 @@ export function PayrollModule() {
         paymentMode:   editMode,
         remarks:       editRemarks,
       } as any);
-
-      // Optimistic update
       setRecords(prev => prev.map(r => r._id !== editRecord._id ? r : {
         ...r,
         basicSalary:   Number(editBasic),
@@ -467,7 +436,6 @@ export function PayrollModule() {
         paymentMode:   editMode,
         remarks:       editRemarks,
       }));
-
       showToast("Saved & recalculated ✓");
       setEditRecord(null);
       loadPayroll();
@@ -494,7 +462,6 @@ export function PayrollModule() {
         presentDays: Number(attPresent),
         leaveDays:   Number(attLeave),
       } as any);
-
       setRecords(prev => prev.map(r => r._id !== editAttId ? r : {
         ...r,
         workingDays:  Number(attWorking),
@@ -502,7 +469,6 @@ export function PayrollModule() {
         leaveDays:    Number(attLeave),
         ...(calc ? { earnedBasic: calc.earnedBasic, grossSalary: calc.earnedBasic, netSalary: calc.netSalary } : {}),
       }));
-
       showToast("Attendance updated & salary recalculated ✓");
       setEditAttId(null);
       loadPayroll();
@@ -568,7 +534,6 @@ export function PayrollModule() {
     showToast(`Downloaded ${data.length} records`);
   };
 
-  /* ── Guards ── */
   if (!currentUser || (!isAdmin && !isHR)) return (
     <div className="flex flex-col items-center justify-center h-64 gap-3 text-slate-400">
       <Shield className="h-10 w-10 opacity-30" />
@@ -583,13 +548,9 @@ export function PayrollModule() {
     </div>
   );
 
-  /* ══════════════════════════════════════════════════════════
-     RENDER
-  ══════════════════════════════════════════════════════════ */
   return (
     <div className="space-y-4 sm:space-y-6 pb-10 px-3 sm:px-0">
 
-      {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-[200] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold max-w-sm border backdrop-blur-sm
           ${toast.type==="error"?"bg-white border-red-200 text-red-700":toast.type==="info"?"bg-white border-blue-200 text-blue-700":"bg-white border-emerald-200 text-emerald-700"}`}>
@@ -674,7 +635,7 @@ export function PayrollModule() {
               </DialogContent>
             </Dialog>
 
-            {/* Add */}
+            {/* Add Record */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-all shadow-lg shadow-orange-500/30">
@@ -693,6 +654,16 @@ export function PayrollModule() {
                         <option key={u._id} value={u._id}>{u.name} ({u.role}{u.department ? ` · ${u.department}` : ""})</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-semibold text-slate-700">Employee ID</Label>
+                    <Input
+                      placeholder="e.g. QT2025001"
+                      className="mt-1.5 rounded-xl border-slate-200"
+                      value={createEmployeeId}
+                      onChange={e => setCreateEmployeeId(e.target.value)}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -725,7 +696,6 @@ export function PayrollModule() {
                     </div>
                   </div>
 
-                  {/* Live preview */}
                   {liveCreate && Number(createBasic) > 0 && (
                     <div className="bg-slate-800 rounded-xl p-3 text-center">
                       <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1">Preview (26 working days assumed)</p>
@@ -755,7 +725,7 @@ export function PayrollModule() {
         </div>
       </div>
 
-      {/* Stats strips */}
+      {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatCard label="Present Today" value={String(presentToday)} icon={<UserCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" trend="up" />
         <StatCard label="Checked Out"   value={String(checkedOut)}   icon={<LogOut   className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-blue-500 to-blue-600"    trend="neutral" />
@@ -779,7 +749,6 @@ export function PayrollModule() {
       {/* ══ TAB: ATTENDANCE ══ */}
       {activeTab === "attendance" && (
         <div className="space-y-4">
-          {/* Today live */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -839,7 +808,6 @@ export function PayrollModule() {
             </div>
           </div>
 
-          {/* Monthly summary */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
@@ -879,10 +847,10 @@ export function PayrollModule() {
                   {filteredAtt.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center text-slate-400 py-12">No data for {attMonth}.</TableCell></TableRow>
                   ) : (filteredAtt as any[]).map(s => {
-                    const pct         = s.workingDays > 0 ? Math.round((s.presentDays / s.workingDays) * 100) : 0;
-                    const barColor    = pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500";
-                    const rc          = roleConfig[s.role] || roleConfig.employee;
-                    const linkedPay   = records.find(r => r.userId?._id === s.userId && r.month === attMonth);
+                    const pct       = s.workingDays > 0 ? Math.round((s.presentDays / s.workingDays) * 100) : 0;
+                    const barColor  = pct >= 90 ? "bg-emerald-500" : pct >= 75 ? "bg-amber-500" : "bg-red-500";
+                    const rc        = roleConfig[s.role] || roleConfig.employee;
+                    const linkedPay = records.find(r => r.userId?._id === s.userId && r.month === attMonth);
                     return (
                       <TableRow key={s.userId} className="hover:bg-orange-50/20 transition-colors border-b border-slate-50">
                         <TableCell>
@@ -1003,7 +971,6 @@ export function PayrollModule() {
       {/* ══ TAB: RECORDS ══ */}
       {activeTab === "records" && (
         <div className="space-y-4">
-          {/* Report / Export */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
               <div>
@@ -1040,7 +1007,6 @@ export function PayrollModule() {
             </div>
           </div>
 
-          {/* Filters */}
           <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -1059,7 +1025,6 @@ export function PayrollModule() {
             ))}
           </div>
 
-          {/* Table */}
           <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <Table className="min-w-[860px]">
@@ -1306,8 +1271,6 @@ export function PayrollModule() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
-
-              {/* Live preview */}
               {liveEdit && (
                 <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 border border-slate-700">
                   <div className="flex items-center gap-2 mb-3">
@@ -1337,7 +1300,6 @@ export function PayrollModule() {
                 </div>
               )}
 
-              {/* Basic salary */}
               <div className="bg-orange-50 rounded-2xl p-4 border border-orange-200 space-y-3">
                 <p className="text-[10px] font-black text-orange-600 uppercase tracking-widest">💰 Basic Salary</p>
                 <div>
@@ -1350,7 +1312,6 @@ export function PayrollModule() {
                 </div>
               </div>
 
-              {/* Attendance */}
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">📅 Attendance</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1382,7 +1343,6 @@ export function PayrollModule() {
                 })()}
               </div>
 
-              {/* Meta */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs font-semibold text-slate-700">Status</Label>
