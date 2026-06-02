@@ -16,11 +16,12 @@ import {
   Search, Edit2, CheckCircle, Clock, AlertCircle, Zap,
   Mail, CreditCard, History, BarChart3, LogIn, LogOut,
   UserCheck, UserX, Activity, Wallet,
-  ArrowUpRight, ArrowDownRight, Building2, Shield,
+  ArrowUpRight, ArrowDownRight, Building2, Shield,FileText
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { payrollApi, attendanceApi } from "@/services/api";
 import { format } from "date-fns";
+
 
 interface PayrollRecord {
   _id:          string;
@@ -1108,6 +1109,29 @@ export function PayrollModule() {
                         </TableCell>
                         <TableCell className="py-3">
                           <div className="flex gap-1">
+                            <button
+    title="View Payslip PDF"
+    className="p-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 transition-all"
+    onClick={async () => {
+      try {
+        await payrollApi.view(rec._id);
+      } catch (err: any) {
+        showToast("Failed to open payslip: " + err.message, "error");
+      }
+    }}
+  >
+    <FileText className="h-3.5 w-3.5 text-indigo-500" />
+  </button>
+
+  {/* existing buttons below unchanged */}
+  <button title="Resend Payslip" disabled={sending === rec._id}
+    className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 transition-all disabled:opacity-50"
+    onClick={() => handleResend(rec._id)}>
+    {sending === rec._id
+      ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-purple-500" />
+      : <Mail className="h-3.5 w-3.5 text-purple-500" />}
+  </button>
+                            
                             <button title="Resend Payslip" disabled={sending === rec._id}
                               className="p-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 transition-all disabled:opacity-50"
                               onClick={() => handleResend(rec._id)}>
