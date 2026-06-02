@@ -568,6 +568,9 @@ export const clientApi = {
     }),
 
   getInvoices: () => apiFetch("/clients/invoices"),
+
+  getInvoicesByClient: (clientId: string) =>
+    apiFetch(`/clients/${clientId}/invoices`),
 };
 
 /* ============================================================
@@ -634,7 +637,6 @@ export const vendorApi = {
 
   delete: (id: string) => apiFetch(`/vendors/${id}`, { method: "DELETE" }),
 };
-
 /* ============================================================
    FREELANCER API
    ============================================================ */
