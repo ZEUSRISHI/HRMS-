@@ -551,26 +551,44 @@ export const payrollApi = {
    CLIENT API
    ============================================================ */
 export const clientApi = {
-  create: (data: any) =>
-    apiFetch("/clients", { method: "POST", body: JSON.stringify(data) }),
+  create:   (data: any) => apiFetch("/clients", { method: "POST", body: JSON.stringify(data) }),
+  getAll:   () => apiFetch("/clients"),
+  update:   (id: string, data: any) => apiFetch(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete:   (id: string) => apiFetch(`/clients/${id}`, { method: "DELETE" }),
 
-  getAll: () => apiFetch("/clients"),
+  createInvoice:          (data: any)    => apiFetch("/clients/invoices", { method: "POST", body: JSON.stringify(data) }),
+  getInvoices:            ()             => apiFetch("/clients/invoices"),
+  getInvoiceById:         (id: string)   => apiFetch(`/clients/invoices/${id}`),
+  getInvoicesByClient:    (clientId: string) => apiFetch(`/clients/${clientId}/invoices`),
+  updateInvoice:          (id: string, data: any) => apiFetch(`/clients/invoices/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteInvoice:          (id: string)   => apiFetch(`/clients/invoices/${id}`, { method: "DELETE" }),
+  resendInvoiceEmail:     (id: string)   => apiFetch(`/clients/invoices/${id}/resend`, { method: "POST" }),
 
-  update: (id: string, data: any) =>
-    apiFetch(`/clients/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  viewInvoicePDF: async (id: string) => {
+    const token = tokenStorage.getAccess();
+    const res   = await fetch(
+      `${BASE_URL}/clients/invoices/${id}/view`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to load PDF");
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
 
-  delete: (id: string) => apiFetch(`/clients/${id}`, { method: "DELETE" }),
-
-  createInvoice: (data: any) =>
-    apiFetch("/clients/invoices", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  getInvoices: () => apiFetch("/clients/invoices"),
-
-  getInvoicesByClient: (clientId: string) =>
-    apiFetch(`/clients/${clientId}/invoices`),
+  downloadInvoicePDF: async (id: string, invoiceNumber: string) => {
+    const token = tokenStorage.getAccess();
+    const res   = await fetch(
+      `${BASE_URL}/clients/invoices/${id}/download`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error("Failed to download PDF");
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url; a.download = `Invoice_${invoiceNumber}.pdf`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  },
 };
 
 /* ============================================================
