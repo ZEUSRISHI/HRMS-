@@ -447,6 +447,26 @@ export const projectApi = {
    PAYROLL API
    ============================================================ */
 export const payrollApi = {
+  // ... all existing methods unchanged ...
+
+  view: (id: string) => {
+    const token = tokenStorage.getAccess();
+    const url   = `${BASE_URL}/payroll/${id}/view`;
+    // Open PDF in new tab with auth token in header via a form POST trick
+    // Since we need auth headers, we fetch as blob and open it
+    return fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).then(res => {
+      if (!res.ok) throw new Error("Failed to load payslip");
+      return res.blob();
+    }).then(blob => {
+      const blobUrl = URL.createObjectURL(blob);
+      window.open(blobUrl, "_blank");
+    });
+  },
+
   create: (data: {
     userId:           string;
     month:            string;
