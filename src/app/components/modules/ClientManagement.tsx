@@ -1,24 +1,29 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Building2, DollarSign, FileText, Plus, TrendingUp,
   Download, Mail, Trash2, Eye, X, Edit2, RefreshCw,
   ChevronRight, AlertCircle, CheckCircle2, Search,
-  MoreVertical, ExternalLink, Filter,
+  ExternalLink, Upload, Paperclip,
 } from "lucide-react";
 import { clientApi } from "@/services/api";
 
 /* ══════════ TYPES ══════════ */
 type InvoiceItem = { description: string; quantity: number; unitPrice: number; total: number };
 
+type ClientDocument = {
+  _id: string; name: string; originalName?: string; size?: number; uploadedAt?: string;
+};
+
 type Client = {
   _id: string; name: string; company?: string; email: string;
-  phone?: string; address?: string; description?: string;
+  phone?: string; address?: string; description?: string; gstNumber?: string;
   status?: "active" | "inactive"; outstandingBalance?: number;
+  documents?: ClientDocument[];
 };
 
 type Invoice = {
   _id: string;
-  clientId?: { _id?: string; name?: string; company?: string; email?: string } | string;
+  clientId?: { _id?: string; name?: string; company?: string; email?: string; gstNumber?: string } | string;
   invoiceNumber?: string; amount?: number; subtotal?: number;
   tax?: number; taxAmount?: number; discount?: number; paidAmount?: number;
   status?: string; date?: string; dueDate?: string;
@@ -34,6 +39,13 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
+function fmtBytes(b: number) {
+  if (!b) return "—";
+  if (b < 1024)        return b + " B";
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+  return (b / (1024 * 1024)).toFixed(1) + " MB";
+}
+
 /* ══════════ MAIN COMPONENT ══════════ */
 export function ClientManagement() {
   const [clients,  setClients]  = useState<Client[]>([]);
@@ -48,15 +60,22 @@ export function ClientManagement() {
   const [showClientInvoices, setShowClientInvoices] = useState<Client | null>(null);
   const [showPDFViewer,      setShowPDFViewer]      = useState<{ url: string; title: string } | null>(null);
   const [showEditInvoice,    setShowEditInvoice]    = useState<Invoice | null>(null);
+  const [showDocuments,      setShowDocuments]      = useState<Client | null>(null);
 
   const [clientInvoices,  setClientInvoices]  = useState<Invoice[]>([]);
   const [ciLoading,       setCiLoading]       = useState(false);
   const [searchClients,   setSearchClients]   = useState("");
-  const [dropdownOpen,    setDropdownOpen]    = useState<string | null>(null);
+
+  const [documents,     setDocuments]     = useState<ClientDocument[]>([]);
+  const [docsLoading,   setDocsLoading]   = useState(false);
+  const [uploading,     setUploading]     = useState(false);
+  const [docName,       setDocName]       = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /* forms */
   const [clientForm, setClientForm] = useState({
-    name: "", company: "", email: "", phone: "", address: "", description: "", status: "active",
+    name: "", company: "", email: "", phone: "", address: "",
+    description: "", gstNumber: "", status: "active",
   });
   const [invoiceForm, setInvoiceForm] = useState({
     clientId: "", invoiceNumber: "", date: "", dueDate: "",
@@ -108,7 +127,7 @@ export function ClientManagement() {
       await clientApi.create(clientForm);
       showToast("Client added successfully");
       setShowAddClient(false);
-      setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", status: "active" });
+      setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", gstNumber: "", status: "active" });
       await loadData();
     } catch (err: any) { showToast(err.message, "error"); }
   };
@@ -210,10 +229,53 @@ export function ClientManagement() {
     await loadClientInvoices(client);
   };
 
+  /* ── Documents ── */
+  const openDocuments = async (client: Client) => {
+    setShowDocuments(client);
+    setDocsLoading(true);
+    try {
+      const res = await clientApi.getDocuments(client._id);
+      setDocuments(res.documents || []);
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setDocsLoading(false); }
+  };
+
+  const handleUploadDocument = async (file: File) => {
+    if (!showDocuments) return;
+    if (file.type !== "application/pdf") return showToast("Only PDF files allowed", "error");
+    if (file.size > 15 * 1024 * 1024) return showToast("File size must be under 15MB", "error");
+    setUploading(true);
+    try {
+      await clientApi.uploadDocument(showDocuments._id, file, docName || file.name);
+      showToast("Document uploaded successfully");
+      setDocName("");
+      const res = await clientApi.getDocuments(showDocuments._id);
+      setDocuments(res.documents || []);
+    } catch (err: any) { showToast(err.message, "error"); }
+    finally { setUploading(false); }
+  };
+
+  const handleViewDocument = async (docId: string, name: string) => {
+    if (!showDocuments) return;
+    try {
+      const url = await clientApi.viewDocument(showDocuments._id, docId);
+      setShowPDFViewer({ url, title: name });
+    } catch (err: any) { showToast(err.message, "error"); }
+  };
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (!showDocuments || !window.confirm("Delete this document?")) return;
+    try {
+      await clientApi.deleteDocument(showDocuments._id, docId);
+      showToast("Document deleted");
+      setDocuments(d => d.filter(x => x._id !== docId));
+    } catch (err: any) { showToast(err.message, "error"); }
+  };
+
   /* ── CSV ── */
   const downloadReport = () => {
-    let csv = "Client Name,Company,Email,Outstanding\n";
-    clients.forEach(c => { csv += `"${c.name}","${c.company || ""}","${c.email}",${c.outstandingBalance || 0}\n`; });
+    let csv = "Client Name,Company,Email,GST/TIN,Outstanding\n";
+    clients.forEach(c => { csv += `"${c.name}","${c.company || ""}","${c.email}","${c.gstNumber || ""}",${c.outstandingBalance || 0}\n`; });
     csv += "\nInvoice No,Client,Subtotal,Tax,Discount,Amount,Status\n";
     invoices.forEach(i => {
       const cn = typeof i.clientId === "object" ? i.clientId?.name || "" : "";
@@ -252,25 +314,19 @@ export function ClientManagement() {
   return (
     <div className="min-h-screen bg-slate-50">
 
-      {/* ── Toast ── */}
+      {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all animate-in slide-in-from-top-2
-          ${toast.type === "success"
-            ? "bg-white border-emerald-200 text-emerald-800"
-            : "bg-white border-red-200 text-red-800"}`}>
-          {toast.type === "success"
-            ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-            : <AlertCircle  className="w-4 h-4 text-red-500 shrink-0" />}
+          ${toast.type === "success" ? "bg-white border-emerald-200 text-emerald-800" : "bg-white border-red-200 text-red-800"}`}>
+          {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
           {toast.msg}
-          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100">
-            <X className="w-3 h-3" />
-          </button>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
         </div>
       )}
 
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
 
-        {/* ── Page header ── */}
+        {/* Page header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-400 font-medium mb-1">
@@ -288,7 +344,7 @@ export function ClientManagement() {
               className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
               <Download className="w-4 h-4" /> Export CSV
             </button>
-            <button onClick={() => { setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", status: "active" }); setShowAddClient(true); }}
+            <button onClick={() => { setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", gstNumber: "", status: "active" }); setShowAddClient(true); }}
               className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 shadow-sm transition">
               <Plus className="w-4 h-4" /> Add Client
             </button>
@@ -299,15 +355,15 @@ export function ClientManagement() {
           </div>
         </div>
 
-        {/* ── Stat cards ── */}
+        {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Active Clients",    value: activeClients,                         icon: Building2,  color: "text-blue-600",   bg: "bg-blue-50"   },
+            { label: "Active Clients",    value: activeClients,                              icon: Building2,  color: "text-blue-600",   bg: "bg-blue-50"   },
             { label: "Total Invoiced",    value: `₹${totalInvoiced.toLocaleString("en-IN")}`, icon: FileText,   color: "text-violet-600", bg: "bg-violet-50" },
             { label: "Payments Received", value: `₹${totalPaid.toLocaleString("en-IN")}`,     icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50" },
-            { label: "Outstanding",       value: `₹${totalOutstanding.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-orange-600",  bg: "bg-orange-50" },
+            { label: "Outstanding",       value: `₹${totalOutstanding.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-50" },
           ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition group">
+            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{s.label}</span>
                 <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center`}>
@@ -319,7 +375,7 @@ export function ClientManagement() {
           ))}
         </div>
 
-        {/* ── Clients table ── */}
+        {/* Clients table */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-slate-100">
             <div>
@@ -328,38 +384,33 @@ export function ClientManagement() {
             </div>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                placeholder="Search clients..."
-                value={searchClients}
-                onChange={e => setSearchClients(e.target.value)}
-                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-300 w-56"
-              />
+              <input placeholder="Search clients..." value={searchClients} onChange={e => setSearchClients(e.target.value)}
+                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-300 w-56" />
             </div>
           </div>
-
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
-                  {["Client", "Company", "Email", "Outstanding", "Status", "Actions"].map(h => (
+                  {["Client", "Company", "Email", "GST/TIN", "Outstanding", "Status", "Actions"].map(h => (
                     <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-400 text-sm">No clients found</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-sm">No clients found</td></tr>
                 ) : filtered.map(c => (
                   <tr key={c._id} className="hover:bg-slate-50/60 transition group">
                     <td className="px-6 py-4">
                       <button onClick={() => openClientInvoices(c)}
                         className="font-semibold text-slate-900 hover:text-orange-600 transition text-sm flex items-center gap-1 group">
-                        {c.name}
-                        <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
+                        {c.name}<ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
                       </button>
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">{c.company || "—"}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{c.email}</td>
+                    <td className="px-6 py-4 text-sm text-slate-500 font-mono">{c.gstNumber || "—"}</td>
                     <td className="px-6 py-4">
                       <span className={`text-sm font-bold ${(c.outstandingBalance || 0) > 0 ? "text-orange-600" : "text-slate-400"}`}>
                         ₹{(c.outstandingBalance || 0).toLocaleString("en-IN")}
@@ -377,11 +428,15 @@ export function ClientManagement() {
                           className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition">
                           <Eye className="w-3 h-3" /> Invoices
                         </button>
+                        {/* Documents button */}
+                        <button onClick={() => openDocuments(c)}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition">
+                          <Paperclip className="w-3 h-3" /> Docs
+                        </button>
                         <button onClick={() => {
-                          setClientForm({ name: c.name, company: c.company || "", email: c.email, phone: c.phone || "", address: c.address || "", description: c.description || "", status: c.status || "active" });
+                          setClientForm({ name: c.name, company: c.company || "", email: c.email, phone: c.phone || "", address: c.address || "", description: c.description || "", gstNumber: c.gstNumber || "", status: c.status || "active" });
                           setShowEditClient(c);
-                        }}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                        }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button onClick={() => handleDeleteClient(c._id)}
@@ -397,7 +452,7 @@ export function ClientManagement() {
           </div>
         </div>
 
-        {/* ── Recent invoices ── */}
+        {/* Recent invoices */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
             <div>
@@ -421,46 +476,23 @@ export function ClientManagement() {
                   const cn = typeof inv.clientId === "object" ? inv.clientId?.name || "—" : "—";
                   return (
                     <tr key={inv._id} className="hover:bg-slate-50/60 transition">
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-semibold text-slate-900">{inv.invoiceNumber || "—"}</span>
-                      </td>
+                      <td className="px-6 py-4"><span className="text-sm font-semibold text-slate-900">{inv.invoiceNumber || "—"}</span></td>
                       <td className="px-6 py-4 text-sm text-slate-600">{cn}</td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-bold text-slate-900">₹{(inv.amount || 0).toLocaleString("en-IN")}</span>
-                      </td>
+                      <td className="px-6 py-4"><span className="text-sm font-bold text-slate-900">₹{(inv.amount || 0).toLocaleString("en-IN")}</span></td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${STATUS_COLORS[inv.status || "pending"] || STATUS_COLORS.pending}`}>
                           {inv.status || "pending"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-500">
-                        {inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-500">
-                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-500">{inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                      <td className="px-6 py-4 text-sm text-slate-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1">
-                          <button onClick={() => handleViewPDF(inv._id, inv.invoiceNumber || "INV")}
-                            className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="View PDF">
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDownloadPDF(inv._id, inv.invoiceNumber || "INV")}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Download PDF">
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleResendEmail(inv._id)}
-                            className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition" title="Send Email">
-                            <Mail className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => { setShowEditInvoice(inv); setEditInvForm({ status: inv.status, paymentMode: inv.paymentMode, notes: inv.notes }); }}
-                            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Edit">
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteInvoice(inv._id)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <button onClick={() => handleViewPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="View PDF"><Eye className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDownloadPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Download PDF"><Download className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleResendEmail(inv._id)} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition" title="Send Email"><Mail className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => { setShowEditInvoice(inv); setEditInvForm({ status: inv.status, paymentMode: inv.paymentMode, notes: inv.notes }); }} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition" title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteInvoice(inv._id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       </td>
                     </tr>
@@ -476,7 +508,7 @@ export function ClientManagement() {
           MODALS
       ══════════════════════════════════════════ */}
 
-      {/* ── Add/Edit Client Modal ── */}
+      {/* Add/Edit Client Modal */}
       {(showAddClient || showEditClient) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
@@ -485,8 +517,7 @@ export function ClientManagement() {
                 <h2 className="text-lg font-bold text-slate-900">{showEditClient ? "Edit Client" : "Add New Client"}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Fill in the client details below</p>
               </div>
-              <button onClick={() => { setShowAddClient(false); setShowEditClient(null); }}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+              <button onClick={() => { setShowAddClient(false); setShowEditClient(null); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -513,6 +544,13 @@ export function ClientManagement() {
                     placeholder="+91 98765 43210" value={clientForm.phone} onChange={e => setClientForm({ ...clientForm, phone: e.target.value })} />
                 </div>
               </div>
+              {/* GST/TIN field */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">GST / TIN Number</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 font-mono"
+                  placeholder="e.g. 29ABCDE1234F1Z5" value={clientForm.gstNumber}
+                  onChange={e => setClientForm({ ...clientForm, gstNumber: e.target.value.toUpperCase() })} />
+              </div>
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Address</label>
                 <textarea rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
@@ -535,9 +573,7 @@ export function ClientManagement() {
               </div>
               <div className="flex gap-3 pt-2">
                 <button onClick={() => { setShowAddClient(false); setShowEditClient(null); }}
-                  className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">
-                  Cancel
-                </button>
+                  className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
                 <button onClick={showEditClient ? handleEditClient : handleAddClient}
                   className="flex-1 py-2.5 text-sm font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 transition shadow-sm">
                   {showEditClient ? "Save Changes" : "Add Client"}
@@ -548,7 +584,97 @@ export function ClientManagement() {
         </div>
       )}
 
-      {/* ── Create Invoice Modal ── */}
+      {/* Documents Modal */}
+      {showDocuments && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Documents — {showDocuments.name}</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Upload and manage client PDF documents (max 15MB each)</p>
+              </div>
+              <button onClick={() => { setShowDocuments(null); setDocuments([]); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Upload area */}
+              <div
+                className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add("border-blue-400", "bg-blue-50/30"); }}
+                onDragLeave={e => { e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/30"); }}
+                onDrop={e => {
+                  e.preventDefault();
+                  e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/30");
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleUploadDocument(file);
+                }}
+              >
+                <Upload className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-600">Click or drag & drop a PDF here</p>
+                <p className="text-xs text-slate-400 mt-1">PDF only · Max 15MB</p>
+                <input ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadDocument(f); e.target.value = ""; }} />
+              </div>
+
+              {/* Optional name */}
+              <div>
+                <label className="text-xs font-semibold text-slate-600 mb-1 block">Document Label (optional)</label>
+                <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  placeholder="e.g. Contract 2025, NDA, Purchase Order"
+                  value={docName} onChange={e => setDocName(e.target.value)} />
+              </div>
+
+              {uploading && (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span className="text-sm text-blue-700 font-medium">Uploading document...</span>
+                </div>
+              )}
+
+              {/* Document list */}
+              {docsLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : documents.length === 0 ? (
+                <div className="text-center py-8 text-slate-400">
+                  <Paperclip className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No documents uploaded yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {documents.map(doc => (
+                    <div key={doc._id} className="flex items-center gap-3 p-3 border border-slate-100 rounded-xl bg-slate-50 hover:bg-slate-100 transition">
+                      <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-red-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{doc.name}</p>
+                        <p className="text-xs text-slate-400">
+                          {fmtBytes(doc.size || 0)} · {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : ""}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => handleViewDocument(doc._id, doc.name)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="View">
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteDocument(doc._id)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Invoice Modal */}
       {showCreateInvoice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
@@ -557,11 +683,9 @@ export function ClientManagement() {
                 <h2 className="text-lg font-bold text-slate-900">Create Invoice</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Fill in invoice details and line items</p>
               </div>
-              <button onClick={() => setShowCreateInvoice(false)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowCreateInvoice(false)} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-5">
-              {/* Client + Invoice No */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Client *</label>
@@ -577,7 +701,6 @@ export function ClientManagement() {
                     placeholder="INV-001" value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} />
                 </div>
               </div>
-              {/* Dates */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Invoice Date</label>
@@ -594,8 +717,7 @@ export function ClientManagement() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-semibold text-slate-600">Line Items *</label>
-                  <button onClick={addItem}
-                    className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 px-2 py-1 rounded-lg hover:bg-orange-50 transition">
+                  <button onClick={addItem} className="flex items-center gap-1 text-xs font-semibold text-orange-600 hover:text-orange-700 px-2 py-1 rounded-lg hover:bg-orange-50 transition">
                     <Plus className="w-3 h-3" /> Add Item
                   </button>
                 </div>
@@ -626,14 +748,10 @@ export function ClientManagement() {
                             <input type="number" min="0" className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-orange-300"
                               value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </td>
-                          <td className="p-1.5 text-right pr-3 font-bold text-slate-700">
-                            ₹{item.total.toLocaleString("en-IN")}
-                          </td>
+                          <td className="p-1.5 text-right pr-3 font-bold text-slate-700">₹{item.total.toLocaleString("en-IN")}</td>
                           <td className="p-1.5">
                             {invoiceForm.items.length > 1 && (
-                              <button onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 p-0.5 transition">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              <button onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 p-0.5 transition"><X className="w-3.5 h-3.5" /></button>
                             )}
                           </td>
                         </tr>
@@ -642,7 +760,6 @@ export function ClientManagement() {
                   </table>
                 </div>
               </div>
-              {/* Tax / Discount */}
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Tax (%)</label>
@@ -666,7 +783,6 @@ export function ClientManagement() {
                   </select>
                 </div>
               </div>
-              {/* Live summary */}
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-medium text-slate-700">₹{subtotal.toLocaleString("en-IN")}</span></div>
@@ -678,18 +794,15 @@ export function ClientManagement() {
                   </div>
                 </div>
               </div>
-              {/* Notes */}
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Notes</label>
                 <textarea rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
                   placeholder="Payment terms, bank details, etc."
                   value={invoiceForm.notes} onChange={e => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} />
               </div>
-              {/* Send email toggle */}
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
                 <div className="relative">
-                  <input type="checkbox" className="sr-only" checked={invoiceForm.sendEmail}
-                    onChange={e => setInvoiceForm({ ...invoiceForm, sendEmail: e.target.checked })} />
+                  <input type="checkbox" className="sr-only" checked={invoiceForm.sendEmail} onChange={e => setInvoiceForm({ ...invoiceForm, sendEmail: e.target.checked })} />
                   <div className={`w-10 h-5 rounded-full transition ${invoiceForm.sendEmail ? "bg-orange-500" : "bg-slate-200"}`}></div>
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${invoiceForm.sendEmail ? "translate-x-5" : ""}`}></div>
                 </div>
@@ -699,21 +812,15 @@ export function ClientManagement() {
                 </div>
               </label>
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowCreateInvoice(false)}
-                  className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">
-                  Cancel
-                </button>
-                <button onClick={handleCreateInvoice}
-                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-sm">
-                  Create Invoice
-                </button>
+                <button onClick={() => setShowCreateInvoice(false)} className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
+                <button onClick={handleCreateInvoice} className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-sm">Create Invoice</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Client Invoices Modal ── */}
+      {/* Client Invoices Modal */}
       {showClientInvoices && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
@@ -722,6 +829,7 @@ export function ClientManagement() {
                 <h2 className="text-lg font-bold text-slate-900">{showClientInvoices.name}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {showClientInvoices.company && `${showClientInvoices.company} · `}
+                  {showClientInvoices.gstNumber && `GST: ${showClientInvoices.gstNumber} · `}
                   {showClientInvoices.email} · Outstanding: <span className="font-semibold text-orange-600">₹{(showClientInvoices.outstandingBalance || 0).toLocaleString("en-IN")}</span>
                 </p>
               </div>
@@ -730,8 +838,7 @@ export function ClientManagement() {
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition">
                   <Plus className="w-3 h-3" /> New Invoice
                 </button>
-                <button onClick={() => { setShowClientInvoices(null); setClientInvoices([]); }}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+                <button onClick={() => { setShowClientInvoices(null); setClientInvoices([]); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
               </div>
             </div>
             <div className="overflow-y-auto flex-1">
@@ -743,8 +850,7 @@ export function ClientManagement() {
                 <div className="flex flex-col items-center justify-center h-40 gap-2">
                   <FileText className="w-10 h-10 text-slate-200" />
                   <p className="text-sm text-slate-400">No invoices found for this client</p>
-                  <button onClick={() => setShowCreateInvoice(true)}
-                    className="text-xs font-semibold text-orange-600 hover:underline">Create first invoice</button>
+                  <button onClick={() => setShowCreateInvoice(true)} className="text-xs font-semibold text-orange-600 hover:underline">Create first invoice</button>
                 </div>
               ) : (
                 <table className="w-full">
@@ -768,12 +874,8 @@ export function ClientManagement() {
                             {inv.status || "pending"}
                           </span>
                         </td>
-                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
-                          {inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                        </td>
-                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
-                          {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
-                        </td>
+                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
                         <td className="px-5 py-3">
                           {inv.emailSent
                             ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 className="w-3 h-3" /> Sent</span>
@@ -781,26 +883,11 @@ export function ClientManagement() {
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-0.5">
-                            <button onClick={() => handleViewPDF(inv._id, inv.invoiceNumber || "INV")}
-                              className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition" title="View PDF">
-                              <Eye className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDownloadPDF(inv._id, inv.invoiceNumber || "INV")}
-                              className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition" title="Download">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleResendEmail(inv._id)}
-                              className="p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition" title="Send Email">
-                              <Mail className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => { setShowEditInvoice(inv); setEditInvForm({ status: inv.status, paymentMode: inv.paymentMode, notes: inv.notes }); }}
-                              className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition" title="Edit">
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button onClick={() => handleDeleteInvoice(inv._id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition" title="Delete">
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <button onClick={() => handleViewPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition"><Eye className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDownloadPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition"><Download className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleResendEmail(inv._id)} className="p-1.5 text-slate-400 hover:text-violet-500 hover:bg-violet-50 rounded-lg transition"><Mail className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => { setShowEditInvoice(inv); setEditInvForm({ status: inv.status, paymentMode: inv.paymentMode, notes: inv.notes }); }} className="p-1.5 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition"><Edit2 className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => handleDeleteInvoice(inv._id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </td>
                       </tr>
@@ -813,14 +900,13 @@ export function ClientManagement() {
         </div>
       )}
 
-      {/* ── Edit Invoice Modal ── */}
+      {/* Edit Invoice Modal */}
       {showEditInvoice && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
               <h2 className="text-lg font-bold text-slate-900">Edit Invoice</h2>
-              <button onClick={() => setShowEditInvoice(null)}
-                className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowEditInvoice(null)} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -850,40 +936,33 @@ export function ClientManagement() {
                   value={editInvForm.notes || ""} onChange={e => setEditInvForm({ ...editInvForm, notes: e.target.value })} />
               </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowEditInvoice(null)}
-                  className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
-                <button onClick={handleUpdateInvoice}
-                  className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition">Save Changes</button>
+                <button onClick={() => setShowEditInvoice(null)} className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
+                <button onClick={handleUpdateInvoice} className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition">Save Changes</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── PDF Viewer Modal ── */}
+      {/* PDF Viewer Modal */}
       {showPDFViewer && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-orange-500" />
-                <span className="text-sm font-semibold text-slate-900">Invoice — {showPDFViewer.title}</span>
+                <span className="text-sm font-semibold text-slate-900">{showPDFViewer.title}</span>
               </div>
               <div className="flex items-center gap-2">
                 <a href={showPDFViewer.url} download={`${showPDFViewer.title}.pdf`}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
                   <Download className="w-3.5 h-3.5" /> Download
                 </a>
-                <button onClick={() => { URL.revokeObjectURL(showPDFViewer.url); setShowPDFViewer(null); }}
-                  className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+                <button onClick={() => { URL.revokeObjectURL(showPDFViewer.url); setShowPDFViewer(null); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
               </div>
             </div>
             <div className="flex-1 overflow-hidden">
-              <iframe
-                src={showPDFViewer.url}
-                className="w-full h-full border-0"
-                title="Invoice PDF"
-              />
+              <iframe src={showPDFViewer.url} className="w-full h-full border-0" title="Document Viewer" />
             </div>
           </div>
         </div>
