@@ -589,6 +589,37 @@ export const clientApi = {
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   },
+  // ── Document management ──
+  uploadDocument: async (clientId: string, file: File, name?: string) => {
+    const token = tokenStorage.getAccess();
+    const formData = new FormData();
+    formData.append("document", file);
+    if (name) formData.append("name", name);
+    const res = await fetch(`${BASE_URL}/clients/${clientId}/documents`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Upload failed");
+    return data;
+  },
+
+  getDocuments: (clientId: string) =>
+    apiFetch(`/clients/${clientId}/documents`),
+
+  viewDocument: async (clientId: string, docId: string) => {
+    const token = tokenStorage.getAccess();
+    const res   = await fetch(`${BASE_URL}/clients/${clientId}/documents/${docId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error("Failed to load document");
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
+
+  deleteDocument: (clientId: string, docId: string) =>
+    apiFetch(`/clients/${clientId}/documents/${docId}`, { method: "DELETE" }),
 };
 
 /* ============================================================
