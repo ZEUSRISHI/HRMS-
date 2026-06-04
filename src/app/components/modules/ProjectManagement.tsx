@@ -674,11 +674,6 @@ function DocumentPanel({
               <button onClick={() => setError("")}><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
-
-          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-sky-50 border border-sky-100 rounded-xl text-[10px] text-sky-700">
-            <Database className="h-3 w-3 flex-shrink-0" />
-            <span>Files are stored as base64 in <strong>MongoDB Atlas</strong> → projects → documents[].url</span>
-          </div>
         </div>
       ) : (
         <div className="flex items-center gap-2.5 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
