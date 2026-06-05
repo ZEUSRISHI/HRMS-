@@ -672,36 +672,20 @@ export const timesheetApi = {
     apiFetch(`/timesheets/${id}/reject`, { method: "PUT" }),
 };
 
-/* ============================================================
-   VENDOR API
-   ============================================================ */
 export const vendorApi = {
-  create: (data: any) =>
-    apiFetch("/vendors", { method: "POST", body: JSON.stringify(data) }),
-
-  getAll: () => apiFetch("/vendors"),
-
-  update: (id: string, data: any) =>
-    apiFetch(`/vendors/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-
-  delete: (id: string) => apiFetch(`/vendors/${id}`, { method: "DELETE" }),
+  create:      (data: any) => apiFetch("/vendors", { method: "POST", body: JSON.stringify(data) }),
+  getAll:      () => apiFetch("/vendors"),
+  update:      (id: string, data: any) => apiFetch(`/vendors/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete:      (id: string) => apiFetch(`/vendors/${id}`, { method: "DELETE" }),
+  getExpiring: () => apiFetch("/vendors/expiring"),
 };
-/* ============================================================
-   FREELANCER API
-   ============================================================ */
+
 export const freelancerApi = {
-  create: (data: any) =>
-    apiFetch("/freelancers", { method: "POST", body: JSON.stringify(data) }),
-
-  getAll: () => apiFetch("/freelancers"),
-
-  update: (id: string, data: any) =>
-    apiFetch(`/freelancers/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-
-  delete: (id: string) => apiFetch(`/freelancers/${id}`, { method: "DELETE" }),
+  create:      (data: any) => apiFetch("/freelancers", { method: "POST", body: JSON.stringify(data) }),
+  getAll:      () => apiFetch("/freelancers"),
+  update:      (id: string, data: any) => apiFetch(`/freelancers/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  delete:      (id: string) => apiFetch(`/freelancers/${id}`, { method: "DELETE" }),
+  getExpiring: () => apiFetch("/freelancers/expiring"),
 };
 
 /* ============================================================
