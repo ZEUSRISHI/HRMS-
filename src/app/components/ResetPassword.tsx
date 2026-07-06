@@ -2,13 +2,21 @@ import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function ResetPassword({ onBack }: { onBack: () => void }) {
-  const { resetPassword } = useAuth(); // ✅ correct function name
+  const { resetPassword } = useAuth();
 
   const [email, setEmail] = useState("");
   const [newPass, setNewPass] = useState("");
 
-  const handleReset = () => {
-    const success = resetPassword(email, newPass);
+  const handleReset = async () => {
+    const trimmedEmail = email.trim();
+    const trimmedPass = newPass.trim();
+
+    if (!trimmedEmail || !trimmedPass) {
+      alert("Please fill in all fields.");
+      return;
+    }
+
+    const success = await resetPassword(trimmedEmail, trimmedPass);
 
     if (!success) {
       alert("Email not found!");
