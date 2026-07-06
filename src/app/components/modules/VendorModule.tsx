@@ -23,6 +23,30 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   cancelled:   { label: "Cancelled",   color: "#dc2626", bg: "#fef2f2" },
 };
 
+/* ─── COUNTRY CODE OPTIONS ─── */
+const COUNTRY_CODES: { code: string; name: string; dialCode: string; phoneLength: number }[] = [
+  { code: "IN", name: "India",          dialCode: "+91",  phoneLength: 10 },
+  { code: "US", name: "United States",  dialCode: "+1",   phoneLength: 10 },
+  { code: "CA", name: "Canada",         dialCode: "+1",   phoneLength: 10 },
+  { code: "GB", name: "United Kingdom", dialCode: "+44",  phoneLength: 10 },
+  { code: "AU", name: "Australia",      dialCode: "+61",  phoneLength: 9  },
+  { code: "AE", name: "UAE",            dialCode: "+971", phoneLength: 9  },
+  { code: "SG", name: "Singapore",      dialCode: "+65",  phoneLength: 8  },
+  { code: "DE", name: "Germany",        dialCode: "+49",  phoneLength: 10 },
+  { code: "FR", name: "France",         dialCode: "+33",  phoneLength: 9  },
+  { code: "JP", name: "Japan",          dialCode: "+81",  phoneLength: 10 },
+  { code: "CN", name: "China",          dialCode: "+86",  phoneLength: 11 },
+  { code: "BR", name: "Brazil",         dialCode: "+55",  phoneLength: 11 },
+  { code: "ZA", name: "South Africa",   dialCode: "+27",  phoneLength: 9  },
+  { code: "NZ", name: "New Zealand",    dialCode: "+64",  phoneLength: 9  },
+  { code: "SA", name: "Saudi Arabia",   dialCode: "+966", phoneLength: 9  },
+];
+
+function getPhoneLength(dialCode: string): number {
+  const match = COUNTRY_CODES.find(c => c.dialCode === dialCode);
+  return match ? match.phoneLength : 10;
+}
+
 const getDaysBadge = (daysLeft?: number) => {
   if (daysLeft === undefined || daysLeft === null) return null;
   if (daysLeft <  0)  return { label: `Expired ${Math.abs(daysLeft)}d ago`, color: "#dc2626", bg: "#fef2f2" };
@@ -58,7 +82,7 @@ export default function VendorModule() {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const emptyForm = {
-    company: "", contactPerson: "", email: "", phone: "",
+    company: "", contactPerson: "", email: "", countryCode: "+91", phone: "",
     category: "", taxId: "", address: "",
     projectName: "", projectStatus: "", projectStartDate: "", projectEndDate: "",
   };
@@ -88,15 +112,25 @@ export default function VendorModule() {
 
   useEffect(() => { load(); }, []);
 
+  const isPhoneValid = (countryCode: string, phone: string) => {
+    if (!phone) return false; // phone is required for vendors
+    return phone.length === getPhoneLength(countryCode);
+  };
+
   const handleSave = async () => {
     if (!form.company || !form.contactPerson || !form.email || !form.phone) {
       toast$("Please fill all required fields (Company, Contact, Email, Phone)", false);
+      return;
+    }
+    if (!isPhoneValid(form.countryCode, form.phone)) {
+      toast$(`Phone number must be exactly ${getPhoneLength(form.countryCode)} digits for ${form.countryCode}`, false);
       return;
     }
     try {
       setSaving(true);
       const payload = {
         ...form,
+        phone: Number(form.phone),
         projectStartDate: form.projectStartDate || null,
         projectEndDate:   form.projectEndDate   || null,
       };
@@ -119,7 +153,8 @@ export default function VendorModule() {
       company:          v.company          || "",
       contactPerson:    v.contactPerson    || "",
       email:            v.email            || "",
-      phone:            v.phone            || "",
+      countryCode:      v.countryCode      || "+91",
+      phone:            v.phone !== undefined && v.phone !== null ? String(v.phone) : "",
       category:         v.category         || "",
       taxId:            v.taxId            || "",
       address:          v.address          || "",
@@ -149,9 +184,9 @@ export default function VendorModule() {
       return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
     };
     const rows = [
-      "Company,Contact,Email,Phone,Category,Tax ID,Project,Status,Start,End,Days Left",
+      "Company,Contact,Email,Country Code,Phone,Category,Tax ID,Project,Status,Start,End,Days Left",
       ...vendors.map((v) =>
-        [v.company, v.contactPerson, v.email, v.phone, v.category, v.taxId,
+        [v.company, v.contactPerson, v.email, v.countryCode || "", v.phone ?? "", v.category, v.taxId,
          v.projectName, v.projectStatus,
          fmtDate(v.projectStartDate), fmtDate(v.projectEndDate), v.daysLeft ?? ""]
           .map(esc).join(",")
@@ -313,7 +348,6 @@ export default function VendorModule() {
                   { label: "Company Name *",  key: "company"       },
                   { label: "Contact Person *", key: "contactPerson" },
                   { label: "Email Address *",  key: "email"         },
-                  { label: "Phone Number *",   key: "phone"         },
                   { label: "Category",         key: "category"      },
                   { label: "Tax ID / GST No.", key: "taxId"         },
                 ].map(({ label, key }) => (
@@ -326,6 +360,38 @@ export default function VendorModule() {
                     />
                   </div>
                 ))}
+
+                {/* Phone with country code dropdown */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Phone Number *</label>
+                  <div className="flex gap-2">
+                    <select
+                      className="border border-gray-200 rounded-xl px-2 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-[110px]"
+                      value={form.countryCode}
+                      onChange={(e) => setForm({ ...form, countryCode: e.target.value, phone: "" })}
+                    >
+                      {COUNTRY_CODES.map((c) => (
+                        <option key={c.code} value={c.dialCode}>{c.dialCode} {c.code}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={`${getPhoneLength(form.countryCode)}-digit number`}
+                      className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={form.phone}
+                      onChange={(e) => {
+                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, getPhoneLength(form.countryCode));
+                        setForm({ ...form, phone: digitsOnly });
+                      }}
+                    />
+                  </div>
+                  {form.phone && form.phone.length !== getPhoneLength(form.countryCode) && (
+                    <p className="text-[10px] text-red-500 mt-1">
+                      Must be exactly {getPhoneLength(form.countryCode)} digits for {form.countryCode}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -453,7 +519,9 @@ export default function VendorModule() {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                     <span className="flex items-center gap-1"><Building2 size={11} /> {v.contactPerson || "—"}</span>
                     <span className="flex items-center gap-1"><Mail     size={11} /> {v.email}</span>
-                    <span className="flex items-center gap-1"><Phone    size={11} /> {v.phone}</span>
+                    <span className="flex items-center gap-1">
+                      <Phone size={11} /> {v.phone ? `${v.countryCode || ""} ${v.phone}` : "—"}
+                    </span>
                     {v.category && <span className="flex items-center gap-1"><Tag size={11} /> {v.category}</span>}
                   </div>
                   {v.projectName && (
