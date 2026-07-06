@@ -6,6 +6,30 @@ import {
   Plus, Pencil, Trash2, Download, Bell, X, ChevronDown, ChevronUp,
 } from "lucide-react";
 
+/* ─── COUNTRY CODE OPTIONS ─── */
+const COUNTRY_CODES: { code: string; name: string; dialCode: string; phoneLength: number }[] = [
+  { code: "IN", name: "India",          dialCode: "+91",  phoneLength: 10 },
+  { code: "US", name: "United States",  dialCode: "+1",   phoneLength: 10 },
+  { code: "CA", name: "Canada",         dialCode: "+1",   phoneLength: 10 },
+  { code: "GB", name: "United Kingdom", dialCode: "+44",  phoneLength: 10 },
+  { code: "AU", name: "Australia",      dialCode: "+61",  phoneLength: 9  },
+  { code: "AE", name: "UAE",            dialCode: "+971", phoneLength: 9  },
+  { code: "SG", name: "Singapore",      dialCode: "+65",  phoneLength: 8  },
+  { code: "DE", name: "Germany",        dialCode: "+49",  phoneLength: 10 },
+  { code: "FR", name: "France",         dialCode: "+33",  phoneLength: 9  },
+  { code: "JP", name: "Japan",          dialCode: "+81",  phoneLength: 10 },
+  { code: "CN", name: "China",          dialCode: "+86",  phoneLength: 11 },
+  { code: "BR", name: "Brazil",         dialCode: "+55",  phoneLength: 11 },
+  { code: "ZA", name: "South Africa",   dialCode: "+27",  phoneLength: 9  },
+  { code: "NZ", name: "New Zealand",    dialCode: "+64",  phoneLength: 9  },
+  { code: "SA", name: "Saudi Arabia",   dialCode: "+966", phoneLength: 9  },
+];
+
+function getPhoneLength(dialCode: string): number {
+  const match = COUNTRY_CODES.find(c => c.dialCode === dialCode);
+  return match ? match.phoneLength : 10;
+}
+
 /* ─── helpers ─────────────────────────────────────────────── */
 const getDaysBadge = (daysLeft?: number) => {
   if (daysLeft === undefined || daysLeft === null) return null;
@@ -43,7 +67,7 @@ export default function FreelancerModule() {
   const [expanded,    setExpanded]    = useState<string | null>(null);
 
   const emptyForm = {
-    name: "", email: "", phone: "", skill: "",
+    name: "", email: "", countryCode: "+91", phone: "", skill: "",
     rate: "", contractStart: "", contractEnd: "", status: "active" as "active" | "expired",
   };
   const [form, setForm] = useState(emptyForm);
@@ -68,16 +92,34 @@ export default function FreelancerModule() {
 
   useEffect(() => { load(); }, []);
 
+  const isPhoneValid = (countryCode: string, phone: string) => {
+    if (!phone) return true; // phone optional for freelancers
+    return phone.length === getPhoneLength(countryCode);
+  };
+
   const handleSave = async () => {
     if (!form.name || !form.email || !form.skill) {
       toast$("Please fill required fields: Name, Email, Skill", false);
       return;
     }
+    if (!isPhoneValid(form.countryCode, form.phone)) {
+      toast$(`Phone number must be exactly ${getPhoneLength(form.countryCode)} digits for ${form.countryCode}`, false);
+      return;
+    }
+    if (form.rate && isNaN(Number(form.rate))) {
+      toast$("Rate must be a valid number", false);
+      return;
+    }
     try {
       setSaving(true);
+      const payload = {
+        ...form,
+        phone: form.phone ? Number(form.phone) : null,
+        rate: form.rate ? Number(form.rate) : null,
+      };
       editId
-        ? await freelancerApi.update(editId, form)
-        : await freelancerApi.create(form);
+        ? await freelancerApi.update(editId, payload)
+        : await freelancerApi.create(payload);
       toast$(editId ? "Freelancer updated" : "Freelancer added");
       setEditId(null); setForm(emptyForm); setShowForm(false);
       await load();
@@ -93,11 +135,12 @@ export default function FreelancerModule() {
     setForm({
       name:          f.name          || "",
       email:         f.email         || "",
-      phone:         f.phone         || "",
+      countryCode:   f.countryCode   || "+91",
+      phone:         f.phone !== undefined && f.phone !== null ? String(f.phone) : "",
       skill:         f.skill         || "",
-      rate:          f.rate          || "",
-      contractStart: f.contractStart || "",
-      contractEnd:   f.contractEnd   || "",
+      rate:          f.rate !== undefined && f.rate !== null ? String(f.rate) : "",
+      contractStart: f.contractStart ? String(f.contractStart).slice(0, 10) : "",
+      contractEnd:   f.contractEnd   ? String(f.contractEnd).slice(0, 10)   : "",
       status:        f.status        || "active",
     });
     setShowForm(true);
@@ -117,9 +160,9 @@ export default function FreelancerModule() {
 
   const downloadCSV = () => {
     const rows = [
-      "Name,Email,Phone,Skill,Rate,Contract Start,Contract End,Status,Days Left",
+      "Name,Email,Country Code,Phone,Skill,Rate,Contract Start,Contract End,Status,Days Left",
       ...freelancers.map((f) =>
-        [f.name, f.email, f.phone, f.skill, f.rate,
+        [f.name, f.email, f.countryCode || "", f.phone ?? "", f.skill, f.rate ?? "",
          fmtDate(f.contractStart), fmtDate(f.contractEnd), f.status, f.daysLeft ?? ""].join(",")
       ),
     ];
@@ -270,9 +313,7 @@ export default function FreelancerModule() {
               {[
                 { label: "Full Name *",           key: "name"  },
                 { label: "Email Address *",        key: "email" },
-                { label: "Phone Number",           key: "phone" },
                 { label: "Primary Skill *",        key: "skill" },
-                { label: "Rate (e.g. ₹3000/hr)",  key: "rate"  },
               ].map(({ label, key }) => (
                 <div key={key}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
@@ -283,6 +324,55 @@ export default function FreelancerModule() {
                   />
                 </div>
               ))}
+
+              {/* Phone with country code dropdown */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Phone Number</label>
+                <div className="flex gap-2">
+                  <select
+                    className="border border-gray-200 rounded-xl px-2 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-[110px]"
+                    value={form.countryCode}
+                    onChange={(e) => setForm({ ...form, countryCode: e.target.value, phone: "" })}
+                  >
+                    {COUNTRY_CODES.map((c) => (
+                      <option key={c.code} value={c.dialCode}>{c.dialCode} {c.code}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={`${getPhoneLength(form.countryCode)}-digit number`}
+                    className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    value={form.phone}
+                    onChange={(e) => {
+                      const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, getPhoneLength(form.countryCode));
+                      setForm({ ...form, phone: digitsOnly });
+                    }}
+                  />
+                </div>
+                {form.phone && form.phone.length !== getPhoneLength(form.countryCode) && (
+                  <p className="text-[10px] text-red-500 mt-1">
+                    Must be exactly {getPhoneLength(form.countryCode)} digits for {form.countryCode}
+                  </p>
+                )}
+              </div>
+
+              {/* Rate as number */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Rate (per hour, numeric)</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="e.g. 3000"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  value={form.rate}
+                  onChange={(e) => {
+                    const numeric = e.target.value.replace(/[^0-9.]/g, "");
+                    setForm({ ...form, rate: numeric });
+                  }}
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Contract Start</label>
                 <input type="date"
@@ -385,8 +475,12 @@ export default function FreelancerModule() {
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
                     <span className="flex items-center gap-1"><Briefcase size={11} /> {f.skill}</span>
                     <span className="flex items-center gap-1"><Mail  size={11} /> {f.email}</span>
-                    {f.phone && <span className="flex items-center gap-1"><Phone size={11} /> {f.phone}</span>}
-                    {f.rate  && <span className="flex items-center gap-1">💰 {f.rate}</span>}
+                    {f.phone && (
+                      <span className="flex items-center gap-1">
+                        <Phone size={11} /> {f.countryCode || ""} {f.phone}
+                      </span>
+                    )}
+                    {f.rate  && <span className="flex items-center gap-1">💰 ₹{f.rate}/hr</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                     <CalendarDays size={11} />
