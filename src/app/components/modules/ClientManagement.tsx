@@ -46,6 +46,46 @@ function fmtBytes(b: number) {
   return (b / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+/* ══════════ COUNTRY CODE / PHONE LENGTH CONFIG ══════════ */
+type CountryPhoneConfig = { code: string; name: string; dial: string; digits: number };
+
+const COUNTRY_CODES: CountryPhoneConfig[] = [
+  { code: "IN", name: "India",          dial: "+91",  digits: 10 },
+  { code: "US", name: "United States",  dial: "+1",   digits: 10 },
+  { code: "CA", name: "Canada",         dial: "+1",   digits: 10 },
+  { code: "GB", name: "United Kingdom", dial: "+44",  digits: 10 },
+  { code: "AU", name: "Australia",      dial: "+61",  digits: 9  },
+  { code: "AE", name: "UAE",            dial: "+971", digits: 9  },
+  { code: "SG", name: "Singapore",      dial: "+65",  digits: 8  },
+  { code: "DE", name: "Germany",        dial: "+49",  digits: 11 },
+  { code: "FR", name: "France",         dial: "+33",  digits: 9  },
+  { code: "CN", name: "China",          dial: "+86",  digits: 11 },
+  { code: "JP", name: "Japan",          dial: "+81",  digits: 10 },
+  { code: "SA", name: "Saudi Arabia",   dial: "+966", digits: 9  },
+  { code: "ZA", name: "South Africa",   dial: "+27",  digits: 9  },
+  { code: "BR", name: "Brazil",         dial: "+55",  digits: 11 },
+  { code: "RU", name: "Russia",         dial: "+7",   digits: 10 },
+];
+
+const getCountryConfig = (code: string) =>
+  COUNTRY_CODES.find(c => c.code === code) || COUNTRY_CODES[0];
+
+const isValidPhoneForCountry = (countryCode: string, digits: string) => {
+  const cfg = getCountryConfig(countryCode);
+  return new RegExp(`^\\d{${cfg.digits}}$`).test(digits);
+};
+
+/* Try to detect country + digits from a stored combined phone like "+919876543210" */
+function parseStoredPhone(fullPhone: string): { countryCode: string; digits: string } {
+  if (!fullPhone) return { countryCode: "IN", digits: "" };
+  const sorted = [...COUNTRY_CODES].sort((a, b) => b.dial.length - a.dial.length);
+  const match = sorted.find(c => fullPhone.startsWith(c.dial));
+  if (match) {
+    return { countryCode: match.code, digits: fullPhone.slice(match.dial.length).replace(/\D/g, "") };
+  }
+  return { countryCode: "IN", digits: fullPhone.replace(/\D/g, "") };
+}
+
 /* ══════════ MAIN COMPONENT ══════════ */
 export function ClientManagement() {
   const [clients,  setClients]  = useState<Client[]>([]);
@@ -74,7 +114,7 @@ export function ClientManagement() {
 
   /* forms */
   const [clientForm, setClientForm] = useState({
-    name: "", company: "", email: "", phone: "", address: "",
+    name: "", company: "", email: "", phone: "", phoneCountry: "IN", address: "",
     description: "", gstNumber: "", status: "active",
   });
   const [invoiceForm, setInvoiceForm] = useState({
@@ -123,19 +163,39 @@ export function ClientManagement() {
   /* ── Client CRUD ── */
   const handleAddClient = async () => {
     if (!clientForm.name || !clientForm.email) return showToast("Name and Email are required", "error");
+    if (clientForm.phone && !isValidPhoneForCountry(clientForm.phoneCountry, clientForm.phone)) {
+      const cfg = getCountryConfig(clientForm.phoneCountry);
+      return showToast(`Phone number must be exactly ${cfg.digits} digits for ${cfg.name}`, "error");
+    }
     try {
-      await clientApi.create(clientForm);
+      const dial = getCountryConfig(clientForm.phoneCountry).dial;
+      const payload = {
+        ...clientForm,
+        phone: clientForm.phone ? `${dial}${clientForm.phone}` : "",
+      };
+      delete (payload as any).phoneCountry;
+      await clientApi.create(payload);
       showToast("Client added successfully");
       setShowAddClient(false);
-      setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", gstNumber: "", status: "active" });
+      setClientForm({ name: "", company: "", email: "", phone: "", phoneCountry: "IN", address: "", description: "", gstNumber: "", status: "active" });
       await loadData();
     } catch (err: any) { showToast(err.message, "error"); }
   };
 
   const handleEditClient = async () => {
     if (!showEditClient) return;
+    if (clientForm.phone && !isValidPhoneForCountry(clientForm.phoneCountry, clientForm.phone)) {
+      const cfg = getCountryConfig(clientForm.phoneCountry);
+      return showToast(`Phone number must be exactly ${cfg.digits} digits for ${cfg.name}`, "error");
+    }
     try {
-      await clientApi.update(showEditClient._id, clientForm);
+      const dial = getCountryConfig(clientForm.phoneCountry).dial;
+      const payload = {
+        ...clientForm,
+        phone: clientForm.phone ? `${dial}${clientForm.phone}` : "",
+      };
+      delete (payload as any).phoneCountry;
+      await clientApi.update(showEditClient._id, payload);
       showToast("Client updated successfully");
       setShowEditClient(null);
       await loadData();
@@ -254,7 +314,7 @@ export function ClientManagement() {
     } catch (err: any) { showToast(err.message, "error"); }
     finally { setUploading(false); }
   };
-
+   
   const handleViewDocument = async (docId: string, name: string) => {
     if (!showDocuments) return;
     try {
@@ -308,6 +368,8 @@ export function ClientManagement() {
     </div>
   );
 
+  const activePhoneCfg = getCountryConfig(clientForm.phoneCountry);
+
   /* ════════════════════════════════════════════════
      RENDER
   ════════════════════════════════════════════════ */
@@ -316,84 +378,84 @@ export function ClientManagement() {
 
       {/* Toast */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all animate-in slide-in-from-top-2
+        <div className={`fixed top-4 right-4 left-4 sm:left-auto z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium transition-all animate-in slide-in-from-top-2
           ${toast.type === "success" ? "bg-white border-emerald-200 text-emerald-800" : "bg-white border-red-200 text-red-800"}`}>
           {toast.type === "success" ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" /> : <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />}
-          {toast.msg}
-          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100"><X className="w-3 h-3" /></button>
+          <span className="flex-1">{toast.msg}</span>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-60 hover:opacity-100 shrink-0"><X className="w-3 h-3" /></button>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-6 sm:space-y-8">
 
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs text-slate-400 font-medium mb-1">
               <span>HRMS</span><ChevronRight className="w-3 h-3" /><span className="text-slate-600">Client & Payment Tracking</span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Client & Payment Tracking</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Client & Payment Tracking</h1>
             <p className="text-sm text-slate-500 mt-0.5">Manage clients, invoices and payments</p>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
             <button onClick={() => loadData()}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-              <RefreshCw className="w-4 h-4" /> Refresh
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+              <RefreshCw className="w-4 h-4" /> <span className="hidden xs:inline sm:inline">Refresh</span>
             </button>
             <button onClick={downloadReport}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
-              <Download className="w-4 h-4" /> Export CSV
+              className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition">
+              <Download className="w-4 h-4" /> <span className="hidden xs:inline sm:inline">Export CSV</span>
             </button>
-            <button onClick={() => { setClientForm({ name: "", company: "", email: "", phone: "", address: "", description: "", gstNumber: "", status: "active" }); setShowAddClient(true); }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 shadow-sm transition">
+            <button onClick={() => { setClientForm({ name: "", company: "", email: "", phone: "", phoneCountry: "IN", address: "", description: "", gstNumber: "", status: "active" }); setShowAddClient(true); }}
+              className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-orange-500 rounded-lg hover:bg-orange-600 shadow-sm transition">
               <Plus className="w-4 h-4" /> Add Client
             </button>
             <button onClick={() => setShowCreateInvoice(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 shadow-sm transition">
-              <FileText className="w-4 h-4" /> Create Invoice
+              className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 shadow-sm transition">
+              <FileText className="w-4 h-4" /> <span className="whitespace-nowrap">Create Invoice</span>
             </button>
           </div>
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {[
             { label: "Active Clients",    value: activeClients,                              icon: Building2,  color: "text-blue-600",   bg: "bg-blue-50"   },
             { label: "Total Invoiced",    value: `₹${totalInvoiced.toLocaleString("en-IN")}`, icon: FileText,   color: "text-violet-600", bg: "bg-violet-50" },
             { label: "Payments Received", value: `₹${totalPaid.toLocaleString("en-IN")}`,     icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50" },
             { label: "Outstanding",       value: `₹${totalOutstanding.toLocaleString("en-IN")}`, icon: TrendingUp, color: "text-orange-600", bg: "bg-orange-50" },
           ].map(s => (
-            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 hover:shadow-md transition">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{s.label}</span>
-                <div className={`w-8 h-8 rounded-lg ${s.bg} flex items-center justify-center`}>
-                  <s.icon className={`w-4 h-4 ${s.color}`} />
+            <div key={s.label} className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-5 hover:shadow-md transition min-w-0">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <span className="text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wider truncate pr-1">{s.label}</span>
+                <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg ${s.bg} flex items-center justify-center shrink-0`}>
+                  <s.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${s.color}`} />
                 </div>
               </div>
-              <div className="text-2xl font-bold text-slate-900">{s.value}</div>
+              <div className="text-lg sm:text-2xl font-bold text-slate-900 truncate">{s.value}</div>
             </div>
           ))}
         </div>
 
         {/* Clients table */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-4 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">Clients</h2>
               <p className="text-xs text-slate-400 mt-0.5">{clients.length} total clients</p>
             </div>
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input placeholder="Search clients..." value={searchClients} onChange={e => setSearchClients(e.target.value)}
-                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-300 w-56" />
+                className="pl-9 pr-4 py-2 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-orange-300 w-full sm:w-56" />
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[720px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {["Client", "Company", "Email", "GST/TIN", "Outstanding", "Status", "Actions"].map(h => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                    <th key={h} className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -402,45 +464,51 @@ export function ClientManagement() {
                   <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-sm">No clients found</td></tr>
                 ) : filtered.map(c => (
                   <tr key={c._id} className="hover:bg-slate-50/60 transition group">
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <button onClick={() => openClientInvoices(c)}
-                        className="font-semibold text-slate-900 hover:text-orange-600 transition text-sm flex items-center gap-1 group">
+                        className="font-semibold text-slate-900 hover:text-orange-600 transition text-sm flex items-center gap-1 group whitespace-nowrap">
                         {c.name}<ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition" />
                       </button>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{c.company || "—"}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{c.email}</td>
-                    <td className="px-6 py-4 text-sm text-slate-500 font-mono">{c.gstNumber || "—"}</td>
-                    <td className="px-6 py-4">
-                      <span className={`text-sm font-bold ${(c.outstandingBalance || 0) > 0 ? "text-orange-600" : "text-slate-400"}`}>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{c.company || "—"}</td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{c.email}</td>
+                    <td className="px-4 sm:px-6 py-4 text-sm text-slate-500 font-mono whitespace-nowrap">{c.gstNumber || "—"}</td>
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className={`text-sm font-bold whitespace-nowrap ${(c.outstandingBalance || 0) > 0 ? "text-orange-600" : "text-slate-400"}`}>
                         ₹{(c.outstandingBalance || 0).toLocaleString("en-IN")}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border
+                    <td className="px-4 sm:px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap
                         ${c.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"}`}>
                         {c.status || "active"}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 sm:px-6 py-4">
                       <div className="flex items-center gap-1">
                         <button onClick={() => openClientInvoices(c)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition">
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition whitespace-nowrap">
                           <Eye className="w-3 h-3" /> Invoices
                         </button>
                         {/* Documents button */}
                         <button onClick={() => openDocuments(c)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition">
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition whitespace-nowrap">
                           <Paperclip className="w-3 h-3" /> Docs
                         </button>
                         <button onClick={() => {
-                          setClientForm({ name: c.name, company: c.company || "", email: c.email, phone: c.phone || "", address: c.address || "", description: c.description || "", gstNumber: c.gstNumber || "", status: c.status || "active" });
+                          const parsed = parseStoredPhone(c.phone || "");
+                          setClientForm({
+                            name: c.name, company: c.company || "", email: c.email,
+                            phone: parsed.digits, phoneCountry: parsed.countryCode,
+                            address: c.address || "", description: c.description || "",
+                            gstNumber: c.gstNumber || "", status: c.status || "active",
+                          });
                           setShowEditClient(c);
-                        }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                        }} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition shrink-0">
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button onClick={() => handleDeleteClient(c._id)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition">
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition shrink-0">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -454,18 +522,18 @@ export function ClientManagement() {
 
         {/* Recent invoices */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-100">
             <div>
               <h2 className="text-base font-bold text-slate-900">Recent Invoices</h2>
               <p className="text-xs text-slate-400 mt-0.5">{invoices.length} total invoices</p>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[760px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-100">
                   {["Invoice No", "Client", "Amount", "Status", "Date", "Due Date", "Actions"].map(h => (
-                    <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
+                    <th key={h} className="text-left px-4 sm:px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -476,17 +544,17 @@ export function ClientManagement() {
                   const cn = typeof inv.clientId === "object" ? inv.clientId?.name || "—" : "—";
                   return (
                     <tr key={inv._id} className="hover:bg-slate-50/60 transition">
-                      <td className="px-6 py-4"><span className="text-sm font-semibold text-slate-900">{inv.invoiceNumber || "—"}</span></td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{cn}</td>
-                      <td className="px-6 py-4"><span className="text-sm font-bold text-slate-900">₹{(inv.amount || 0).toLocaleString("en-IN")}</span></td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${STATUS_COLORS[inv.status || "pending"] || STATUS_COLORS.pending}`}>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap"><span className="text-sm font-semibold text-slate-900">{inv.invoiceNumber || "—"}</span></td>
+                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-600 whitespace-nowrap">{cn}</td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap"><span className="text-sm font-bold text-slate-900">₹{(inv.amount || 0).toLocaleString("en-IN")}</span></td>
+                      <td className="px-4 sm:px-6 py-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap ${STATUS_COLORS[inv.status || "pending"] || STATUS_COLORS.pending}`}>
                           {inv.status || "pending"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-500">{inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                      <td className="px-6 py-4 text-sm text-slate-500">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{inv.date ? new Date(inv.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                      <td className="px-4 sm:px-6 py-4 text-sm text-slate-500 whitespace-nowrap">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
+                      <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-1">
                           <button onClick={() => handleViewPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition" title="View PDF"><Eye className="w-3.5 h-3.5" /></button>
                           <button onClick={() => handleDownloadPDF(inv._id, inv.invoiceNumber || "INV")} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Download PDF"><Download className="w-3.5 h-3.5" /></button>
@@ -510,17 +578,17 @@ export function ClientManagement() {
 
       {/* Add/Edit Client Modal */}
       {(showAddClient || showEditClient) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-lg h-full sm:h-auto max-h-full sm:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">{showEditClient ? "Edit Client" : "Add New Client"}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Fill in the client details below</p>
+                <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">Fill in the client details below</p>
               </div>
               <button onClick={() => { setShowAddClient(false); setShowEditClient(null); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Full Name *</label>
                   <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -532,7 +600,7 @@ export function ClientManagement() {
                     placeholder="Acme Corp" value={clientForm.company} onChange={e => setClientForm({ ...clientForm, company: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Email *</label>
                   <input type="email" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -540,8 +608,42 @@ export function ClientManagement() {
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Phone</label>
-                  <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                    placeholder="+91 98765 43210" value={clientForm.phone} onChange={e => setClientForm({ ...clientForm, phone: e.target.value })} />
+                  <div className="flex gap-2">
+                    <select
+                      className="border border-slate-200 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 shrink-0 w-[84px] sm:w-[92px]"
+                      value={clientForm.phoneCountry}
+                      onChange={e => {
+                        const newCountry = e.target.value;
+                        const newCfg = getCountryConfig(newCountry);
+                        setClientForm({
+                          ...clientForm,
+                          phoneCountry: newCountry,
+                          phone: clientForm.phone.slice(0, newCfg.digits),
+                        });
+                      }}
+                    >
+                      {COUNTRY_CODES.map(c => (
+                        <option key={c.code} value={c.code}>{c.dial} {c.code}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={activePhoneCfg.digits}
+                      className="flex-1 min-w-0 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                      placeholder={"0".repeat(activePhoneCfg.digits)}
+                      value={clientForm.phone}
+                      onChange={e => {
+                        const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, activePhoneCfg.digits);
+                        setClientForm({ ...clientForm, phone: digitsOnly });
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">{activePhoneCfg.name} numbers need {activePhoneCfg.digits} digits</p>
+                  {clientForm.phone && clientForm.phone.length !== activePhoneCfg.digits && (
+                    <p className="text-xs text-red-500 mt-0.5">Must be exactly {activePhoneCfg.digits} digits</p>
+                  )}
                 </div>
               </div>
               {/* GST/TIN field */}
@@ -556,7 +658,7 @@ export function ClientManagement() {
                 <textarea rows={2} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
                   placeholder="123 Business Park, City" value={clientForm.address} onChange={e => setClientForm({ ...clientForm, address: e.target.value })} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Description</label>
                   <input className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -571,7 +673,7 @@ export function ClientManagement() {
                   </select>
                 </div>
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-2 pb-2 sm:pb-0">
                 <button onClick={() => { setShowAddClient(false); setShowEditClient(null); }}
                   className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
                 <button onClick={showEditClient ? handleEditClient : handleAddClient}
@@ -586,20 +688,20 @@ export function ClientManagement() {
 
       {/* Documents Modal */}
       {showDocuments && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Documents — {showDocuments.name}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Upload and manage client PDF documents (max 15MB each)</p>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl h-full sm:h-auto max-h-full sm:max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 truncate">Documents — {showDocuments.name}</h2>
+                <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">Upload and manage client PDF documents (max 15MB each)</p>
               </div>
-              <button onClick={() => { setShowDocuments(null); setDocuments([]); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
+              <button onClick={() => { setShowDocuments(null); setDocuments([]); }} className="p-2 hover:bg-slate-100 rounded-lg transition shrink-0"><X className="w-4 h-4" /></button>
             </div>
 
-            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 space-y-5 overflow-y-auto flex-1">
               {/* Upload area */}
               <div
-                className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition cursor-pointer"
+                className="border-2 border-dashed border-slate-200 rounded-xl p-4 sm:p-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add("border-blue-400", "bg-blue-50/30"); }}
                 onDragLeave={e => { e.currentTarget.classList.remove("border-blue-400", "bg-blue-50/30"); }}
@@ -676,17 +778,17 @@ export function ClientManagement() {
 
       {/* Create Invoice Modal */}
       {showCreateInvoice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl h-full sm:h-auto max-h-full sm:max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Create Invoice</h2>
-                <p className="text-xs text-slate-500 mt-0.5">Fill in invoice details and line items</p>
+                <p className="text-xs text-slate-500 mt-0.5 hidden sm:block">Fill in invoice details and line items</p>
               </div>
               <button onClick={() => setShowCreateInvoice(false)} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Client *</label>
                   <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white"
@@ -701,7 +803,7 @@ export function ClientManagement() {
                     placeholder="INV-001" value={invoiceForm.invoiceNumber} onChange={e => setInvoiceForm({ ...invoiceForm, invoiceNumber: e.target.value })} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Invoice Date</label>
                   <input type="date" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -721,8 +823,8 @@ export function ClientManagement() {
                     <Plus className="w-3 h-3" /> Add Item
                   </button>
                 </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-xs">
+                <div className="border border-slate-200 rounded-xl overflow-x-auto">
+                  <table className="w-full text-xs min-w-[480px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold text-slate-500">Description</th>
@@ -748,7 +850,7 @@ export function ClientManagement() {
                             <input type="number" min="0" className="w-full border border-slate-200 rounded-md px-2 py-1.5 text-xs text-right focus:outline-none focus:ring-1 focus:ring-orange-300"
                               value={item.unitPrice} onChange={e => updateItem(idx, "unitPrice", e.target.value)} />
                           </td>
-                          <td className="p-1.5 text-right pr-3 font-bold text-slate-700">₹{item.total.toLocaleString("en-IN")}</td>
+                          <td className="p-1.5 text-right pr-3 font-bold text-slate-700 whitespace-nowrap">₹{item.total.toLocaleString("en-IN")}</td>
                           <td className="p-1.5">
                             {invoiceForm.items.length > 1 && (
                               <button onClick={() => removeItem(idx)} className="text-slate-300 hover:text-red-500 p-0.5 transition"><X className="w-3.5 h-3.5" /></button>
@@ -760,7 +862,7 @@ export function ClientManagement() {
                   </table>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-slate-600 mb-1 block">Tax (%)</label>
                   <input type="number" min="0" max="100" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -801,7 +903,7 @@ export function ClientManagement() {
                   value={invoiceForm.notes} onChange={e => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} />
               </div>
               <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition">
-                <div className="relative">
+                <div className="relative shrink-0">
                   <input type="checkbox" className="sr-only" checked={invoiceForm.sendEmail} onChange={e => setInvoiceForm({ ...invoiceForm, sendEmail: e.target.checked })} />
                   <div className={`w-10 h-5 rounded-full transition ${invoiceForm.sendEmail ? "bg-orange-500" : "bg-slate-200"}`}></div>
                   <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${invoiceForm.sendEmail ? "translate-x-5" : ""}`}></div>
@@ -811,7 +913,7 @@ export function ClientManagement() {
                   <p className="text-xs text-slate-400">PDF will be attached and sent to the client's email</p>
                 </div>
               </label>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-2 pb-2 sm:pb-0">
                 <button onClick={() => setShowCreateInvoice(false)} className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
                 <button onClick={handleCreateInvoice} className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition shadow-sm">Create Invoice</button>
               </div>
@@ -822,26 +924,26 @@ export function ClientManagement() {
 
       {/* Client Invoices Modal */}
       {showClientInvoices && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">{showClientInvoices.name}</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-5xl h-full sm:h-auto max-h-full sm:max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 truncate">{showClientInvoices.name}</h2>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">
                   {showClientInvoices.company && `${showClientInvoices.company} · `}
                   {showClientInvoices.gstNumber && `GST: ${showClientInvoices.gstNumber} · `}
                   {showClientInvoices.email} · Outstanding: <span className="font-semibold text-orange-600">₹{(showClientInvoices.outstandingBalance || 0).toLocaleString("en-IN")}</span>
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => setShowCreateInvoice(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition">
-                  <Plus className="w-3 h-3" /> New Invoice
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition whitespace-nowrap">
+                  <Plus className="w-3 h-3" /> <span className="hidden sm:inline">New Invoice</span>
                 </button>
                 <button onClick={() => { setShowClientInvoices(null); setClientInvoices([]); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
               </div>
             </div>
-            <div className="overflow-y-auto flex-1">
+            <div className="overflow-auto flex-1">
               {ciLoading ? (
                 <div className="flex items-center justify-center h-40">
                   <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
@@ -853,7 +955,7 @@ export function ClientManagement() {
                   <button onClick={() => setShowCreateInvoice(true)} className="text-xs font-semibold text-orange-600 hover:underline">Create first invoice</button>
                 </div>
               ) : (
-                <table className="w-full">
+                <table className="w-full min-w-[900px]">
                   <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
                     <tr>
                       {["Invoice No", "Amount", "Tax", "Discount", "Net", "Status", "Date", "Due", "Email", "Actions"].map(h => (
@@ -864,13 +966,13 @@ export function ClientManagement() {
                   <tbody className="divide-y divide-slate-50">
                     {clientInvoices.map(inv => (
                       <tr key={inv._id} className="hover:bg-slate-50/60 transition">
-                        <td className="px-5 py-3 text-sm font-bold text-slate-900">{inv.invoiceNumber || "—"}</td>
-                        <td className="px-5 py-3 text-sm text-slate-600">₹{(inv.subtotal || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-5 py-3 text-sm text-slate-600">₹{(inv.taxAmount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-5 py-3 text-sm text-slate-600">₹{(inv.discount || 0).toLocaleString("en-IN")}</td>
-                        <td className="px-5 py-3"><span className="text-sm font-bold text-emerald-600">₹{(inv.amount || 0).toLocaleString("en-IN")}</span></td>
+                        <td className="px-5 py-3 text-sm font-bold text-slate-900 whitespace-nowrap">{inv.invoiceNumber || "—"}</td>
+                        <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">₹{(inv.subtotal || 0).toLocaleString("en-IN")}</td>
+                        <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">₹{(inv.taxAmount || 0).toLocaleString("en-IN")}</td>
+                        <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">₹{(inv.discount || 0).toLocaleString("en-IN")}</td>
+                        <td className="px-5 py-3 whitespace-nowrap"><span className="text-sm font-bold text-emerald-600">₹{(inv.amount || 0).toLocaleString("en-IN")}</span></td>
                         <td className="px-5 py-3">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${STATUS_COLORS[inv.status || "pending"] || STATUS_COLORS.pending}`}>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap ${STATUS_COLORS[inv.status || "pending"] || STATUS_COLORS.pending}`}>
                             {inv.status || "pending"}
                           </span>
                         </td>
@@ -878,7 +980,7 @@ export function ClientManagement() {
                         <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</td>
                         <td className="px-5 py-3">
                           {inv.emailSent
-                            ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium"><CheckCircle2 className="w-3 h-3" /> Sent</span>
+                            ? <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium whitespace-nowrap"><CheckCircle2 className="w-3 h-3" /> Sent</span>
                             : <span className="text-xs text-slate-400">—</span>}
                         </td>
                         <td className="px-5 py-3">
@@ -902,13 +1004,13 @@ export function ClientManagement() {
 
       {/* Edit Invoice Modal */}
       {showEditInvoice && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-md h-full sm:h-auto max-h-full sm:max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-slate-900">Edit Invoice</h2>
               <button onClick={() => setShowEditInvoice(null)} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="text-xs font-semibold text-slate-600 mb-1 block">Status</label>
                 <select className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 bg-white"
@@ -935,7 +1037,7 @@ export function ClientManagement() {
                 <textarea rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 resize-none"
                   value={editInvForm.notes || ""} onChange={e => setEditInvForm({ ...editInvForm, notes: e.target.value })} />
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3 pt-2 pb-2 sm:pb-0">
                 <button onClick={() => setShowEditInvoice(null)} className="flex-1 py-2.5 text-sm font-medium border border-slate-200 text-slate-600 rounded-lg hover:bg-slate-50 transition">Cancel</button>
                 <button onClick={handleUpdateInvoice} className="flex-1 py-2.5 text-sm font-semibold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition">Save Changes</button>
               </div>
@@ -946,17 +1048,17 @@ export function ClientManagement() {
 
       {/* PDF Viewer Modal */}
       {showPDFViewer && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-orange-500" />
-                <span className="text-sm font-semibold text-slate-900">{showPDFViewer.title}</span>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center sm:p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full sm:max-w-4xl h-full sm:h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-orange-500 shrink-0" />
+                <span className="text-sm font-semibold text-slate-900 truncate">{showPDFViewer.title}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <a href={showPDFViewer.url} download={`${showPDFViewer.title}.pdf`}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
-                  <Download className="w-3.5 h-3.5" /> Download
+                  <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
                 </a>
                 <button onClick={() => { URL.revokeObjectURL(showPDFViewer.url); setShowPDFViewer(null); }} className="p-2 hover:bg-slate-100 rounded-lg transition"><X className="w-4 h-4" /></button>
               </div>
