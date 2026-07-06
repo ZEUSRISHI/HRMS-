@@ -72,7 +72,9 @@ export async function apiFetch(
   const url = `${BASE_URL}${endpoint}`;
   console.log(`📡 ${options.method || "GET"} ${url}`);
 
-  const response = await fetch(url, { ...options, headers });
+  // cache: "no-store" prevents the browser (and any CDN in front of Render)
+  // from serving a stale cached response for GET requests like /users
+  const response = await fetch(url, { ...options, headers, cache: "no-store" });
 
   if (response.status === 401 && retry) {
     const refreshed = await attemptRefresh();
@@ -447,13 +449,9 @@ export const projectApi = {
    PAYROLL API
    ============================================================ */
 export const payrollApi = {
-  // ... all existing methods unchanged ...
-
   view: (id: string) => {
     const token = tokenStorage.getAccess();
     const url   = `${BASE_URL}/payroll/${id}/view`;
-    // Open PDF in new tab with auth token in header via a form POST trick
-    // Since we need auth headers, we fetch as blob and open it
     return fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -589,7 +587,6 @@ export const clientApi = {
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
   },
-  // ── Document management ──
   uploadDocument: async (clientId: string, file: File, name?: string) => {
     const token = tokenStorage.getAccess();
     const formData = new FormData();
@@ -800,8 +797,12 @@ export const helpdeskApi = {
 /* ============================================================
    USER MANAGEMENT API  (Admin only)
    ============================================================ */
+/* ============================================================
+   USER MANAGEMENT API  (Admin only)
+   ============================================================ */
 export const userManagementApi = {
-  getStats: () => apiFetch("/users/stats"),
+  getStats: () =>
+    apiFetch(`/users/stats?_=${Date.now()}_${Math.random().toString(36).slice(2)}`),
 
   getAll: (params?: {
     role?:     string;
@@ -814,8 +815,11 @@ export const userManagementApi = {
       Object.entries(params || {})
         .filter(([, v]) => v !== undefined && v !== "")
         .map(([k, v]) => [k, String(v)])
-    ).toString();
-    return apiFetch(`/users${query ? `?${query}` : ""}`);
+    );
+    // Guarantees a unique URL every single call (timestamp + random suffix),
+    // so no browser/proxy/CDN layer can ever serve a cached response.
+    query.set("_", `${Date.now()}_${Math.random().toString(36).slice(2)}`);
+    return apiFetch(`/users?${query.toString()}`);
   },
 
   getById: (id: string) => apiFetch(`/users/${id}`),
@@ -826,6 +830,7 @@ export const userManagementApi = {
     password:          string;
     role?:             string;
     phone?:            string;
+    countryCode?:      string;
     dob?:              string;
     department?:       string;
     designation?:      string;
@@ -833,6 +838,7 @@ export const userManagementApi = {
     joiningDate?:      string;
     gender?:           string;
     emergencyContact?: string;
+    emergencyCountryCode?: string;
     avatar?:           string;
   }) =>
     apiFetch("/users", { method: "POST", body: JSON.stringify(data) }),
@@ -843,6 +849,7 @@ export const userManagementApi = {
     password:          string;
     role:              string;
     phone:             string;
+    countryCode:       string;
     dob:               string;
     department:        string;
     designation:       string;
@@ -850,6 +857,7 @@ export const userManagementApi = {
     joiningDate:       string;
     gender:            string;
     emergencyContact:  string;
+    emergencyCountryCode: string;
     avatar:            string;
     isActive:          boolean;
   }>) =>
