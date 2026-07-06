@@ -33,7 +33,8 @@ type OnboardingItem = {
     _id: string;
     name: string;
     email: string;
-    phone: string;
+    phone: number | null;
+    countryCode: string;
     role: string;
     isActive: boolean;
   } | null;
@@ -58,7 +59,8 @@ type OffboardingItem = {
     _id: string;
     name: string;
     email: string;
-    phone: string;
+    phone: number | null;
+    countryCode: string;
     role: string;
     isActive: boolean;
   } | null;
@@ -73,6 +75,89 @@ type OffboardingItem = {
 /* ================= ROLE OPTIONS ================= */
 const ROLE_OPTIONS = ["employee", "manager", "hr"];
 
+/* ================= COUNTRY CODE OPTIONS ================= */
+/* dialCode is stored as the "countryCode" string (e.g. "+91")
+   phoneLength is the exact number of digits expected for that country
+   (without the country code) */
+const COUNTRY_CODES: { code: string; name: string; dialCode: string; phoneLength: number }[] = [
+  { code: "IN", name: "India",          dialCode: "+91",  phoneLength: 10 },
+  { code: "US", name: "United States",  dialCode: "+1",   phoneLength: 10 },
+  { code: "CA", name: "Canada",         dialCode: "+1",   phoneLength: 10 },
+  { code: "GB", name: "United Kingdom", dialCode: "+44",  phoneLength: 10 },
+  { code: "AU", name: "Australia",      dialCode: "+61",  phoneLength: 9  },
+  { code: "AE", name: "UAE",            dialCode: "+971", phoneLength: 9  },
+  { code: "SG", name: "Singapore",      dialCode: "+65",  phoneLength: 8  },
+  { code: "DE", name: "Germany",        dialCode: "+49",  phoneLength: 10 },
+  { code: "FR", name: "France",         dialCode: "+33",  phoneLength: 9  },
+  { code: "JP", name: "Japan",          dialCode: "+81",  phoneLength: 10 },
+  { code: "CN", name: "China",          dialCode: "+86",  phoneLength: 11 },
+  { code: "BR", name: "Brazil",         dialCode: "+55",  phoneLength: 11 },
+  { code: "ZA", name: "South Africa",   dialCode: "+27",  phoneLength: 9  },
+  { code: "NZ", name: "New Zealand",    dialCode: "+64",  phoneLength: 9  },
+  { code: "SA", name: "Saudi Arabia",   dialCode: "+966", phoneLength: 9  },
+];
+
+function getPhoneLength(dialCode: string): number {
+  const match = COUNTRY_CODES.find(c => c.dialCode === dialCode);
+  return match ? match.phoneLength : 10;
+}
+
+/* Reusable Country Code + Phone Number input */
+function PhoneInput({
+  countryCode,
+  setCountryCode,
+  phone,
+  setPhone,
+  labelClass,
+  inputClass,
+}: {
+  countryCode: string;
+  setCountryCode: (v: string) => void;
+  phone: string;
+  setPhone: (v: string) => void;
+  labelClass?: string;
+  inputClass?: string;
+}) {
+  const expectedLength = getPhoneLength(countryCode);
+  const isValid = phone.length === 0 || phone.length === expectedLength;
+
+  return (
+    <div className="space-y-1">
+      <Label className={labelClass}>Phone</Label>
+      <div className="flex gap-2">
+        <Select value={countryCode} onValueChange={setCountryCode}>
+          <SelectTrigger className={`w-[110px] ${inputClass || ""}`}>
+            <SelectValue placeholder="Code" />
+          </SelectTrigger>
+          <SelectContent>
+            {COUNTRY_CODES.map(c => (
+              <SelectItem key={c.code} value={c.dialCode}>
+                {c.dialCode} {c.code}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          type="text"
+          inputMode="numeric"
+          placeholder={`${expectedLength}-digit number`}
+          value={phone}
+          onChange={e => {
+            const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, expectedLength);
+            setPhone(digitsOnly);
+          }}
+          className={`flex-1 ${inputClass || ""}`}
+        />
+      </div>
+      {!isValid && (
+        <p className="text-[10px] text-red-500">
+          Must be exactly {expectedLength} digits for {countryCode}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ================= EXCEL EXPORT ================= */
 function exportOnboardingToExcel(onboardingList: OnboardingItem[], offboardingList: OffboardingItem[]) {
   const BOM = "\uFEFF";
@@ -81,13 +166,14 @@ function exportOnboardingToExcel(onboardingList: OnboardingItem[], offboardingLi
     ["ONBOARDING REPORT"],
     ["Generated", new Date().toLocaleString()],
     [],
-    ["Name", "Email", "Phone", "Role", "Start Date", "Status", "Account Active", "Tasks Total", "Tasks Completed", "Created At"],
+    ["Name", "Email", "Country Code", "Phone", "Role", "Start Date", "Status", "Account Active", "Tasks Total", "Tasks Completed", "Created At"],
     ...onboardingList
       .filter(o => o.userId !== null)
       .map(o => [
         o.userId!.name,
         o.userId!.email,
-        o.userId!.phone || "",
+        o.userId!.countryCode || "",
+        o.userId!.phone ?? "",
         o.role,
         o.startDate,
         o.status,
@@ -142,6 +228,7 @@ export function OnboardingModule() {
   const [onName, setOnName] = useState("");
   const [onEmail, setOnEmail] = useState("");
   const [onPassword, setOnPassword] = useState("");
+  const [onCountryCode, setOnCountryCode] = useState("+91");
   const [onPhone, setOnPhone] = useState("");
   const [onRole, setOnRole] = useState("");
   const [onStartDate, setOnStartDate] = useState("");
@@ -152,6 +239,7 @@ export function OnboardingModule() {
   const [manualOnName, setManualOnName] = useState("");
   const [manualOnEmail, setManualOnEmail] = useState("");
   const [manualOnPassword, setManualOnPassword] = useState("");
+  const [manualOnCountryCode, setManualOnCountryCode] = useState("+91");
   const [manualOnPhone, setManualOnPhone] = useState("");
   const [manualOnRole, setManualOnRole] = useState("");
   const [manualOnStartDate, setManualOnStartDate] = useState("");
@@ -191,7 +279,6 @@ export function OnboardingModule() {
     setLoadingOn(true);
     try {
       const data = await onboardingApi.getAll();
-      // CRITICAL FIX: filter out records where userId is null (deleted users)
       setOnboardingList((data.onboarding || []).filter((o: OnboardingItem) => o.userId !== null));
     } catch (e: any) {
       showPopup("Failed to load onboarding: " + e.message);
@@ -205,7 +292,6 @@ export function OnboardingModule() {
     setLoadingOff(true);
     try {
       const data = await onboardingApi.getAllOffboarding();
-      // CRITICAL FIX: filter out records where userId is null
       setOffboardingList((data.offboarding || []).filter((o: OffboardingItem) => o.userId !== null));
     } catch (e: any) {
       showPopup("Failed to load offboarding: " + e.message);
@@ -219,19 +305,30 @@ export function OnboardingModule() {
     fetchOffboarding();
   }, [fetchOnboarding, fetchOffboarding]);
 
+  /* ── Validation helper ── */
+  function isPhoneValid(countryCode: string, phone: string): boolean {
+    if (!phone) return true; // phone optional
+    return phone.length === getPhoneLength(countryCode);
+  }
+
   /* ── Create onboarding (live employee) ── */
   async function handleCreateOnboarding() {
     if (!onName || !onEmail || !onPassword || !onRole || !onStartDate) {
       showPopup("Please fill all required fields.");
       return;
     }
+    if (!isPhoneValid(onCountryCode, onPhone)) {
+      showPopup(`❌ Phone number must be exactly ${getPhoneLength(onCountryCode)} digits for ${onCountryCode}.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await onboardingApi.create({
         name: onName, email: onEmail, password: onPassword,
-        phone: onPhone, role: onRole, startDate: onStartDate,
+        countryCode: onCountryCode,
+        phone: onPhone ? Number(onPhone) : null,
+        role: onRole, startDate: onStartDate,
       });
-      // guard: only push if userId populated
       if (data.onboarding?.userId) {
         setOnboardingList(prev => [data.onboarding, ...prev]);
       } else {
@@ -239,7 +336,7 @@ export function OnboardingModule() {
       }
       showPopup("✅ Onboarding created successfully!");
       setOnName(""); setOnEmail(""); setOnPassword("");
-      setOnPhone(""); setOnRole(""); setOnStartDate("");
+      setOnPhone(""); setOnCountryCode("+91"); setOnRole(""); setOnStartDate("");
       setOnDialogOpen(false);
     } catch (e: any) {
       showPopup("❌ " + (e.message || "Failed to create onboarding."));
@@ -254,13 +351,18 @@ export function OnboardingModule() {
       showPopup("Please fill all required fields.");
       return;
     }
+    if (!isPhoneValid(manualOnCountryCode, manualOnPhone)) {
+      showPopup(`❌ Phone number must be exactly ${getPhoneLength(manualOnCountryCode)} digits for ${manualOnCountryCode}.`);
+      return;
+    }
     setSubmitting(true);
     try {
       const data = await onboardingApi.createManual({
         name: manualOnName,
         email: manualOnEmail,
         password: manualOnPassword,
-        phone: manualOnPhone,
+        countryCode: manualOnCountryCode,
+        phone: manualOnPhone ? Number(manualOnPhone) : null,
         role: manualOnRole,
         startDate: manualOnStartDate,
         createdAt: manualOnCreatedAt || undefined,
@@ -274,7 +376,7 @@ export function OnboardingModule() {
       }
       showPopup("✅ Manual onboarding record saved!");
       setManualOnName(""); setManualOnEmail(""); setManualOnPassword("");
-      setManualOnPhone(""); setManualOnRole(""); setManualOnStartDate("");
+      setManualOnPhone(""); setManualOnCountryCode("+91"); setManualOnRole(""); setManualOnStartDate("");
       setManualOnCreatedAt(""); setManualOnStatus("completed");
       setManualOnTasksCompleted(true);
       setManualOnOpen(false);
@@ -409,7 +511,6 @@ export function OnboardingModule() {
   }
 
   /* ── Eligible for offboarding: active users not already offboarded ── */
-  // CRITICAL FIX: guard o.userId with optional chaining throughout
   const eligibleForOffboarding = onboardingList.filter(
     o =>
       o.userId?.isActive === true &&
@@ -493,10 +594,14 @@ export function OnboardingModule() {
                         <Label className="text-xs">Full Name *</Label>
                         <Input placeholder="John Doe" value={manualOnName} onChange={e => setManualOnName(e.target.value)} className="h-9" />
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Phone</Label>
-                        <Input placeholder="9876543210" value={manualOnPhone} onChange={e => setManualOnPhone(e.target.value)} className="h-9" />
-                      </div>
+                      <PhoneInput
+                        countryCode={manualOnCountryCode}
+                        setCountryCode={setManualOnCountryCode}
+                        phone={manualOnPhone}
+                        setPhone={setManualOnPhone}
+                        labelClass="text-xs"
+                        inputClass="h-9"
+                      />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Email *</Label>
@@ -578,10 +683,12 @@ export function OnboardingModule() {
                         <Label>Full Name *</Label>
                         <Input placeholder="Asha Kumar" value={onName} onChange={e => setOnName(e.target.value)} />
                       </div>
-                      <div className="space-y-2">
-                        <Label>Phone</Label>
-                        <Input placeholder="9876543210" value={onPhone} onChange={e => setOnPhone(e.target.value)} />
-                      </div>
+                      <PhoneInput
+                        countryCode={onCountryCode}
+                        setCountryCode={setOnCountryCode}
+                        phone={onPhone}
+                        setPhone={setOnPhone}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Email Address *</Label>
@@ -634,7 +741,6 @@ export function OnboardingModule() {
             </Card>
           ) : (
             onboardingList.map(o => {
-              // Extra guard — skip any that slipped through with null userId
               if (!o.userId) return null;
               const done = o.tasks.filter(t => t.completed).length;
               const progress = o.tasks.length > 0 ? (done / o.tasks.length) * 100 : 0;
@@ -652,7 +758,7 @@ export function OnboardingModule() {
                         )}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground">
-                        {o.userId.email} · {o.userId.phone || "No phone"}
+                        {o.userId.email} · {o.userId.phone ? `${o.userId.countryCode} ${o.userId.phone}` : "No phone"}
                       </p>
                       <p className="text-xs text-muted-foreground capitalize">
                         Role: <span className="font-medium">{o.role}</span> · Start:{" "}
