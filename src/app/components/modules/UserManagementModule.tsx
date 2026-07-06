@@ -19,6 +19,69 @@ import {
   UserCheck,
 } from "lucide-react";
 
+/* ── country dial codes (major countries — extend as needed) ── */
+const COUNTRIES: { code: string; name: string; flag: string; length: number }[] = [
+  { code: "+91",  name: "India",          flag: "🇮🇳", length: 10 },
+  { code: "+1",   name: "United States",  flag: "🇺🇸", length: 10 },
+  { code: "+1",   name: "Canada",         flag: "🇨🇦", length: 10 },
+  { code: "+44",  name: "United Kingdom", flag: "🇬🇧", length: 10 },
+  { code: "+61",  name: "Australia",      flag: "🇦🇺", length: 9  },
+  { code: "+971", name: "UAE",            flag: "🇦🇪", length: 9  },
+  { code: "+65",  name: "Singapore",      flag: "🇸🇬", length: 8  },
+  { code: "+49",  name: "Germany",        flag: "🇩🇪", length: 11 },
+  { code: "+33",  name: "France",         flag: "🇫🇷", length: 9  },
+  { code: "+81",  name: "Japan",          flag: "🇯🇵", length: 10 },
+  { code: "+86",  name: "China",          flag: "🇨🇳", length: 11 },
+  { code: "+7",   name: "Russia",         flag: "🇷🇺", length: 10 },
+  { code: "+55",  name: "Brazil",         flag: "🇧🇷", length: 11 },
+  { code: "+27",  name: "South Africa",   flag: "🇿🇦", length: 9  },
+  { code: "+92",  name: "Pakistan",       flag: "🇵🇰", length: 10 },
+  { code: "+880", name: "Bangladesh",     flag: "🇧🇩", length: 10 },
+  { code: "+94",  name: "Sri Lanka",      flag: "🇱🇰", length: 9  },
+  { code: "+977", name: "Nepal",          flag: "🇳🇵", length: 10 },
+  { code: "+60",  name: "Malaysia",       flag: "🇲🇾", length: 9  },
+  { code: "+66",  name: "Thailand",       flag: "🇹🇭", length: 9  },
+  { code: "+62",  name: "Indonesia",      flag: "🇮🇩", length: 11 },
+  { code: "+63",  name: "Philippines",    flag: "🇵🇭", length: 10 },
+  { code: "+82",  name: "South Korea",    flag: "🇰🇷", length: 10 },
+  { code: "+64",  name: "New Zealand",    flag: "🇳🇿", length: 9  },
+  { code: "+34",  name: "Spain",          flag: "🇪🇸", length: 9  },
+  { code: "+39",  name: "Italy",          flag: "🇮🇹", length: 10 },
+  { code: "+31",  name: "Netherlands",    flag: "🇳🇱", length: 9  },
+  { code: "+41",  name: "Switzerland",    flag: "🇨🇭", length: 9  },
+  { code: "+46",  name: "Sweden",         flag: "🇸🇪", length: 9  },
+  { code: "+47",  name: "Norway",         flag: "🇳🇴", length: 8  },
+  { code: "+45",  name: "Denmark",        flag: "🇩🇰", length: 8  },
+  { code: "+358", name: "Finland",        flag: "🇫🇮", length: 9  },
+  { code: "+48",  name: "Poland",         flag: "🇵🇱", length: 9  },
+  { code: "+90",  name: "Turkey",         flag: "🇹🇷", length: 10 },
+  { code: "+20",  name: "Egypt",          flag: "🇪🇬", length: 10 },
+  { code: "+234", name: "Nigeria",        flag: "🇳🇬", length: 10 },
+  { code: "+254", name: "Kenya",          flag: "🇰🇪", length: 9  },
+  { code: "+966", name: "Saudi Arabia",   flag: "🇸🇦", length: 9  },
+  { code: "+974", name: "Qatar",          flag: "🇶🇦", length: 8  },
+  { code: "+965", name: "Kuwait",         flag: "🇰🇼", length: 8  },
+  { code: "+968", name: "Oman",           flag: "🇴🇲", length: 8  },
+  { code: "+973", name: "Bahrain",        flag: "🇧🇭", length: 8  },
+  { code: "+972", name: "Israel",         flag: "🇮🇱", length: 9  },
+  { code: "+52",  name: "Mexico",         flag: "🇲🇽", length: 10 },
+  { code: "+54",  name: "Argentina",      flag: "🇦🇷", length: 10 },
+  { code: "+56",  name: "Chile",          flag: "🇨🇱", length: 9  },
+  { code: "+57",  name: "Colombia",       flag: "🇨🇴", length: 10 },
+  { code: "+51",  name: "Peru",           flag: "🇵🇪", length: 9  },
+  { code: "+353", name: "Ireland",        flag: "🇮🇪", length: 9  },
+  { code: "+351", name: "Portugal",       flag: "🇵🇹", length: 9  },
+  { code: "+30",  name: "Greece",         flag: "🇬🇷", length: 10 },
+  { code: "+43",  name: "Austria",        flag: "🇦🇹", length: 10 },
+  { code: "+32",  name: "Belgium",        flag: "🇧🇪", length: 9  },
+  { code: "+420", name: "Czech Republic", flag: "🇨🇿", length: 9  },
+  { code: "+36",  name: "Hungary",        flag: "🇭🇺", length: 9  },
+  { code: "+380", name: "Ukraine",        flag: "🇺🇦", length: 9  },
+  { code: "+84",  name: "Vietnam",        flag: "🇻🇳", length: 9  },
+  { code: "+852", name: "Hong Kong",      flag: "🇭🇰", length: 8  },
+  { code: "+886", name: "Taiwan",         flag: "🇹🇼", length: 9  },
+];
+
 /* ── types ── */
 interface UserRecord {
   _id:              string;
@@ -26,6 +89,7 @@ interface UserRecord {
   email:            string;
   role:             string;
   phone:            string;
+  countryCode:      string;
   dob:              string;
   department:       string;
   designation:      string;
@@ -33,27 +97,31 @@ interface UserRecord {
   joiningDate:      string;
   gender:           string;
   emergencyContact: string;
+  emergencyCountryCode: string;
   avatar:           string;
   isActive:         boolean;
   createdAt:        string;
 }
 
 const initForm = {
-  name:             "",
-  email:            "",
-  password:         "",
-  role:             "employee",
-  phone:            "",
-  dob:              "",
-  department:       "",
-  designation:      "",
-  address:          "",
-  joiningDate:      "",
-  gender:           "",
-  emergencyContact: "",
+  name:                 "",
+  email:                "",
+  password:             "",
+  role:                 "employee",
+  phone:                "",
+  countryCode:          "+91",
+  dob:                  "",
+  department:           "",
+  designation:          "",
+  address:              "",
+  joiningDate:          "",
+  gender:               "",
+  emergencyContact:     "",
+  emergencyCountryCode: "+91",
 };
 
 const ROLES = ["all", "admin", "manager", "hr", "employee"];
+const DIGITS_ONLY = /^[0-9]{4,15}$/;
 
 /* ── helpers ── */
 const roleColor = (r: string) => {
@@ -62,6 +130,9 @@ const roleColor = (r: string) => {
   if (r === "manager") return "bg-purple-500 text-white";
   return "bg-gray-500 text-white";
 };
+
+const formatPhone = (code?: string, number?: string) =>
+  number ? `${code || ""} ${number}` : "—";
 
 /* ── reusable field component ── */
 const Field = ({
@@ -95,6 +166,63 @@ const Field = ({
     )}
   </div>
 );
+
+/* ── phone / emergency contact field: country code dropdown + digits-only number ── */
+const PhoneField = ({
+  label, countryCode, number, onCountryChange, onNumberChange, required = false,
+}: {
+  label: string; countryCode: string; number: string;
+  onCountryChange: (v: string) => void; onNumberChange: (v: string) => void;
+  required?: boolean;
+}) => {
+  const country = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
+  const maxLen  = country.length || 15;
+
+  const sanitize = (raw: string) => raw.replace(/\D/g, "").slice(0, maxLen);
+
+  return (
+    <div>
+      <label className="text-xs font-semibold text-gray-700 mb-1 block">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="flex gap-2">
+        <select
+          className="border p-2 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-gray-300 w-[105px] flex-shrink-0"
+          value={countryCode}
+          onChange={e => onCountryChange(e.target.value)}
+        >
+          {COUNTRIES.map((c, i) => (
+            <option key={`${c.code}-${c.name}-${i}`} value={c.code}>
+              {c.flag} {c.code}
+            </option>
+          ))}
+        </select>
+        <input
+          type="tel"
+          inputMode="numeric"
+          className="border p-2 rounded w-full text-sm focus:outline-none focus:ring-2 focus:ring-gray-300"
+          placeholder={`${maxLen}-digit number`}
+          value={number}
+          maxLength={maxLen}
+          onChange={e => onNumberChange(sanitize(e.target.value))}
+          onPaste={e => {
+            e.preventDefault();
+            onNumberChange(sanitize(e.clipboardData.getData("text")));
+          }}
+          onKeyDown={e => {
+            // block non-numeric key presses (allow control keys)
+            if (
+              !/[0-9]/.test(e.key) &&
+              !["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End"].includes(e.key)
+            ) {
+              e.preventDefault();
+            }
+          }}
+        />
+      </div>
+    </div>
+  );
+};
 
 /* ================================================================
    COMPONENT
@@ -140,31 +268,52 @@ export function UserManagementModule() {
   const setF  = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }));
   const setEF = (k: string, v: any) => setEditForm((f: any) => ({ ...f, [k]: v }));
 
-  /* ── load ── */
+  /* ── load ──
+     Users and stats are fetched independently: if the stats endpoint
+     fails, it should never block the user list from refreshing. */
   const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
       const params: any = {};
       if (filterRole   !== "all") params.role     = filterRole;
       if (filterActive !== "all") params.isActive = filterActive;
       if (searchQ.trim())         params.search   = searchQ.trim();
       params.limit = 100;
 
-      const [usersRes, statsRes] = await Promise.all([
-        userManagementApi.getAll(params),
-        userManagementApi.getStats(),
-      ]);
-      setUsers(usersRes.users   || []);
-      setStats(statsRes.stats   || null);
+      const usersRes = await userManagementApi.getAll(params);
+      setUsers(usersRes.users || []);
     } catch (err: any) {
       showToast(err.message || "Failed to load users", "error");
     } finally {
       setLoading(false);
     }
+
+    try {
+      const statsRes = await userManagementApi.getStats();
+      setStats(statsRes.stats || null);
+    } catch {
+      // stats are a secondary concern — don't let this block the table
+    }
   }, [filterRole, filterActive, searchQ]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  /* ── validation ── */
+  const validatePhoneFields = (phone: string, emergencyContact: string) => {
+    if (phone && !DIGITS_ONLY.test(phone)) {
+      showToast("Phone number must contain only digits", "error");
+      return false;
+    }
+    if (emergencyContact && !DIGITS_ONLY.test(emergencyContact)) {
+      showToast("Emergency contact must contain only digits", "error");
+      return false;
+    }
+    return true;
+  };
+
+  /* ── create ── */
+  /* ── create ── */
+/* ── create ── */
   /* ── create ── */
   const handleCreate = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
@@ -173,13 +322,29 @@ export function UserManagementModule() {
     if (form.password.length < 6) {
       showToast("Password must be at least 6 characters", "error"); return;
     }
+    if (!validatePhoneFields(form.phone, form.emergencyContact)) return;
+
     try {
       setSubmitting(true);
-      await userManagementApi.create(form);
+      const res = await userManagementApi.create(form);
+
       showToast("✅ User created successfully");
       setForm(initForm);
       setCreateOpen(false);
-      loadData();
+
+      if (res?.user) {
+        setUsers(prev => {
+          if (prev.some(u => u._id === res.user._id)) return prev;
+          return [res.user, ...prev];
+        });
+      }
+
+      // Reset filters — this alone triggers the useEffect to refetch
+      // with a clean query. Do NOT also call loadData() here manually;
+      // that caused a stale closure to refire the old filtered request.
+      setSearchQ("");
+      setFilterRole("all");
+      setFilterActive("all");
     } catch (err: any) {
       showToast(err.message || "Failed to create user", "error");
     } finally {
@@ -191,38 +356,45 @@ export function UserManagementModule() {
   const openEdit = (user: UserRecord) => {
     setSelected(user);
     setEditForm({
-      name:             user.name,
-      email:            user.email,
-      role:             user.role,
-      phone:            user.phone,
-      dob:              user.dob,
-      department:       user.department,
-      designation:      user.designation,
-      address:          user.address,
-      joiningDate:      user.joiningDate,
-      gender:           user.gender,
-      emergencyContact: user.emergencyContact,
-      password:         "",
+      name:                 user.name,
+      email:                user.email,
+      role:                 user.role,
+      phone:                user.phone,
+      countryCode:          user.countryCode || "+91",
+      dob:                  user.dob,
+      department:           user.department,
+      designation:          user.designation,
+      address:              user.address,
+      joiningDate:          user.joiningDate,
+      gender:               user.gender,
+      emergencyContact:     user.emergencyContact,
+      emergencyCountryCode: user.emergencyCountryCode || "+91",
+      password:             "",
     });
     setShowEditPwd(false);
     setEditOpen(true);
   };
 
   /* ── update ── */
+ /* ── update ── */
   const handleUpdate = async () => {
     if (!selected) return;
+    if (!validatePhoneFields(editForm.phone || "", editForm.emergencyContact || "")) return;
+
     try {
       setSubmitting(true);
       const payload = { ...editForm };
       if (!payload.password || payload.password.trim().length === 0) {
         delete payload.password;
       } else if (payload.password.trim().length < 6) {
-        showToast("Password must be at least 6 characters", "error"); return;
+        showToast("Password must be at least 6 characters", "error");
+        setSubmitting(false);
+        return;
       }
       await userManagementApi.update(selected._id, payload);
       showToast("✅ User updated successfully");
       setEditOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || "Failed to update user", "error");
     } finally {
@@ -231,11 +403,12 @@ export function UserManagementModule() {
   };
 
   /* ── toggle status ── */
+  /* ── toggle status ── */
   const handleToggleStatus = async (user: UserRecord) => {
     try {
       await userManagementApi.toggleStatus(user._id);
       showToast(`✅ User ${user.isActive ? "deactivated" : "activated"}`);
-      loadData();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || "Failed to toggle status", "error");
     }
@@ -261,6 +434,7 @@ export function UserManagementModule() {
   };
 
   /* ── delete ── */
+  /* ── delete ── */
   const handleDelete = async () => {
     if (!selected) return;
     try {
@@ -268,7 +442,7 @@ export function UserManagementModule() {
       await userManagementApi.delete(selected._id);
       showToast(`✅ User "${selected.name}" deleted`);
       setDeleteOpen(false);
-      loadData();
+      await loadData();
     } catch (err: any) {
       showToast(err.message || "Failed to delete user", "error");
     } finally {
@@ -436,7 +610,7 @@ export function UserManagementModule() {
                       <Badge className={`${roleColor(user.role)} text-[11px]`}>{user.role}</Badge>
                     </TableCell>
                     <TableCell className="text-gray-600">{user.department || "—"}</TableCell>
-                    <TableCell className="text-gray-600">{user.phone || "—"}</TableCell>
+                    <TableCell className="text-gray-600">{formatPhone(user.countryCode, user.phone)}</TableCell>
                     <TableCell className="text-gray-500 text-xs">
                       {user.joiningDate || user.createdAt?.slice(0, 10) || "—"}
                     </TableCell>
@@ -547,7 +721,15 @@ export function UserManagementModule() {
               { value: "hr",       label: "HR"        },
               { value: "admin",    label: "Admin"     },
             ]} />
-            <Field label="Phone"        value={form.phone}        onChange={v => setF("phone", v)}        placeholder="+91 9XXXXXXXXX" />
+
+            <PhoneField
+              label="Phone"
+              countryCode={form.countryCode}
+              number={form.phone}
+              onCountryChange={v => setF("countryCode", v)}
+              onNumberChange={v => setF("phone", v)}
+            />
+
             <Field label="Date of Birth" value={form.dob}         onChange={v => setF("dob", v)}          type="date" />
             <Field label="Department"   value={form.department}   onChange={v => setF("department", v)}   placeholder="e.g. Engineering" />
             <Field label="Designation"  value={form.designation}  onChange={v => setF("designation", v)}  placeholder="e.g. Software Engineer" />
@@ -559,10 +741,16 @@ export function UserManagementModule() {
               { value: "other",  label: "Other"  },
             ]} />
             <div className="sm:col-span-2">
-              <Field label="Address"           value={form.address}          onChange={v => setF("address", v)}          placeholder="Full address" />
+              <Field label="Address" value={form.address} onChange={v => setF("address", v)} placeholder="Full address" />
             </div>
             <div className="sm:col-span-2">
-              <Field label="Emergency Contact" value={form.emergencyContact} onChange={v => setF("emergencyContact", v)} placeholder="+91 9XXXXXXXXX" />
+              <PhoneField
+                label="Emergency Contact"
+                countryCode={form.emergencyCountryCode}
+                number={form.emergencyContact}
+                onCountryChange={v => setF("emergencyCountryCode", v)}
+                onNumberChange={v => setF("emergencyContact", v)}
+              />
             </div>
           </div>
 
@@ -626,7 +814,15 @@ export function UserManagementModule() {
               { value: "hr",       label: "HR"        },
               { value: "admin",    label: "Admin"     },
             ]} />
-            <Field label="Phone"         value={editForm.phone        || ""} onChange={v => setEF("phone", v)}        placeholder="+91 9XXXXXXXXX" />
+
+            <PhoneField
+              label="Phone"
+              countryCode={editForm.countryCode || "+91"}
+              number={editForm.phone || ""}
+              onCountryChange={v => setEF("countryCode", v)}
+              onNumberChange={v => setEF("phone", v)}
+            />
+
             <Field label="Date of Birth" value={editForm.dob          || ""} onChange={v => setEF("dob", v)}          type="date" />
             <Field label="Department"    value={editForm.department   || ""} onChange={v => setEF("department", v)}   placeholder="e.g. Engineering" />
             <Field label="Designation"   value={editForm.designation  || ""} onChange={v => setEF("designation", v)}  placeholder="e.g. Software Engineer" />
@@ -638,10 +834,16 @@ export function UserManagementModule() {
               { value: "other",  label: "Other"  },
             ]} />
             <div className="sm:col-span-2">
-              <Field label="Address"           value={editForm.address          || ""} onChange={v => setEF("address", v)}          placeholder="Full address" />
+              <Field label="Address" value={editForm.address || ""} onChange={v => setEF("address", v)} placeholder="Full address" />
             </div>
             <div className="sm:col-span-2">
-              <Field label="Emergency Contact" value={editForm.emergencyContact || ""} onChange={v => setEF("emergencyContact", v)} placeholder="+91 9XXXXXXXXX" />
+              <PhoneField
+                label="Emergency Contact"
+                countryCode={editForm.emergencyCountryCode || "+91"}
+                number={editForm.emergencyContact || ""}
+                onCountryChange={v => setEF("emergencyCountryCode", v)}
+                onNumberChange={v => setEF("emergencyContact", v)}
+              />
             </div>
           </div>
 
@@ -697,13 +899,13 @@ export function UserManagementModule() {
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
-                  ["Phone",             selected.phone            || "—"],
+                  ["Phone",             formatPhone(selected.countryCode, selected.phone)],
                   ["Date of Birth",     selected.dob              || "—"],
                   ["Department",        selected.department       || "—"],
                   ["Designation",       selected.designation      || "—"],
                   ["Joining Date",      selected.joiningDate      || "—"],
                   ["Gender",            selected.gender           || "—"],
-                  ["Emergency Contact", selected.emergencyContact || "—"],
+                  ["Emergency Contact", formatPhone(selected.emergencyCountryCode, selected.emergencyContact)],
                   ["Account Created",   selected.createdAt?.slice(0, 10) || "—"],
                 ].map(([label, val]) => (
                   <div key={label} className="bg-gray-50 rounded-lg p-3">
