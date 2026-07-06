@@ -17,32 +17,36 @@ export default function SignupPage({ onBack }: Props) {
   const [loading, setLoading]   = useState(false);
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !role) {
-      setError("All fields are required");
-      setSuccess("");
-      return;
-    }
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password.trim();
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
+  if (!trimmedName || !trimmedEmail || !trimmedPassword || !role) {
+    setError("All fields are required");
+    setSuccess("");
+    return;
+  }
 
-    setLoading(true);
+  if (trimmedPassword.length < 6) {
+    setError("Password must be at least 6 characters");
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+
+  const result = await signup(trimmedName, trimmedEmail, trimmedPassword, role);
+
+  setLoading(false);
+
+  if (!result) {
+    setError("Email already exists. Please use a different email.");
+    setSuccess("");
+  } else {
+    setSuccess("Account created! Redirecting to dashboard...");
     setError("");
-
-    const result = await signup(name, email, password, role);
-
-    setLoading(false);
-
-    if (!result) {
-      setError("Email already exists. Please use a different email.");
-      setSuccess("");
-    } else {
-      setSuccess("Account created! Redirecting to dashboard...");
-      setError("");
-    }
-  };
+  }
+};
 
   return (
     <div className="min-h-screen flex bg-gray-100">
