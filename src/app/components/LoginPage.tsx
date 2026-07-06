@@ -32,24 +32,29 @@ export default function LoginPage({ onReset }: Props) {
 
   /* ── Email / Password login ── */
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!email || !password) {
-      setError("Please fill in all fields.");
-      return;
+  e.preventDefault();
+  setError("");
+
+  const trimmedEmail = email.trim();
+  const trimmedPassword = password.trim();
+
+  if (!trimmedEmail || !trimmedPassword) {
+    setError("Please fill in all fields.");
+    return;
+  }
+  setLoading(true);
+  try {
+    const success = await login(trimmedEmail, trimmedPassword, role);
+    if (!success) {
+      setError("Invalid credentials. Please check your email, password and role.");
     }
-    setLoading(true);
-    try {
-      const success = await login(email, password, role);
-      if (!success) {
-        setError("Invalid credentials. Please check your email, password and role.");
-      }
-    } catch (err: any) {
-      setError(err?.message || "Something went wrong. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err: any) {
+    setError(err?.message || "Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   /* ── Google Sign-In ── */
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
