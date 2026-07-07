@@ -2,17 +2,91 @@ import { useState, useRef } from "react";
 import { useAuth } from "../app/contexts/AuthContext";
 import { profileApi } from "../services/api";
 
+/* ================= COUNTRY CODES (inline) ================= */
+
+interface CountryCode {
+  name: string;
+  iso: string;
+  dialCode: string;
+  maxLength: number; // expected digits for local number (without dial code)
+}
+
+const countryCodes: CountryCode[] = [
+  { name: "India", iso: "IN", dialCode: "+91", maxLength: 10 },
+  { name: "United States", iso: "US", dialCode: "+1", maxLength: 10 },
+  { name: "United Kingdom", iso: "GB", dialCode: "+44", maxLength: 10 },
+  { name: "Canada", iso: "CA", dialCode: "+1", maxLength: 10 },
+  { name: "Australia", iso: "AU", dialCode: "+61", maxLength: 9 },
+  { name: "Germany", iso: "DE", dialCode: "+49", maxLength: 11 },
+  { name: "France", iso: "FR", dialCode: "+33", maxLength: 9 },
+  { name: "Italy", iso: "IT", dialCode: "+39", maxLength: 10 },
+  { name: "Spain", iso: "ES", dialCode: "+34", maxLength: 9 },
+  { name: "Netherlands", iso: "NL", dialCode: "+31", maxLength: 9 },
+  { name: "Belgium", iso: "BE", dialCode: "+32", maxLength: 9 },
+  { name: "Switzerland", iso: "CH", dialCode: "+41", maxLength: 9 },
+  { name: "Austria", iso: "AT", dialCode: "+43", maxLength: 10 },
+  { name: "Sweden", iso: "SE", dialCode: "+46", maxLength: 9 },
+  { name: "Norway", iso: "NO", dialCode: "+47", maxLength: 8 },
+  { name: "Denmark", iso: "DK", dialCode: "+45", maxLength: 8 },
+  { name: "Finland", iso: "FI", dialCode: "+358", maxLength: 9 },
+  { name: "Poland", iso: "PL", dialCode: "+48", maxLength: 9 },
+  { name: "Portugal", iso: "PT", dialCode: "+351", maxLength: 9 },
+  { name: "Greece", iso: "GR", dialCode: "+30", maxLength: 10 },
+  { name: "Ireland", iso: "IE", dialCode: "+353", maxLength: 9 },
+  { name: "Russia", iso: "RU", dialCode: "+7", maxLength: 10 },
+  { name: "Ukraine", iso: "UA", dialCode: "+380", maxLength: 9 },
+  { name: "Turkey", iso: "TR", dialCode: "+90", maxLength: 10 },
+  { name: "China", iso: "CN", dialCode: "+86", maxLength: 11 },
+  { name: "Japan", iso: "JP", dialCode: "+81", maxLength: 10 },
+  { name: "South Korea", iso: "KR", dialCode: "+82", maxLength: 10 },
+  { name: "Singapore", iso: "SG", dialCode: "+65", maxLength: 8 },
+  { name: "Malaysia", iso: "MY", dialCode: "+60", maxLength: 9 },
+  { name: "Indonesia", iso: "ID", dialCode: "+62", maxLength: 11 },
+  { name: "Thailand", iso: "TH", dialCode: "+66", maxLength: 9 },
+  { name: "Vietnam", iso: "VN", dialCode: "+84", maxLength: 9 },
+  { name: "Philippines", iso: "PH", dialCode: "+63", maxLength: 10 },
+  { name: "Pakistan", iso: "PK", dialCode: "+92", maxLength: 10 },
+  { name: "Bangladesh", iso: "BD", dialCode: "+880", maxLength: 10 },
+  { name: "Sri Lanka", iso: "LK", dialCode: "+94", maxLength: 9 },
+  { name: "Nepal", iso: "NP", dialCode: "+977", maxLength: 10 },
+  { name: "United Arab Emirates", iso: "AE", dialCode: "+971", maxLength: 9 },
+  { name: "Saudi Arabia", iso: "SA", dialCode: "+966", maxLength: 9 },
+  { name: "Qatar", iso: "QA", dialCode: "+974", maxLength: 8 },
+  { name: "Kuwait", iso: "KW", dialCode: "+965", maxLength: 8 },
+  { name: "Oman", iso: "OM", dialCode: "+968", maxLength: 8 },
+  { name: "Bahrain", iso: "BH", dialCode: "+973", maxLength: 8 },
+  { name: "Israel", iso: "IL", dialCode: "+972", maxLength: 9 },
+  { name: "Egypt", iso: "EG", dialCode: "+20", maxLength: 10 },
+  { name: "South Africa", iso: "ZA", dialCode: "+27", maxLength: 9 },
+  { name: "Nigeria", iso: "NG", dialCode: "+234", maxLength: 10 },
+  { name: "Kenya", iso: "KE", dialCode: "+254", maxLength: 9 },
+  { name: "Brazil", iso: "BR", dialCode: "+55", maxLength: 11 },
+  { name: "Mexico", iso: "MX", dialCode: "+52", maxLength: 10 },
+  { name: "Argentina", iso: "AR", dialCode: "+54", maxLength: 10 },
+  { name: "Chile", iso: "CL", dialCode: "+56", maxLength: 9 },
+  { name: "Colombia", iso: "CO", dialCode: "+57", maxLength: 10 },
+  { name: "Peru", iso: "PE", dialCode: "+51", maxLength: 9 },
+  { name: "New Zealand", iso: "NZ", dialCode: "+64", maxLength: 9 },
+  { name: "Hong Kong", iso: "HK", dialCode: "+852", maxLength: 8 },
+  { name: "Taiwan", iso: "TW", dialCode: "+886", maxLength: 9 },
+];
+
+const getCountryByDialCode = (dialCode: string): CountryCode =>
+  countryCodes.find((c) => c.dialCode === dialCode) || countryCodes[0];
+
 export default function ProfilePage() {
   const { currentUser } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   const [form, setForm] = useState({
     firstName:       currentUser?.name.split(" ")[0] || "",
     lastName:        currentUser?.name.split(" ")[1] || "",
     email:           currentUser?.email || "",
+    countryCode:     (currentUser as any)?.countryCode || "+91",
     phone:           currentUser?.phone || "",
     designation:     "Software Engineer",
     department:      currentUser?.department || "Engineering",
@@ -30,8 +104,44 @@ export default function ProfilePage() {
 
   if (!currentUser) return null;
 
+  const selectedCountry = getCountryByDialCode(form.countryCode);
+
   const handleChange = (e: any) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // ✅ digits only, capped to the selected country's expected length
+  const handlePhoneChange = (e: any) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "");
+    const trimmed = digitsOnly.slice(0, selectedCountry.maxLength);
+    setForm({ ...form, phone: trimmed });
+
+    if (trimmed.length > 0 && trimmed.length !== selectedCountry.maxLength) {
+      setPhoneError(
+        `${selectedCountry.name} phone number must be exactly ${selectedCountry.maxLength} digits.`
+      );
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  // ✅ re-validate phone length whenever country code changes
+  const handleCountryCodeChange = (e: any) => {
+    const dialCode = e.target.value;
+    const newCountry = getCountryByDialCode(dialCode);
+    setForm({ ...form, countryCode: dialCode });
+
+    if (form.phone.length > 0 && form.phone.length !== newCountry.maxLength) {
+      setPhoneError(
+        `${newCountry.name} phone number must be exactly ${newCountry.maxLength} digits.`
+      );
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  const handlePostalCodeChange = (e: any) => {
+    setForm({ ...form, postalCode: e.target.value.replace(/\D/g, "") });
   };
 
   const handleImage = (e: any) => {
@@ -43,13 +153,23 @@ export default function ProfilePage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
     setMessage("");
+
+    // ✅ validate phone before saving
+    if (form.phone.length !== selectedCountry.maxLength) {
+      setPhoneError(
+        `${selectedCountry.name} phone number must be exactly ${selectedCountry.maxLength} digits.`
+      );
+      return;
+    }
+
+    setSaving(true);
 
     try {
       await profileApi.update({
         name: `${form.firstName} ${form.lastName}`.trim(),
         phone: form.phone,
+        countryCode: form.countryCode,
         department: form.department,
         avatar: avatar || undefined,
       });
@@ -68,9 +188,12 @@ export default function ProfilePage() {
       firstName: currentUser.name.split(" ")[0] || "",
       lastName:  currentUser.name.split(" ")[1] || "",
       email:     currentUser.email,
+      phone:     currentUser.phone || "",
+      countryCode: (currentUser as any)?.countryCode || "+91",
     });
     setAvatar(null);
     setMessage("");
+    setPhoneError("");
   };
 
   return (
@@ -117,7 +240,39 @@ export default function ProfilePage() {
         <Field label="First Name"   name="firstName"   value={form.firstName}   onChange={handleChange} />
         <Field label="Last Name"    name="lastName"    value={form.lastName}    onChange={handleChange} />
         <Field label="Email"        name="email"       value={form.email}       onChange={handleChange} disabled />
-        <Field label="Phone"        name="phone"       value={form.phone}       onChange={handleChange} />
+
+        {/* ✅ PHONE FIELD WITH COUNTRY CODE DROPDOWN */}
+        <div>
+          <label className="text-sm text-gray-500 font-medium">Phone</label>
+          <div className="mt-1 flex gap-2">
+            <select
+              name="countryCode"
+              value={form.countryCode}
+              onChange={handleCountryCodeChange}
+              className="border rounded-lg px-2 py-2 w-28 focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+            >
+              {countryCodes.map((c) => (
+                <option key={`${c.iso}-${c.dialCode}`} value={c.dialCode}>
+                  {c.dialCode} {c.iso}
+                </option>
+              ))}
+            </select>
+
+            <input
+              name="phone"
+              value={form.phone}
+              onChange={handlePhoneChange}
+              inputMode="numeric"
+              maxLength={selectedCountry.maxLength}
+              placeholder={`${selectedCountry.maxLength} digit number`}
+              className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
+            />
+          </div>
+          {phoneError && (
+            <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+          )}
+        </div>
+
         <Field label="Designation"  name="designation" value={form.designation} onChange={handleChange} />
         <Field label="Department"   name="department"  value={form.department}  onChange={handleChange} />
         <Field label="Date of Birth" name="dob"        value={form.dob}         onChange={handleChange} type="date" />
@@ -136,7 +291,7 @@ export default function ProfilePage() {
         <Field label="Country"     name="country"    value={form.country}    onChange={handleChange} />
         <Field label="State"       name="state"      value={form.state}      onChange={handleChange} />
         <Field label="City"        name="city"       value={form.city}       onChange={handleChange} />
-        <Field label="Postal Code" name="postalCode" value={form.postalCode} onChange={handleChange} />
+        <Field label="Postal Code" name="postalCode" value={form.postalCode} onChange={handlePostalCodeChange} />
       </Section>
 
       {/* ACTIONS */}
