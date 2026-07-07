@@ -160,21 +160,22 @@ export default function LoginPage({ onReset }: Props) {
 
   /* ── Google Sign-In ── */
   const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
-    setError("");
-    setGLoading(true);
-    try {
-      const decoded     = jwtDecode<GoogleJwtPayload>(credentialResponse.credential!);
-      const googleEmail = decoded.email;
-      await loginWithGoogle(googleEmail);
-    } catch (err: any) {
-      setError(
-        err?.message ||
-        "This Google account is not registered. Please contact your admin."
-      );
-    } finally {
-      setGLoading(false);
+  setError("");
+  setGLoading(true);
+  try {
+    if (!credentialResponse.credential) {
+      throw new Error("No credential received from Google.");
     }
-  };
+    await loginWithGoogle(credentialResponse.credential); // send raw ID token, not decoded email
+  } catch (err: any) {
+    setError(
+      err?.message ||
+      "This Google account is not registered. Please contact your admin."
+    );
+  } finally {
+    setGLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
