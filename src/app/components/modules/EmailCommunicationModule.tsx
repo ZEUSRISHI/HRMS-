@@ -448,9 +448,6 @@ export function EmailCommunicationModule() {
               <h1 className="text-base font-black text-slate-900 leading-tight">Email Communication</h1>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[11px] text-slate-400">via</span>
-                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-lg">
-                  Brevo API
-                </span>
               </div>
             </div>
           </div>
@@ -546,10 +543,6 @@ export function EmailCommunicationModule() {
                   <p className="text-xs font-black truncate">{currentUser.name}</p>
                   <p className="text-[10px] text-slate-400 capitalize">{currentUser.role}</p>
                 </div>
-              </div>
-              <div className="bg-white/10 rounded-xl p-2.5 border border-white/10">
-                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Service</p>
-                <p className="text-[10px] font-mono text-slate-200 break-all leading-relaxed">Brevo API</p>
               </div>
             </div>
           </div>
