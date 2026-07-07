@@ -117,15 +117,15 @@ export const authApi = {
     return data;
   },
 
-  googleLogin: async (email: string) => {
-    const data = await apiFetch("/auth/google-login", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
-    tokenStorage.set(data.accessToken, data.refreshToken);
-    localStorage.setItem("hrms_current", JSON.stringify(data.user));
-    return data;
-  },
+  googleLogin: async (idToken: string) => {
+  const data = await apiFetch("/auth/google-login", {
+    method: "POST",
+    body: JSON.stringify({ idToken }),
+  });
+  tokenStorage.set(data.accessToken, data.refreshToken);
+  localStorage.setItem("hrms_current", JSON.stringify(data.user));
+  return data;
+},
 
   logout: async () => {
     try {
