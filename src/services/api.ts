@@ -157,10 +157,11 @@ export const profileApi = {
   get: async () => apiFetch("/profile"),
 
   update: async (updates: {
-    name?:       string;
-    phone?:      string;
-    department?: string;
-    avatar?:     string;
+    name?:        string;
+    phone?:       string;
+    countryCode?: string;   // ✅ added
+    department?:  string;
+    avatar?:      string;
   }) =>
     apiFetch("/profile", {
       method: "PUT",
