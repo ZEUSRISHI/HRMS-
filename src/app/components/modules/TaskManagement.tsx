@@ -41,7 +41,6 @@ interface EmployeeSummary {
 
 /* ── tiny xlsx writer (no dependency needed) ── */
 function exportToExcel(reportData: any, rangeLabel: string) {
-  // ===== SUMMARY SHEET =====
   const summaryData = [
     ["TASK REPORT", rangeLabel],
     ["Generated", new Date().toLocaleString()],
@@ -60,7 +59,6 @@ function exportToExcel(reportData: any, rangeLabel: string) {
 
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
 
-  // ===== EMPLOYEE SHEET =====
   const employeeData = [
     ["Employee", "Role", "Total", "Pending", "In Progress", "Completed", "Hours"],
     ...reportData.employeeSummary.map((e: any) => [
@@ -76,7 +74,6 @@ function exportToExcel(reportData: any, rangeLabel: string) {
 
   const employeeSheet = XLSX.utils.aoa_to_sheet(employeeData);
 
-  // ===== TASKS SHEET =====
   const taskData = [
     [
       "Title",
@@ -108,7 +105,6 @@ function exportToExcel(reportData: any, rangeLabel: string) {
 
   const taskSheet = XLSX.utils.aoa_to_sheet(taskData);
 
-  // ===== AUTO COLUMN WIDTH (🔥 improves UI) =====
   const autoWidth = (data: any[]) =>
     data[0].map((_: any, colIndex: number) => ({
       wch: Math.max(
@@ -122,14 +118,12 @@ function exportToExcel(reportData: any, rangeLabel: string) {
   employeeSheet["!cols"] = autoWidth(employeeData);
   taskSheet["!cols"] = autoWidth(taskData);
 
-  // ===== CREATE WORKBOOK =====
   const workbook = XLSX.utils.book_new();
 
   XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
   XLSX.utils.book_append_sheet(workbook, employeeSheet, "Employees");
   XLSX.utils.book_append_sheet(workbook, taskSheet, "Tasks");
 
-  // ===== DOWNLOAD =====
   XLSX.writeFile(
     workbook,
     `task-report-${rangeLabel.replace(/ /g, "-")}-${new Date()
@@ -154,6 +148,9 @@ export function TaskManagement() {
   const [editId,          setEditId]          = useState<string | null>(null);
   const [toast,           setToast]           = useState("");
 
+  // ── Duplicate-submit guard for the New/Edit Task form ──
+  const [submittingTask,  setSubmittingTask]  = useState(false);
+
   // ── Filter state ──
   const [filterStatus,   setFilterStatus]   = useState("");
   const [filterPriority, setFilterPriority] = useState("");
@@ -166,7 +163,6 @@ export function TaskManagement() {
     title: "", description: "", assignedTo: "none",
     priority: "medium" as Priority, dueDate: "",
     status: "pending" as TaskStatus,
-    // date control
     dateMode: "single" as "single" | "range",
     createdAt: "",
     rangeStart: "", rangeEnd: "",
@@ -200,7 +196,10 @@ export function TaskManagement() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(""), 3500); };
 
-  /* ===== LOAD ===== */
+  /* ===== LOAD =====
+     Admin sees EVERY task in the system via /tasks/all.
+     Manager/HR/Employee see their own created/assigned tasks via /tasks/my,
+     but have full CRUD (create, edit, delete, status-change) on that scope. */
   const loadTasks = async () => {
     try {
       setLoading(true);
@@ -230,6 +229,8 @@ export function TaskManagement() {
   /* ===== TASK CRUD ===== */
   const handleSubmit = async () => {
     if (!form.title) return showToast("Title is required");
+    if (submittingTask) return;
+    setSubmittingTask(true);
     try {
       const payload = { ...form, assignedTo: form.assignedTo || undefined };
       if (editId) { await taskApi.update(editId, payload); showToast("✅ Task updated"); }
@@ -237,6 +238,7 @@ export function TaskManagement() {
       await loadTasks();
       resetForm();
     } catch (err: any) { showToast("❌ " + err.message); }
+    finally { setSubmittingTask(false); }
   };
 
   const handleDelete = async (id: string) => {
@@ -267,7 +269,6 @@ export function TaskManagement() {
   };
 
   /* ===== MANUAL ENTRY — supports single date OR date range ===== */
-  // When range mode is used, we create one task per day in the range
   const generateDateRange = (start: string, end: string): string[] => {
     const dates: string[] = [];
     const cur = new Date(start);
@@ -286,14 +287,12 @@ export function TaskManagement() {
       const assignedToVal = manualForm.assignedTo === "none" ? undefined : manualForm.assignedTo || undefined;
 
       if (manualForm.dateMode === "range") {
-        // validate range
         if (!manualForm.rangeStart || !manualForm.rangeEnd)
           return showToast("Please select both start and end dates");
         const dates = generateDateRange(manualForm.rangeStart, manualForm.rangeEnd);
         if (dates.length > 366)
           return showToast("Range too large — max 366 days");
 
-        // bulk import all dates as individual tasks
         const tasks = dates.map(date => ({
           title:       manualForm.title,
           description: manualForm.description,
@@ -310,7 +309,6 @@ export function TaskManagement() {
         const result = await taskApi.bulkManual(tasks);
         showToast(`✅ Imported ${result.created} tasks for date range`);
       } else {
-        // single task
         const updates = manualForm.hoursWorked || manualForm.note
           ? [{ status: manualForm.status, hoursWorked: Number(manualForm.hoursWorked) || 0, note: manualForm.note }]
           : [];
@@ -570,7 +568,7 @@ export function TaskManagement() {
                     <DialogTitle>{editId ? "Edit Task" : "Create New Task"}</DialogTitle>
                   </DialogHeader>
                   <div className="text-xs bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-700">
-                    {isAdmin && "📋 You can assign tasks to Managers"}
+                    {isAdmin && "📋 You can assign tasks to Managers, HR & Employees"}
                     {isManager && "📋 You can assign tasks to HR & Employees"}
                     {isHR && "📋 You can assign tasks to Employees"}
                   </div>
@@ -621,7 +619,13 @@ export function TaskManagement() {
                       <Label className="text-xs">Due Date</Label>
                       <Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} className="h-9" />
                     </div>
-                    <Button className="w-full" onClick={handleSubmit}>{editId ? "Update Task" : "Create Task"}</Button>
+                    <Button
+                      className="w-full"
+                      onClick={handleSubmit}
+                      disabled={submittingTask}
+                    >
+                      {submittingTask ? "Saving..." : (editId ? "Update Task" : "Create Task")}
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -715,7 +719,10 @@ export function TaskManagement() {
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
                   )}
-                  {isAdmin && (
+                  {/* ✅ UPDATED — Delete is now available to Admin (any task)
+                      OR the Manager/HR who originally created the task,
+                      giving Manager/HR full CRUD on their own tasks. */}
+                  {(isAdmin || isAssignedByMe(task)) && (
                     <Button size="sm" variant="destructive" onClick={() => handleDelete(task._id)} className="h-7 text-xs px-2">
                       <Trash className="h-3 w-3 mr-1" /> Delete
                     </Button>
@@ -739,19 +746,16 @@ export function TaskManagement() {
           </div>
 
           <div className="space-y-3">
-            {/* Title */}
             <div>
               <Label className="text-xs">Title *</Label>
               <Input value={manualForm.title} onChange={e => setManualForm({ ...manualForm, title: e.target.value })} placeholder="Task title" className="h-9" />
             </div>
 
-            {/* Description */}
             <div>
               <Label className="text-xs">Description</Label>
               <Textarea rows={2} value={manualForm.description} onChange={e => setManualForm({ ...manualForm, description: e.target.value })} placeholder="Description" />
             </div>
 
-            {/* Assign To */}
             <div>
               <Label className="text-xs">Assign To</Label>
               <Select value={manualForm.assignedTo} onValueChange={v => setManualForm({ ...manualForm, assignedTo: v })}>
@@ -765,7 +769,6 @@ export function TaskManagement() {
               </Select>
             </div>
 
-            {/* Priority + Status */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <Label className="text-xs">Priority</Label>
@@ -791,13 +794,11 @@ export function TaskManagement() {
               </div>
             </div>
 
-            {/* Due Date */}
             <div>
               <Label className="text-xs">Due Date</Label>
               <Input type="date" value={manualForm.dueDate} onChange={e => setManualForm({ ...manualForm, dueDate: e.target.value })} className="h-9" />
             </div>
 
-            {/* Date Mode toggle */}
             <div className="border-t pt-3">
               <Label className="text-xs font-semibold text-gray-600 mb-2 block">Creation Date Mode</Label>
               <div className="flex gap-2 mb-3">
@@ -863,7 +864,6 @@ export function TaskManagement() {
               )}
             </div>
 
-            {/* Progress update */}
             <div className="border-t pt-3">
               <p className="text-xs font-medium text-gray-500 mb-2">Progress Update (optional)</p>
               <div className="grid grid-cols-2 gap-2">
