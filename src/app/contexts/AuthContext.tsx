@@ -15,6 +15,7 @@ import { authApi, tokenStorage } from "../../services/api";
 export type Role = "admin" | "hr" | "manager" | "employee";
 
 export interface User {
+  _id: string;   
   id: string;
   name: string;
   email: string;
@@ -52,6 +53,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
    ============================================================ */
 function mapUser(apiUser: any): User {
   return {
+    _id: apiUser.id || apiUser._id,
     id: apiUser.id || apiUser._id,
     name: apiUser.name,
     email: apiUser.email,
