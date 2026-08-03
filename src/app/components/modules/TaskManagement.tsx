@@ -17,6 +17,7 @@ import {
   Filter, ChevronDown, ChevronUp, Calendar, BarChart2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useUnreadCounts } from "../../contexts/UnreadCountsContext";
 import { taskApi } from "@/services/api";
 
 type TaskStatus = "pending" | "in-progress" | "completed";
@@ -134,11 +135,12 @@ function exportToExcel(reportData: any, rangeLabel: string) {
 
 export function TaskManagement() {
   const { currentUser } = useAuth();
+  const { markSeen } = useUnreadCounts();
   const myId      = (currentUser as any)?._id ?? (currentUser as any)?.id;
   const isAdmin   = currentUser?.role === "admin";
   const isManager = currentUser?.role === "manager";
   const isHR      = currentUser?.role === "hr";
-  const canCreate = isAdmin || isManager || isHR;
+  const canCreate = isManager || isHR; // ⛔ admin no longer creates/assigns tasks — view-only + report/manual-import tools remain
 
   // ── Core state ──
   const [tasks,           setTasks]           = useState<Task[]>([]);
@@ -156,7 +158,27 @@ export function TaskManagement() {
   const [filterPriority, setFilterPriority] = useState("");
   const [showFilters,    setShowFilters]    = useState(false);
 
+  // ── New-task-assigned popup ──
+  const [newTaskPopupOpen, setNewTaskPopupOpen] = useState(false);
+  const [newTasks,         setNewTasks]         = useState<Task[]>([]);
+  const SEEN_TASK_IDS_KEY = "hrms_seen_new_task_ids";
+
+  const getSeenTaskIds = (): string[] => {
+    try { return JSON.parse(localStorage.getItem(SEEN_TASK_IDS_KEY) || "[]"); }
+    catch { return []; }
+  };
+  const addSeenTaskIds = (ids: string[]) => {
+    const cur = new Set(getSeenTaskIds());
+    ids.forEach(id => cur.add(id));
+    localStorage.setItem(SEEN_TASK_IDS_KEY, JSON.stringify(Array.from(cur)));
+  };
+
   // ── Manual entry ──
+  // ── Employee self-update dialog (assigned-to user updating their own task's progress) ──
+  const [selfEditOpen, setSelfEditOpen]    = useState(false);
+  const [selfEditTask, setSelfEditTask]    = useState<Task | null>(null);
+  const [selfEditDesc, setSelfEditDesc]    = useState("");
+  const [selfEditSaving, setSelfEditSaving] = useState(false);
   const [manualOpen,    setManualOpen]    = useState(false);
   const [manualLoading, setManualLoading] = useState(false);
   const defaultManual = {
@@ -206,9 +228,33 @@ export function TaskManagement() {
       const data = isAdmin
         ? await taskApi.getAllFiltered({ status: filterStatus, priority: filterPriority })
         : await taskApi.getMy();
-      setTasks(data.tasks || []);
+      const fetchedTasks: Task[] = data.tasks || [];
+      setTasks(fetchedTasks);
+      detectNewlyAssignedTasks(fetchedTasks);
     } catch (err: any) { console.error(err.message); }
     finally { setLoading(false); }
+  };
+
+  /* Show a popup for tasks assigned to me that I haven't seen/dismissed yet */
+  const detectNewlyAssignedTasks = (allTasks: Task[]) => {
+    if (!myId) return;
+    const seenIds = new Set(getSeenTaskIds());
+    const unseen = allTasks.filter(t => {
+      const assignedToMe = t.assignedTo?._id === myId || t.assignedTo === myId;
+      const assignedBySomeoneElse = t.assignedBy?._id !== myId && t.assignedBy !== myId;
+      return assignedToMe && assignedBySomeoneElse && !seenIds.has(t._id);
+    });
+    if (unseen.length > 0) {
+      setNewTasks(unseen);
+      setNewTaskPopupOpen(true);
+    }
+  };
+
+  const dismissNewTaskPopup = () => {
+    addSeenTaskIds(newTasks.map(t => t._id));
+    setNewTaskPopupOpen(false);
+    setNewTasks([]);
+    markSeen("tasks"); // clears the sidebar badge count too
   };
 
   const loadAssignableUsers = async () => {
@@ -260,6 +306,25 @@ export function TaskManagement() {
   const handleStatusChange = async (id: string, status: TaskStatus) => {
     try { await taskApi.update(id, { status }); showToast("✅ Status updated"); await loadTasks(); }
     catch (err: any) { showToast("❌ " + err.message); }
+  };
+
+  const handleSelfEdit = (task: Task) => {
+    setSelfEditTask(task);
+    setSelfEditDesc(task.description || "");
+    setSelfEditOpen(true);
+  };
+
+  const submitSelfEdit = async () => {
+    if (!selfEditTask) return;
+    setSelfEditSaving(true);
+    try {
+      await taskApi.update(selfEditTask._id, { description: selfEditDesc });
+      showToast("✅ Task details updated");
+      setSelfEditOpen(false);
+      setSelfEditTask(null);
+      await loadTasks();
+    } catch (err: any) { showToast("❌ " + err.message); }
+    finally { setSelfEditSaving(false); }
   };
 
   const resetForm = () => {
@@ -516,6 +581,45 @@ export function TaskManagement() {
   return (
     <div className="space-y-4 px-2 sm:px-0">
 
+      {/* ── NEW TASK ASSIGNED POPUP ── */}
+      <Dialog open={newTaskPopupOpen} onOpenChange={(v) => { if (!v) dismissNewTaskPopup(); }}>
+        <DialogContent className="max-w-md mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-slate-800">
+              <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-base">🔔</span>
+              New Task{newTasks.length > 1 ? "s" : ""} Assigned
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-500">
+              You've been assigned {newTasks.length} new task{newTasks.length !== 1 ? "s" : ""}:
+            </p>
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {newTasks.map(t => (
+                <div key={t._id} className="border border-blue-100 bg-blue-50/50 rounded-lg px-3 py-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">{t.title}</p>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold shrink-0 ${priorityColor(t.priority)}`}>
+                      {t.priority}
+                    </span>
+                  </div>
+                  {t.description && (
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{t.description}</p>
+                  )}
+                  <div className="flex items-center gap-2 mt-1.5 text-[11px] text-gray-400">
+                    {t.assignedBy?.name && <span>By {t.assignedBy.name}</span>}
+                    {t.dueDate && <span>· Due {t.dueDate}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button className="w-full" onClick={dismissNewTaskPopup}>
+              Got it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* TOAST */}
       {toast && (
         <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-80 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm text-center sm:text-left">
@@ -671,23 +775,34 @@ export function TaskManagement() {
       ) : (
         <div className="grid gap-3">
           {filteredTasks.map(task => (
-            <Card key={task._id} className="hover:shadow-md transition">
+            <Card
+              key={task._id}
+              className={`hover:shadow-lg transition-all duration-200 border-l-4 ${
+                task.status === "completed"   ? "border-l-emerald-500" :
+                task.status === "in-progress" ? "border-l-blue-500"    :
+                                                 "border-l-gray-300"
+              }`}
+            >
               <CardHeader className="flex flex-row items-start justify-between pb-2 pt-4 px-4">
-                <div className="space-y-1 flex-1 min-w-0 pr-2">
+                <div className="space-y-1.5 flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-sm sm:text-base">{task.title}</CardTitle>
+                    <CardTitle className="text-sm sm:text-base font-semibold">{task.title}</CardTitle>
                     {isAssignedToMe(task) && !isAdmin && (
-                      <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">Mine</span>
+                      <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">Mine</span>
                     )}
                     {isAssignedByMe(task) && !isAssignedToMe(task) && !isAdmin && (
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">By me</span>
+                      <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">By me</span>
                     )}
                   </div>
-                  {task.description && <p className="text-xs text-gray-500 line-clamp-2">{task.description}</p>}
+                  {task.description && (
+                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{task.description}</p>
+                  )}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-1 shrink-0">
-                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${priorityColor(task.priority)}`}>{task.priority}</span>
-                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${statusColor(task.status)}`}>{task.status}</span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wide ${priorityColor(task.priority)}`}>{task.priority}</span>
+                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${statusColor(task.status)}`}>
+                    {task.status === "in-progress" ? "In Progress" : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
+                  </span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 px-4 pb-4">
@@ -699,8 +814,8 @@ export function TaskManagement() {
                   {task.updates?.length > 0 && <div className="text-xs text-gray-400">📝 {task.updates.length} update{task.updates.length !== 1 ? "s" : ""}</div>}
                 </div>
                 {task.updates?.length > 0 && task.updates[0].note && (
-                  <div className="text-xs bg-gray-50 border rounded px-2 py-1.5 text-gray-600">
-                    <span className="font-medium">Note: </span>{task.updates[0].note}
+                  <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
+                    <span className="font-semibold text-slate-700">Latest note: </span>{task.updates[0].note}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -714,14 +829,19 @@ export function TaskManagement() {
                       </SelectContent>
                     </Select>
                   )}
+
+                  {/* Employee self-update: edit their own progress notes on a completed/in-progress task assigned to them */}
+                  {isAssignedToMe(task) && !isAdmin && !isAssignedByMe(task) && (
+                    <Button size="sm" variant="outline" onClick={() => handleSelfEdit(task)} className="h-7 text-xs px-2">
+                      <Pencil className="h-3 w-3 mr-1" /> Update Details
+                    </Button>
+                  )}
+
                   {(isAdmin || isAssignedByMe(task)) && (
                     <Button size="sm" variant="outline" onClick={() => handleEdit(task)} className="h-7 text-xs px-2">
                       <Pencil className="h-3 w-3 mr-1" /> Edit
                     </Button>
                   )}
-                  {/* ✅ UPDATED — Delete is now available to Admin (any task)
-                      OR the Manager/HR who originally created the task,
-                      giving Manager/HR full CRUD on their own tasks. */}
                   {(isAdmin || isAssignedByMe(task)) && (
                     <Button size="sm" variant="destructive" onClick={() => handleDelete(task._id)} className="h-7 text-xs px-2">
                       <Trash className="h-3 w-3 mr-1" /> Delete
@@ -882,6 +1002,47 @@ export function TaskManagement() {
               {manualLoading ? "Saving..." : "💾 Save Manual Task"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── EMPLOYEE SELF-UPDATE DIALOG ── */}
+      <Dialog open={selfEditOpen} onOpenChange={(v) => { if (!selfEditSaving) setSelfEditOpen(v); }}>
+        <DialogContent className="max-w-md mx-2 sm:mx-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-slate-600" /> Update Task Details
+            </DialogTitle>
+          </DialogHeader>
+          {selfEditTask && (
+            <div className="space-y-3">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                <p className="text-sm font-semibold text-slate-800">{selfEditTask.title}</p>
+                <div className="flex items-center gap-2 mt-1.5">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColor(selfEditTask.status)}`}>
+                    {selfEditTask.status}
+                  </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${priorityColor(selfEditTask.priority)}`}>
+                    {selfEditTask.priority}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs">Your Notes / Completion Details</Label>
+                <Textarea
+                  rows={4}
+                  value={selfEditDesc}
+                  onChange={e => setSelfEditDesc(e.target.value)}
+                  placeholder="Describe what you completed, any blockers, or additional details…"
+                />
+              </div>
+              <p className="text-[10px] text-gray-400">
+                You can update your notes and status. Title, assignee, priority, and due date are managed by whoever assigned this task.
+              </p>
+              <Button className="w-full" onClick={submitSelfEdit} disabled={selfEditSaving}>
+                {selfEditSaving ? "Saving..." : "Save Update"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
