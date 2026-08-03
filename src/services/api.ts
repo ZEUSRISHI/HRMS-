@@ -205,13 +205,17 @@ export const dashboardApi = {
    ATTENDANCE API
    ============================================================ */
 export const attendanceApi = {
-  checkIn: (body?: { tagline?: string }) =>
+  checkIn: (body?: { tagline?: string; lat?: number; lng?: number }) =>
     apiFetch("/attendance/checkin", {
       method: "POST",
       body: JSON.stringify(body ?? {}),
     }),
 
-  checkOut: () => apiFetch("/attendance/checkout", { method: "POST" }),
+  checkOut: (body?: { lat?: number; lng?: number }) =>
+    apiFetch("/attendance/checkout", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
   getToday:    () => apiFetch("/attendance/today"),
   getMy:       () => apiFetch("/attendance/my"),
   getAll:      () => apiFetch("/attendance/all"),
@@ -227,6 +231,12 @@ export const attendanceApi = {
 
   adminCheckOut: (userId: string) =>
     apiFetch(`/attendance/admin-checkout/${userId}`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+
+  sendCheckoutReminder: (userId: string) =>
+    apiFetch(`/attendance/send-reminder/${userId}`, {
       method: "POST",
       body: JSON.stringify({}),
     }),
@@ -247,6 +257,7 @@ export const attendanceApi = {
     }),
 
   getManual:    ()           => apiFetch("/attendance/manual"),
+  getManualMy:  ()           => apiFetch("/attendance/manual/my"),  
   deleteManual: (id: string) => apiFetch(`/attendance/manual/${id}`, { method: "DELETE" }),
 };
 
