@@ -17,6 +17,7 @@ import {
   CheckCircle2, XCircle, LogIn, LogOut, ArrowUp, ArrowDown,
   Activity, Target
 } from "lucide-react";
+import { format } from "date-fns";
 
 /* ── unified slate colour palette for charts ── */
 const COLORS = ["#475569", "#64748b", "#94a3b8", "#cbd5e1", "#334155", "#1e293b"];
@@ -771,12 +772,14 @@ function EmployeeDashboardNew() {
   const [myTasks,    setMyTasks]    = useState<any[]>([]);
   const [mySheets,   setMySheets]   = useState<any[]>([]);
   const [myTickets,  setMyTickets]  = useState<any[]>([]);
+  const [myManual,   setMyManual]   = useState<any[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const [todayRes, myAttRes, leavesRes, tasksRes, sheetsRes, ticketsRes] = await Promise.allSettled([
+      const [todayRes, myAttRes, leavesRes, tasksRes, sheetsRes, ticketsRes, manualRes] = await Promise.allSettled([
         attendanceApi.getToday(), attendanceApi.getMy(), leaveApi.getMy(),
         taskApi.getMy(), timesheetApi.getMy(), helpdeskApi.getMy(),
+        attendanceApi.getManualMy(),
       ]);
       if (todayRes.status   === "fulfilled") setTodayRec(todayRes.value.record    ?? null);
       if (myAttRes.status   === "fulfilled") setMyRecords(myAttRes.value.records  ?? []);
@@ -784,28 +787,86 @@ function EmployeeDashboardNew() {
       if (tasksRes.status   === "fulfilled") setMyTasks(tasksRes.value.tasks      ?? []);
       if (sheetsRes.status  === "fulfilled") setMySheets(sheetsRes.value.sheets   ?? []);
       if (ticketsRes.status === "fulfilled") setMyTickets(ticketsRes.value.tickets ?? []);
+      if (manualRes.status  === "fulfilled") setMyManual(manualRes.value.records  ?? []);
     } finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t); }, [load]);
 
-  const now          = new Date();
-  const monthStart   = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthRecords = myRecords.filter(r => new Date(r.date) >= monthStart);
-  const workingDays  = now.getDate();
-  const attRate      = workingDays > 0 ? Math.min(Math.round((monthRecords.length / workingDays) * 100), 100) : 0;
+  //* ── combine system + manual records, one per date (manual wins if duplicate) ── */
+  const combinedRecordsMap = new Map<string, any>();
+  myRecords.forEach(r => combinedRecordsMap.set(r.date, r));
+  myManual.forEach(r => combinedRecordsMap.set(r.date, r));
+  const combinedRecords = Array.from(combinedRecordsMap.values());
 
-  const pendingTasks   = myTasks.filter(t => t.status === "pending").length;
-  const inProgTasks    = myTasks.filter(t => t.status === "in-progress").length;
-  const doneTasks      = myTasks.filter(t => t.status === "completed").length;
-  const totalHours     = mySheets.reduce((s, t) => s + (t.hours || 0), 0);
+  const now        = new Date();
+  const todayDate  = format(now, "yyyy-MM-dd");
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthRecords = combinedRecords.filter(r => new Date(r.date) >= monthStart);
+
+  const parseTimeToMinutes = (t: string | null | undefined): number | null => {
+    if (!t) return null;
+    const clean = t.trim().toUpperCase();
+    const match = clean.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+    if (!match) return null;
+    let [, hh, mm, ampm] = match;
+    let h = parseInt(hh, 10);
+    const m = parseInt(mm, 10);
+    if (ampm === "PM" && h !== 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    return h * 60 + m;
+  };
+
+  /* ── SAME rule as MonthlyAttendanceCalendar: "present" needs checkIn && checkOut,
+     "partial" needs checkIn only — BOTH count as presentDays there, so both count as 1 here too ── */
+  const isPresentDay = (r: any): boolean => !!r?.checkIn;
+
+  const workingDaysInMonthSoFar = (() => {
+    let count = 0;
+    const cursor = new Date(now.getFullYear(), now.getMonth(), 1);
+    while (cursor <= now) {
+      const day = cursor.getDay();
+      if (day !== 0 && day !== 6) count++; // skip Sat & Sun — matches MonthlyAttendanceCalendar's isWeekend rule exactly
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return count;
+  })();
+
+  const presentDaysThisMonth = monthRecords.filter(isPresentDay).length;
+  const attRate = workingDaysInMonthSoFar > 0
+    ? Math.min(Math.round((presentDaysThisMonth / workingDaysInMonthSoFar) * 100), 100)
+    : 0;
+
+  const pendingTasks = myTasks.filter(t => t.status === "pending").length;
+  const inProgTasks  = myTasks.filter(t => t.status === "in-progress").length;
+  const doneTasks    = myTasks.filter(t => t.status === "completed").length;
+
+  /* ── Hours Logged: TODAY only, from check-in to check-out, or check-in to now if still working ── */
+  const totalHours = (() => {
+    const todayRecord = combinedRecords.find(r => r.date === todayDate) || todayRec;
+    if (!todayRecord?.checkIn) return 0;
+    const inMin = parseTimeToMinutes(todayRecord.checkIn);
+    if (inMin === null) return 0;
+    let outMin: number;
+    if (todayRecord.checkOut) {
+      const parsedOut = parseTimeToMinutes(todayRecord.checkOut);
+      if (parsedOut === null) return 0;
+      outMin = parsedOut;
+    } else {
+      outMin = now.getHours() * 60 + now.getMinutes(); // still working — count up to now
+    }
+    let mins = outMin - inMin;
+    if (mins < 0) mins += 24 * 60;
+    return mins / 60;
+  })();
+
   const approvedLeaves = myLeaves.filter(l => l.status === "approved").length;
   const openTickets    = myTickets.filter(t => t.status === "open").length;
 
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d  = new Date(); d.setDate(d.getDate() - (6 - i));
     const ds = d.toISOString().split("T")[0];
-    const rec = myRecords.find(r => r.date === ds);
+    const rec = combinedRecords.find(r => r.date === ds);
     return {
       day:     d.toLocaleDateString("en-US", { weekday: "short" }),
       present: rec ? 1 : 0,
@@ -874,7 +935,7 @@ function EmployeeDashboardNew() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard title="Attendance"      value={`${attRate}%`}                   icon={Activity}    color="slate"  loading={loading} />
         <StatCard title="My Tasks"        value={myTasks.length}                  icon={CheckSquare} color="slate"  loading={loading} />
-        <StatCard title="Hours Logged"    value={`${totalHours.toFixed(0)}h`}     icon={Clock}       color="slate"  loading={loading} />
+        <StatCard title="Hours Logged"    value={`${totalHours.toFixed(1)}h`}     subtitle="Today"    icon={Clock}       color="slate"  loading={loading} />
         <StatCard title="Approved Leaves" value={approvedLeaves}                  icon={Calendar}    color="green"  loading={loading} />
         <StatCard title="Open Tickets"    value={openTickets}                     icon={TicketCheck} color="red"    loading={loading} />
       </div>
