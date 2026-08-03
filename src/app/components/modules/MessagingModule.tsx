@@ -53,6 +53,7 @@ interface Conversation {
     content: string;
   };
   lastMessageAt: string;
+  unreadCount?: number;
 }
 
 /* ─── Helpers ────────────────────────────── */
@@ -158,18 +159,25 @@ export function MessagingModule() {
   }, []);
 
   /* ─── Load messages ───────────────────── */
-  const loadMessages = useCallback(async (convId: string) => {
-    try {
-      setLoadingMsgs(true);
-      const data = await messageApi.getMessages(convId);
-      setMessages(data.messages || []);
-      setTimeout(scrollToBottom, 100);
-    } catch (err: any) {
-      console.error("Load messages:", err.message);
-    } finally {
-      setLoadingMsgs(false);
-    }
-  }, []);
+  const loadMessages = useCallback(async (convId: string, silent = false) => {
+  try {
+    if (!silent) setLoadingMsgs(true);
+    const data = await messageApi.getMessages(convId);
+    setMessages((prev) => {
+      // avoid re-render/jank if nothing changed
+      if (prev.length === data.messages?.length &&
+          prev[prev.length - 1]?._id === data.messages?.[data.messages.length - 1]?._id) {
+        return prev;
+      }
+      return data.messages || [];
+    });
+    setTimeout(scrollToBottom, 100);
+  } catch (err: any) {
+    console.error("Load messages:", err.message);
+  } finally {
+    if (!silent) setLoadingMsgs(false);
+  }
+}, []);
 
   /* ─── Load users for new chat ─────────── */
   const loadUsers = async () => {
@@ -183,25 +191,49 @@ export function MessagingModule() {
 
   /* ─── Polling for new messages ────────── */
   useEffect(() => {
-    loadConversations();
-    loadUsers();
-  }, []);
+  loadConversations();
+  loadUsers();
 
-  useEffect(() => {
-    if (!activeConv) return;
+  // ✅ Poll conversation list every 3s for real-time unread badges (WhatsApp-like)
+  const convPoll = setInterval(loadConversations, 3000);
+  return () => clearInterval(convPoll);
+}, []);
 
-    loadMessages(activeConv._id);
+useEffect(() => {
+  if (!activeConv) return;
 
-    // Poll every 4s for new messages
-    pollRef.current = setInterval(() => {
-      loadMessages(activeConv._id);
-      loadConversations();
-    }, 4000);
+  loadMessages(activeConv._id);
 
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [activeConv?._id]);
+  // ✅ Poll active chat every 2s — fast enough to feel live, light enough to not lag
+  pollRef.current = setInterval(() => {
+    loadMessages(activeConv._id, true);
+  }, 2000);
+
+  return () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+  };
+}, [activeConv?._id]);
+
+// ✅ Notify on new incoming messages (only when that conversation is NOT currently open)
+const prevUnreadRef = useRef<Record<string, number>>({});
+
+useEffect(() => {
+  conversations.forEach((c) => {
+    const prev = prevUnreadRef.current[c._id] || 0;
+    const curr = c.unreadCount || 0;
+    const isOpenChat = activeConv?._id === c._id;
+
+    if (curr > prev && !isOpenChat) {
+      const name = getConversationName(c, currentUser.id);
+      const preview = c.lastMessage?.content?.slice(0, 40) || "New message";
+      showToast(`💬 ${name}: ${preview}`);
+    }
+  });
+
+  const map: Record<string, number> = {};
+  conversations.forEach((c) => (map[c._id] = c.unreadCount || 0));
+  prevUnreadRef.current = map;
+}, [conversations, activeConv?._id]);
 
   /* ─── Select a conversation ───────────── */
   const selectConversation = (conv: Conversation) => {
@@ -306,10 +338,11 @@ export function MessagingModule() {
 
       {/* TOAST */}
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
-          {toast}
-        </div>
-      )}
+  <div className="fixed top-5 right-5 bg-white border border-gray-200 text-gray-800 px-4 py-3 rounded-xl shadow-lg z-50 text-sm max-w-xs animate-in slide-in-from-top-2 fade-in duration-200 flex items-start gap-2">
+    <MessageSquare className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+    <span className="leading-snug">{toast}</span>
+  </div>
+)}
 
       <div className="flex-1 flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
 
@@ -473,43 +506,53 @@ export function MessagingModule() {
               </div>
             ) : (
               filteredConvs.map((conv) => {
-                const name    = getConversationName(conv, currentUser.id);
-                const isActive = activeConv?._id === conv._id;
-                const lastMsg  = conv.lastMessage;
+  const name     = getConversationName(conv, currentUser.id);
+  const isActive = activeConv?._id === conv._id;
+  const lastMsg  = conv.lastMessage;
+  const unread   = conv.unreadCount || 0;
 
-                return (
-                  <button
-                    key={conv._id}
-                    onClick={() => selectConversation(conv)}
-                    className={`w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 text-left ${
-                      isActive ? "bg-orange-50 border-l-2 border-l-orange-500" : ""
-                    }`}
-                  >
-                    <div className="relative">
-                      <Avatar name={name} />
-                      {conv.type === "group" && (
-                        <div className="absolute -bottom-0.5 -right-0.5 bg-blue-500 rounded-full p-0.5">
-                          <Users className="h-2.5 w-2.5 text-white" />
-                        </div>
-                      )}
-                    </div>
+  return (
+    <button
+      key={conv._id}
+      onClick={() => selectConversation(conv)}
+      className={`w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 text-left ${
+        isActive ? "bg-orange-50 border-l-2 border-l-orange-500" : ""
+      }`}
+    >
+      <div className="relative">
+        <Avatar name={name} />
+        {conv.type === "group" && (
+          <div className="absolute -bottom-0.5 -right-0.5 bg-blue-500 rounded-full p-0.5">
+            <Users className="h-2.5 w-2.5 text-white" />
+          </div>
+        )}
+      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center">
-                        <p className="text-sm font-medium truncate">{name}</p>
-                        <span className="text-[10px] text-gray-400 flex-shrink-0 ml-1">
-                          {formatMessageTime(conv.lastMessageAt)}
-                        </span>
-                      </div>
-                      {lastMsg && (
-                        <p className="text-xs text-gray-400 truncate">
-                          {lastMsg.senderId?.name}: {lastMsg.content}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                );
-              })
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-center">
+          <p className={`text-sm truncate ${unread > 0 ? "font-bold text-gray-900" : "font-medium"}`}>
+            {name}
+          </p>
+          <span className={`text-[10px] flex-shrink-0 ml-1 ${unread > 0 ? "text-orange-500 font-semibold" : "text-gray-400"}`}>
+            {formatMessageTime(conv.lastMessageAt)}
+          </span>
+        </div>
+        <div className="flex justify-between items-center">
+          {lastMsg && (
+            <p className={`text-xs truncate ${unread > 0 ? "text-gray-700 font-medium" : "text-gray-400"}`}>
+              {lastMsg.senderId?.name}: {lastMsg.content}
+            </p>
+          )}
+          {unread > 0 && (
+            <span className="ml-2 flex-shrink-0 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+})
             )}
           </div>
         </div>
