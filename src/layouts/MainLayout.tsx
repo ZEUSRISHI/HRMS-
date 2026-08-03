@@ -19,6 +19,7 @@ interface MenuItem {
   name: string;
   icon: LucideIcon;
   roles: Role[];
+  badge?: number;
 }
 
 /* ================= PROPS ================= */
@@ -92,6 +93,8 @@ export default function MainLayout({
             .filter(item => item.roles.includes(currentUser?.role as Role))
             .map(item => {
               const Icon = item.icon;
+              const hasBadge = item.badge != null && item.badge > 0;
+
               return (
                 <button
                   key={item.id}
@@ -100,15 +103,31 @@ export default function MainLayout({
                     setMobileOpen(false); // close on mobile
                   }}
                   className={`
-                    flex items-center gap-3 w-full p-3 rounded-lg
+                    relative flex items-center gap-3 w-full p-3 rounded-lg
                     transition text-left
                     ${active === item.id
                       ? "bg-orange-100 text-orange-600"
                       : "hover:bg-gray-100"}
                   `}
                 >
-                  <Icon size={20} />
-                  {!collapsed && <span className="text-sm font-medium">{item.name}</span>}
+                  <span className="relative">
+                    <Icon size={20} />
+                    {/* COLLAPSED: small dot on the icon */}
+                    {collapsed && hasBadge && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 rounded-full w-2.5 h-2.5 border-2 border-white" />
+                    )}
+                  </span>
+
+                  {!collapsed && (
+                    <span className="text-sm font-medium">{item.name}</span>
+                  )}
+
+                  {/* EXPANDED: full pill with count */}
+                  {!collapsed && hasBadge && (
+                    <span className="ml-auto bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                      {item.badge! > 99 ? "99+" : item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
