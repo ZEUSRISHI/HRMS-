@@ -1168,7 +1168,7 @@ function SubmissionForm({ onSubmit, isAdmin }: { onSubmit: (d: any) => Promise<v
    Shows: Budget, Start Date (createdAt), End Date (deadline),
    Remaining days real-time, progress stats, milestones
 ══════════════════════════════════════════════════════════ */
-function ProjectOverviewTab({ project }: { project: Project }) {
+function ProjectOverviewTab({ project, canViewBudget }: { project: Project; canViewBudget: boolean }) {
   const teamCount      = project.teamMembers?.length ?? 0;
   const budgetPct      = project.budget > 0 ? Math.min(Math.round((project.spent / project.budget) * 100), 100) : 0;
   const remaining      = getRemainingDays(project.deadline);
@@ -1196,36 +1196,40 @@ function ProjectOverviewTab({ project }: { project: Project }) {
   return (
     <div className="space-y-5">
       {/* ── Key Metrics ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {/* Budget */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
-          <div className="w-9 h-9 bg-sky-50 rounded-xl flex items-center justify-center mb-3">
-            <Wallet className="h-4 w-4 text-sky-500" />
-          </div>
-          <p className="text-xl font-bold text-gray-900">
-            {project.budget >= 100000
-              ? `₹${(project.budget / 100000).toFixed(1)}L`
-              : `₹${project.budget.toLocaleString()}`}
-          </p>
-          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Budget</p>
-          <p className="text-[9px] text-gray-300 mt-0.5">Allocated</p>
-        </div>
+      <div className={`grid grid-cols-2 gap-3 ${canViewBudget ? "sm:grid-cols-4" : "sm:grid-cols-2"}`}>
+        {canViewBudget && (
+          <>
+            {/* Budget */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+              <div className="w-9 h-9 bg-sky-50 rounded-xl flex items-center justify-center mb-3">
+                <Wallet className="h-4 w-4 text-sky-500" />
+              </div>
+              <p className="text-xl font-bold text-gray-900">
+                {project.budget >= 100000
+                  ? `₹${(project.budget / 100000).toFixed(1)}L`
+                  : `₹${project.budget.toLocaleString()}`}
+              </p>
+              <p className="text-[10px] text-gray-500 font-medium mt-0.5">Budget</p>
+              <p className="text-[9px] text-gray-300 mt-0.5">Allocated</p>
+            </div>
 
-        {/* Spent */}
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
-          <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center mb-3">
-            <TrendingUp className="h-4 w-4 text-orange-500" />
-          </div>
-          <p className={`text-xl font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-900"}`}>
-            {project.spent >= 100000
-              ? `₹${(project.spent / 100000).toFixed(1)}L`
-              : `₹${project.spent.toLocaleString()}`}
-          </p>
-          <p className="text-[10px] text-gray-500 font-medium mt-0.5">Spent</p>
-          <p className={`text-[9px] mt-0.5 font-medium ${budgetPct > 85 ? "text-rose-400" : "text-gray-300"}`}>
-            {budgetPct}% used
-          </p>
-        </div>
+            {/* Spent */}
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+              <div className="w-9 h-9 bg-orange-50 rounded-xl flex items-center justify-center mb-3">
+                <TrendingUp className="h-4 w-4 text-orange-500" />
+              </div>
+              <p className={`text-xl font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-900"}`}>
+                {project.spent >= 100000
+                  ? `₹${(project.spent / 100000).toFixed(1)}L`
+                  : `₹${project.spent.toLocaleString()}`}
+              </p>
+              <p className="text-[10px] text-gray-500 font-medium mt-0.5">Spent</p>
+              <p className={`text-[9px] mt-0.5 font-medium ${budgetPct > 85 ? "text-rose-400" : "text-gray-300"}`}>
+                {budgetPct}% used
+              </p>
+            </div>
+          </>
+        )}
 
         {/* Progress */}
         <div className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-sm transition-shadow">
@@ -1352,24 +1356,26 @@ function ProjectOverviewTab({ project }: { project: Project }) {
       </div>
 
       {/* ── Budget Bar ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-2">
-        <div className="flex justify-between items-center">
-          <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-            <Wallet className="h-3.5 w-3.5 text-orange-400" /> Budget Usage
-          </h4>
-          <span className={`text-xs font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-700"}`}>{budgetPct}%</span>
+      {canViewBudget && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+              <Wallet className="h-3.5 w-3.5 text-orange-400" /> Budget Usage
+            </h4>
+            <span className={`text-xs font-bold ${budgetPct > 85 ? "text-rose-600" : "text-gray-700"}`}>{budgetPct}%</span>
+          </div>
+          <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${BUDGET_COLOR(budgetPct)} transition-all duration-700`}
+              style={{ width: `${budgetPct}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-gray-400">
+            <span>₹{project.spent.toLocaleString()} spent</span>
+            <span>₹{project.budget.toLocaleString()} total</span>
+          </div>
         </div>
-        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full bg-gradient-to-r ${BUDGET_COLOR(budgetPct)} transition-all duration-700`}
-            style={{ width: `${budgetPct}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-[10px] text-gray-400">
-          <span>₹{project.spent.toLocaleString()} spent</span>
-          <span>₹{project.budget.toLocaleString()} total</span>
-        </div>
-      </div>
+      )}
 
       {/* ── Milestones ── */}
       {totalMilestones > 0 && (
@@ -1686,8 +1692,8 @@ function ProjectCard({
           </div>
 
           <div className="p-6">
-            {/* FIX: Overview now shows budget, start date, end date, remaining days */}
-            {activeTab === "overview" && <ProjectOverviewTab project={project} />}
+            {/* Budget figures hidden from employee & manager — only admin/HR can view */}
+            {activeTab === "overview" && <ProjectOverviewTab project={project} canViewBudget={isAdmin || isHR} />}
 
             {activeTab === "team" && (
               <div>
