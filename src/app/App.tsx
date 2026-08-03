@@ -8,6 +8,7 @@ import { TimesheetProvider } from "./contexts/TimesheetContext";
 import { PerformanceProvider } from "./contexts/PerformanceContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
 import { AdminUsersProvider } from "./contexts/AdminUsersContext";
+import { UnreadCountsProvider, useUnreadCounts } from "./contexts/UnreadCountsContext";
 
 import MainLayout from "../layouts/MainLayout";
 
@@ -42,6 +43,7 @@ import {
 import RoleBasedDashboard from "./components/modules/RoleBasedDashboard";
 import { DashboardStats } from "./components/Dashboard";
 import { AttendanceModule } from "./components/modules/AttendanceModule";
+import { LeaveModule } from "./components/modules/LeaveModule";
 import { TaskManagement } from "./components/modules/TaskManagement";
 import { DailyStatusModule } from "./components/modules/DailyStatusModule";
 import { CalendarModule } from "./components/modules/CalendarModule";
@@ -51,7 +53,6 @@ import { ProjectManagement } from "./components/modules/ProjectManagement";
 import { OnboardingModule } from "./components/modules/OnboardingModule";
 import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
-import EmployeeTaskStatusModule from "./components/modules/EmployeeTaskStatusModule";
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
 import { UserManagementModule } from "./components/modules/UserManagementModule";
 
@@ -71,8 +72,8 @@ import FreelancerModule from "./components/modules/FreelancerModule";
 export type ModuleType =
   | "dashboard"
   | "attendance"
+  | "leave"
   | "tasks"
-  | "employee-task-status"
   | "status"
   | "calendar"
   | "payroll"
@@ -96,12 +97,25 @@ interface MenuItem {
   name: string;
   icon: LucideIcon;
   roles: Role[];
+  badge?: number;
 }
 
 function AppContent() {
   const { currentUser } = useAuth();
-  const [activeModule, setActiveModule] =
+  const { counts, markSeen } = useUnreadCounts(); // ✅ unread badge counts
+
+  const [activeModule, setActiveModuleRaw] =
     useState<ModuleType>("dashboard");
+
+  // ✅ wrap setActiveModule so opening a module clears its badge
+  const setActiveModule = (m: ModuleType) => {
+    setActiveModuleRaw(m);
+    if (m === "messaging") markSeen("messages");
+    if (m === "tasks") markSeen("tasks");
+    if (m === "calendar") markSeen("calendar");
+    if (m === "helpdesk") markSeen("helpdesk");
+    if (m === "projects") markSeen("projects");
+  };
 
   if (!currentUser) return null;
 
@@ -123,16 +137,17 @@ function AppContent() {
       roles: ["admin", "manager", "employee", "hr"],
     },
     {
+      id: "leave",
+      name: "Leave",
+      icon: FileText,
+      roles: ["admin", "manager", "employee", "hr"],
+    },
+    {
       id: "tasks",
       name: "Tasks",
       icon: CheckSquare,
       roles: ["admin", "manager", "employee", "hr"],
-    },
-    {
-      id: "employee-task-status",
-      name: "My Task Status",
-      icon: CheckSquare,
-      roles: ["employee"],
+      badge: counts.tasks,
     },
     {
       id: "status",
@@ -145,6 +160,7 @@ function AppContent() {
       name: "Calendar",
       icon: Calendar,
       roles: ["admin", "manager", "employee", "hr"],
+      badge: counts.calendar,
     },
     {
       id: "payroll",
@@ -163,6 +179,7 @@ function AppContent() {
       name: "Projects",
       icon: FolderKanban,
       roles: ["admin", "manager", "employee"],
+      badge: counts.projects,
     },
     {
       id: "onboarding",
@@ -205,6 +222,7 @@ function AppContent() {
       name: "Helpdesk",
       icon: TicketCheck,
       roles: ["admin", "manager", "employee", "hr"],
+      badge: counts.helpdesk,
     },
     {
       id: "user-management",
@@ -217,6 +235,7 @@ function AppContent() {
       name: "Messages",
       icon: MessageSquare,
       roles: ["admin", "manager", "employee", "hr"],
+      badge: counts.messages,
     },
 
     // ✅ EMAIL COMMUNICATION MENU
@@ -240,11 +259,11 @@ function AppContent() {
       case "attendance":
         return <AttendanceModule />;
 
+      case "leave":
+        return <LeaveModule />;
+
       case "tasks":
         return <TaskManagement />;
-
-      case "employee-task-status":
-        return <EmployeeTaskStatusModule />;
 
       case "status":
         return <DailyStatusModule />;
@@ -359,7 +378,9 @@ export default function App() {
               <TaskProvider>
                 <WorkforceProvider>
                   <NotificationProvider>
-                    <AppWrapper />
+                    <UnreadCountsProvider>
+                      <AppWrapper />
+                    </UnreadCountsProvider>
                   </NotificationProvider>
                 </WorkforceProvider>
               </TaskProvider>
