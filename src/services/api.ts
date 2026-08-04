@@ -259,6 +259,12 @@ export const attendanceApi = {
   getManual:    ()           => apiFetch("/attendance/manual"),
   getManualMy:  ()           => apiFetch("/attendance/manual/my"),  
   deleteManual: (id: string) => apiFetch(`/attendance/manual/${id}`, { method: "DELETE" }),
+
+  updateLocation: (data: { lat: number; lng: number; type: "checkin" | "checkout" }) =>
+    apiFetch("/attendance/update-location", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 };
 
 /* ============================================================
