@@ -1,352 +1,577 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Download, Info, Pencil, X, Check, Loader2, Trash2, Upload, FileText } from "lucide-react";
 import { useAuth } from "../app/contexts/AuthContext";
 import { profileApi } from "../services/api";
 
-/* ================= COUNTRY CODES (inline) ================= */
-
-interface CountryCode {
+/* ============================================================
+   TYPES
+   ============================================================ */
+interface ProfileData {
   name: string;
-  iso: string;
-  dialCode: string;
-  maxLength: number; // expected digits for local number (without dial code)
+  preferredName: string;
+  email: string;
+  dob: string;
+  gender: string;
+  bloodGroup: string;
+  phone: string;
+  countryCode: string;
+  address: string;
+  maritalStatus: string;
+  nationality: string;
+  languagesKnown: string;
+
+  employeeCode: string;
+  department: string;
+  employmentType: string;
+  workMode: string;
+  reportingManager: string;
+  joiningDate: string;
+  workLocation: string;
+  isActive: boolean;
+  designation: string;
+  avatar: string;
+
+  emergencyContact: string;
+  emergencyCountryCode: string;
+  emergencyContactName: string;
+  emergencyRelationship: string;
+
+  bankName: string;
+  accountNumber: string;
+  ifscCode: string;
+  accountType: string;
+
+  panNumber: string;
+  uanNumber: string;
+  pfNumber: string;
+  taxRegime: string;
+}
+interface DocumentItem {
+  _id: string;
+  name: string;
+  category: "employee" | "identity" | "tax";
+  fileData: string;
+  fileType: string;
+  uploadedAt: string;
 }
 
-const countryCodes: CountryCode[] = [
-  { name: "India", iso: "IN", dialCode: "+91", maxLength: 10 },
-  { name: "United States", iso: "US", dialCode: "+1", maxLength: 10 },
-  { name: "United Kingdom", iso: "GB", dialCode: "+44", maxLength: 10 },
-  { name: "Canada", iso: "CA", dialCode: "+1", maxLength: 10 },
-  { name: "Australia", iso: "AU", dialCode: "+61", maxLength: 9 },
-  { name: "Germany", iso: "DE", dialCode: "+49", maxLength: 11 },
-  { name: "France", iso: "FR", dialCode: "+33", maxLength: 9 },
-  { name: "Italy", iso: "IT", dialCode: "+39", maxLength: 10 },
-  { name: "Spain", iso: "ES", dialCode: "+34", maxLength: 9 },
-  { name: "Netherlands", iso: "NL", dialCode: "+31", maxLength: 9 },
-  { name: "Belgium", iso: "BE", dialCode: "+32", maxLength: 9 },
-  { name: "Switzerland", iso: "CH", dialCode: "+41", maxLength: 9 },
-  { name: "Austria", iso: "AT", dialCode: "+43", maxLength: 10 },
-  { name: "Sweden", iso: "SE", dialCode: "+46", maxLength: 9 },
-  { name: "Norway", iso: "NO", dialCode: "+47", maxLength: 8 },
-  { name: "Denmark", iso: "DK", dialCode: "+45", maxLength: 8 },
-  { name: "Finland", iso: "FI", dialCode: "+358", maxLength: 9 },
-  { name: "Poland", iso: "PL", dialCode: "+48", maxLength: 9 },
-  { name: "Portugal", iso: "PT", dialCode: "+351", maxLength: 9 },
-  { name: "Greece", iso: "GR", dialCode: "+30", maxLength: 10 },
-  { name: "Ireland", iso: "IE", dialCode: "+353", maxLength: 9 },
-  { name: "Russia", iso: "RU", dialCode: "+7", maxLength: 10 },
-  { name: "Ukraine", iso: "UA", dialCode: "+380", maxLength: 9 },
-  { name: "Turkey", iso: "TR", dialCode: "+90", maxLength: 10 },
-  { name: "China", iso: "CN", dialCode: "+86", maxLength: 11 },
-  { name: "Japan", iso: "JP", dialCode: "+81", maxLength: 10 },
-  { name: "South Korea", iso: "KR", dialCode: "+82", maxLength: 10 },
-  { name: "Singapore", iso: "SG", dialCode: "+65", maxLength: 8 },
-  { name: "Malaysia", iso: "MY", dialCode: "+60", maxLength: 9 },
-  { name: "Indonesia", iso: "ID", dialCode: "+62", maxLength: 11 },
-  { name: "Thailand", iso: "TH", dialCode: "+66", maxLength: 9 },
-  { name: "Vietnam", iso: "VN", dialCode: "+84", maxLength: 9 },
-  { name: "Philippines", iso: "PH", dialCode: "+63", maxLength: 10 },
-  { name: "Pakistan", iso: "PK", dialCode: "+92", maxLength: 10 },
-  { name: "Bangladesh", iso: "BD", dialCode: "+880", maxLength: 10 },
-  { name: "Sri Lanka", iso: "LK", dialCode: "+94", maxLength: 9 },
-  { name: "Nepal", iso: "NP", dialCode: "+977", maxLength: 10 },
-  { name: "United Arab Emirates", iso: "AE", dialCode: "+971", maxLength: 9 },
-  { name: "Saudi Arabia", iso: "SA", dialCode: "+966", maxLength: 9 },
-  { name: "Qatar", iso: "QA", dialCode: "+974", maxLength: 8 },
-  { name: "Kuwait", iso: "KW", dialCode: "+965", maxLength: 8 },
-  { name: "Oman", iso: "OM", dialCode: "+968", maxLength: 8 },
-  { name: "Bahrain", iso: "BH", dialCode: "+973", maxLength: 8 },
-  { name: "Israel", iso: "IL", dialCode: "+972", maxLength: 9 },
-  { name: "Egypt", iso: "EG", dialCode: "+20", maxLength: 10 },
-  { name: "South Africa", iso: "ZA", dialCode: "+27", maxLength: 9 },
-  { name: "Nigeria", iso: "NG", dialCode: "+234", maxLength: 10 },
-  { name: "Kenya", iso: "KE", dialCode: "+254", maxLength: 9 },
-  { name: "Brazil", iso: "BR", dialCode: "+55", maxLength: 11 },
-  { name: "Mexico", iso: "MX", dialCode: "+52", maxLength: 10 },
-  { name: "Argentina", iso: "AR", dialCode: "+54", maxLength: 10 },
-  { name: "Chile", iso: "CL", dialCode: "+56", maxLength: 9 },
-  { name: "Colombia", iso: "CO", dialCode: "+57", maxLength: 10 },
-  { name: "Peru", iso: "PE", dialCode: "+51", maxLength: 9 },
-  { name: "New Zealand", iso: "NZ", dialCode: "+64", maxLength: 9 },
-  { name: "Hong Kong", iso: "HK", dialCode: "+852", maxLength: 8 },
-  { name: "Taiwan", iso: "TW", dialCode: "+886", maxLength: 9 },
-];
+const emptyProfile: ProfileData = {
+  name: "", preferredName: "", email: "", dob: "", gender: "", bloodGroup: "",
+  phone: "", countryCode: "+91", address: "", maritalStatus: "", nationality: "",
+  languagesKnown: "", employeeCode: "", department: "", employmentType: "Full-time",
+  workMode: "", reportingManager: "", joiningDate: "", workLocation: "",
+  isActive: true, designation: "", avatar: "",
+  emergencyContact: "", emergencyCountryCode: "+91",
+  emergencyContactName: "", emergencyRelationship: "",
+  bankName: "", accountNumber: "", ifscCode: "", accountType: "",
+  panNumber: "", uanNumber: "", pfNumber: "", taxRegime: "New Regime",
+};
 
-const getCountryByDialCode = (dialCode: string): CountryCode =>
-  countryCodes.find((c) => c.dialCode === dialCode) || countryCodes[0];
-
+/* ============================================================
+   MAIN PAGE
+   ============================================================ */
 export default function ProfilePage() {
   const { currentUser } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [phoneError, setPhoneError] = useState("");
 
-  const [form, setForm] = useState({
-    firstName:       currentUser?.name.split(" ")[0] || "",
-    lastName:        currentUser?.name.split(" ")[1] || "",
-    email:           currentUser?.email || "",
-    countryCode:     (currentUser as any)?.countryCode || "+91",
-    phone:           currentUser?.phone || "",
-    designation:     "Software Engineer",
-    department:      currentUser?.department || "Engineering",
-    dob:             "",
-    gender:          "",
-    address:         "",
-    country:         "",
-    state:           "",
-    city:            "",
-    postalCode:      "",
-    currentPassword: "",
-    newPassword:     "",
-    confirmPassword: "",
-  });
+  const [profile, setProfile]     = useState<ProfileData>(emptyProfile);
+  const [draft, setDraft]         = useState<ProfileData>(emptyProfile);
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [error, setError]         = useState("");
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [uploadingCat, setUploadingCat] = useState<string | null>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
+  const pendingCategoryRef = useRef<"employee" | "identity" | "tax">("employee");
 
-  if (!currentUser) return null;
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
-  const selectedCountry = getCountryByDialCode(form.countryCode);
-
-  const handleChange = (e: any) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  // ✅ digits only, capped to the selected country's expected length
-  const handlePhoneChange = (e: any) => {
-    const digitsOnly = e.target.value.replace(/\D/g, "");
-    const trimmed = digitsOnly.slice(0, selectedCountry.maxLength);
-    setForm({ ...form, phone: trimmed });
-
-    if (trimmed.length > 0 && trimmed.length !== selectedCountry.maxLength) {
-      setPhoneError(
-        `${selectedCountry.name} phone number must be exactly ${selectedCountry.maxLength} digits.`
-      );
-    } else {
-      setPhoneError("");
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const res = await profileApi.get();
+      const merged = { ...emptyProfile, ...res.user };
+      setProfile(merged);
+      setDraft(merged);
+      setDocuments(res.user.documents || []);
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+      setError("Could not load profile. Please refresh.");
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ✅ re-validate phone length whenever country code changes
-  const handleCountryCodeChange = (e: any) => {
-    const dialCode = e.target.value;
-    const newCountry = getCountryByDialCode(dialCode);
-    setForm({ ...form, countryCode: dialCode });
-
-    if (form.phone.length > 0 && form.phone.length !== newCountry.maxLength) {
-      setPhoneError(
-        `${newCountry.name} phone number must be exactly ${newCountry.maxLength} digits.`
-      );
-    } else {
-      setPhoneError("");
-    }
+  const openDocPicker = (category: "employee" | "identity" | "tax") => {
+    pendingCategoryRef.current = category;
+    docInputRef.current?.click();
   };
 
-  const handlePostalCodeChange = (e: any) => {
-    setForm({ ...form, postalCode: e.target.value.replace(/\D/g, "") });
-  };
-
-  const handleImage = (e: any) => {
-    const file = e.target.files[0];
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (!file) return;
+    const category = pendingCategoryRef.current;
+
     const reader = new FileReader();
-    reader.onload = () => setAvatar(reader.result as string);
+    reader.onload = async () => {
+      try {
+        setUploadingCat(category);
+        const res = await profileApi.uploadDocument({
+          name: file.name,
+          category,
+          fileData: reader.result as string,
+          fileType: file.type,
+        });
+        setDocuments(res.documents);
+      } catch (err: any) {
+        setError(err?.message || "Failed to upload document.");
+      } finally {
+        setUploadingCat(null);
+        if (docInputRef.current) docInputRef.current.value = "";
+      }
+    };
     reader.readAsDataURL(file);
   };
 
-  const handleSave = async () => {
-    setMessage("");
-
-    // ✅ validate phone before saving
-    if (form.phone.length !== selectedCountry.maxLength) {
-      setPhoneError(
-        `${selectedCountry.name} phone number must be exactly ${selectedCountry.maxLength} digits.`
-      );
-      return;
-    }
-
-    setSaving(true);
-
+  const handleDocDelete = async (docId: string) => {
     try {
-      await profileApi.update({
-        name: `${form.firstName} ${form.lastName}`.trim(),
-        phone: form.phone,
-        countryCode: form.countryCode,
-        department: form.department,
-        avatar: avatar || undefined,
-      });
-
-      setMessage("✅ Profile updated successfully!");
+      const res = await profileApi.deleteDocument(docId);
+      setDocuments(res.documents);
     } catch (err: any) {
-      setMessage("❌ " + (err.message || "Failed to update profile"));
+      setError(err?.message || "Failed to delete document.");
+    }
+  };
+
+  const handleDocPreview = (doc: DocumentItem) => {
+    const win = window.open();
+    if (win) win.document.write(`<iframe src="${doc.fileData}" style="width:100%;height:100%;border:none;"></iframe>`);
+  };
+
+  const handleEditClick = () => {
+    setDraft(profile);
+    setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    setDraft(profile);
+    setIsEditing(false);
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      const res = await profileApi.update(draft);
+      const merged = { ...emptyProfile, ...res.user };
+      setProfile(merged);
+      setDraft(merged);
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error("Failed to save profile:", err);
+      setError(err?.message || "Failed to save changes.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setForm({
-      ...form,
-      firstName: currentUser.name.split(" ")[0] || "",
-      lastName:  currentUser.name.split(" ")[1] || "",
-      email:     currentUser.email,
-      phone:     currentUser.phone || "",
-      countryCode: (currentUser as any)?.countryCode || "+91",
-    });
-    setAvatar(null);
-    setMessage("");
-    setPhoneError("");
+  const update = (field: keyof ProfileData, value: string) => {
+    setDraft((prev) => ({ ...prev, [field]: value }));
   };
 
+  const handleImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => update("avatar", reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  if (!currentUser) return null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-orange-500" size={28} />
+      </div>
+    );
+  }
+
+  const data = isEditing ? draft : profile;
+
   return (
-    <div className="w-full bg-white p-8 rounded-xl shadow space-y-8">
+    <div className="max-w-6xl mx-auto space-y-6 pb-12">
 
-      <h2 className="text-2xl font-semibold">Profile Settings</h2>
-
-      {message && (
-        <div className={`p-3 rounded-lg text-sm text-center ${
-          message.startsWith("✅")
-            ? "bg-green-50 text-green-600 border border-green-200"
-            : "bg-red-50 text-red-600 border border-red-200"
-        }`}>
-          {message}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {error}
         </div>
       )}
 
-      {/* PHOTO */}
-      <div className="flex items-center gap-6">
-        <div className="h-20 w-20 rounded-full overflow-hidden bg-orange-500 flex items-center justify-center text-white text-2xl font-bold border-4 border-orange-200">
-          {avatar ? (
-            <img src={avatar} className="h-full w-full object-cover" />
-          ) : currentUser.avatar ? (
-            <img src={currentUser.avatar} className="h-full w-full object-cover" />
-          ) : (
-            currentUser.name.charAt(0).toUpperCase()
-          )}
-        </div>
+      {/* ===================== HEADER CARD ===================== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex flex-col md:flex-row md:items-start gap-6">
 
-        <div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 text-sm transition"
-          >
-            Upload Photo
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-          <p className="text-xs text-gray-400 mt-1">Recommended: 200x200 JPG or PNG</p>
-        </div>
-      </div>
-
-      {/* BASIC INFO */}
-      <Section title="Basic Information">
-        <Field label="First Name"   name="firstName"   value={form.firstName}   onChange={handleChange} />
-        <Field label="Last Name"    name="lastName"    value={form.lastName}    onChange={handleChange} />
-        <Field label="Email"        name="email"       value={form.email}       onChange={handleChange} disabled />
-
-        {/* ✅ PHONE FIELD WITH COUNTRY CODE DROPDOWN */}
-        <div>
-          <label className="text-sm text-gray-500 font-medium">Phone</label>
-          <div className="mt-1 flex gap-2">
-            <select
-              name="countryCode"
-              value={form.countryCode}
-              onChange={handleCountryCodeChange}
-              className="border rounded-lg px-2 py-2 w-28 focus:ring-2 focus:ring-orange-400 outline-none bg-white"
-            >
-              {countryCodes.map((c) => (
-                <option key={`${c.iso}-${c.dialCode}`} value={c.dialCode}>
-                  {c.dialCode} {c.iso}
-                </option>
-              ))}
-            </select>
-
-            <input
-              name="phone"
-              value={form.phone}
-              onChange={handlePhoneChange}
-              inputMode="numeric"
-              maxLength={selectedCountry.maxLength}
-              placeholder={`${selectedCountry.maxLength} digit number`}
-              className="flex-1 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none"
-            />
+          {/* Avatar block */}
+          <div className="relative w-40 h-40 rounded-xl overflow-hidden bg-gradient-to-br from-amber-300 to-orange-400 flex-shrink-0">
+            {data.avatar ? (
+              <img src={data.avatar} alt={data.name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-4xl font-semibold text-white">
+                {data.name?.charAt(0) || "?"}
+              </div>
+            )}
+            {isEditing && (
+              <>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center shadow hover:bg-white"
+                  title="Change photo"
+                >
+                  <Camera size={16} className="text-gray-700" />
+                </button>
+                <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+              </>
+            )}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2">
+              <p className="text-white font-medium text-sm leading-tight">{data.name || "—"}</p>
+              <p className="text-white/80 text-xs">{data.designation || "—"}</p>
+            </div>
           </div>
-          {phoneError && (
-            <p className="text-xs text-red-500 mt-1">{phoneError}</p>
-          )}
+
+          {/* Employment meta grid */}
+          <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-4">
+            <MetaField label="Employee Code" value={data.employeeCode} editing={isEditing} onChange={(v) => update("employeeCode", v)} />
+            <MetaField label="Department" value={data.department} editing={isEditing} onChange={(v) => update("department", v)} />
+            <MetaField label="Employment Type" value={data.employmentType} editing={isEditing} onChange={(v) => update("employmentType", v)} />
+
+            <MetaField label="Work Mode" value={data.workMode} editing={isEditing} onChange={(v) => update("workMode", v)} />
+            <MetaField label="Reporting Manager" value={data.reportingManager} editing={isEditing} onChange={(v) => update("reportingManager", v)} />
+            <MetaField label="Joining Date" value={data.joiningDate} editing={isEditing} onChange={(v) => update("joiningDate", v)} />
+
+            <MetaField label="Work Location" value={data.workLocation} editing={isEditing} onChange={(v) => update("workLocation", v)} />
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Status</p>
+              <p className={`text-sm font-semibold ${data.isActive ? "text-emerald-600" : "text-gray-400"}`}>
+                {data.isActive ? "Active" : "Inactive"}
+              </p>
+            </div>
+          </div>
+
+          {/* Edit toggle */}
+          <div className="flex-shrink-0">
+            {!isEditing ? (
+              <button
+                onClick={handleEditClick}
+                className="flex items-center gap-2 bg-orange-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-orange-600 transition"
+              >
+                <Pencil size={14} /> Edit Profile
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancel}
+                  disabled={saving}
+                  className="flex items-center gap-2 border border-gray-300 text-gray-700 text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+                >
+                  <X size={14} /> Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-orange-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-orange-600 transition disabled:opacity-50"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  Save
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-
-        <Field label="Designation"  name="designation" value={form.designation} onChange={handleChange} />
-        <Field label="Department"   name="department"  value={form.department}  onChange={handleChange} />
-        <Field label="Date of Birth" name="dob"        value={form.dob}         onChange={handleChange} type="date" />
-        <SelectField
-          label="Gender"
-          name="gender"
-          value={form.gender}
-          onChange={handleChange}
-          options={["Male", "Female", "Other"]}
-        />
-      </Section>
-
-      {/* ADDRESS */}
-      <Section title="Address Information">
-        <Field label="Address"     name="address"    value={form.address}    onChange={handleChange} />
-        <Field label="Country"     name="country"    value={form.country}    onChange={handleChange} />
-        <Field label="State"       name="state"      value={form.state}      onChange={handleChange} />
-        <Field label="City"        name="city"       value={form.city}       onChange={handleChange} />
-        <Field label="Postal Code" name="postalCode" value={form.postalCode} onChange={handlePostalCodeChange} />
-      </Section>
-
-      {/* ACTIONS */}
-      <div className="flex justify-end gap-3 border-t pt-6">
-        <button
-          onClick={handleCancel}
-          className="px-5 py-2 rounded-lg border hover:bg-gray-100 transition"
-        >
-          Cancel
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="px-6 py-2 rounded-lg bg-orange-500 text-white hover:bg-orange-600 disabled:bg-orange-300 transition font-medium"
-        >
-          {saving ? "Saving..." : "Save Changes"}
-        </button>
       </div>
 
-    </div>
-  );
-}
-
-function Section({ title, children }: any) {
-  return (
-    <div>
-      <h3 className="font-semibold text-gray-700 mb-4 pb-2 border-b">{title}</h3>
-      <div className="grid md:grid-cols-2 gap-4">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, ...props }: any) {
-  return (
-    <div>
-      <label className="text-sm text-gray-500 font-medium">{label}</label>
-      <input
-        {...props}
-        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none disabled:bg-gray-50 disabled:text-gray-400"
-      />
-    </div>
-  );
-}
-
-function SelectField({ label, options, ...props }: any) {
-  return (
-    <div>
-      <label className="text-sm text-gray-500 font-medium">{label}</label>
-      <select
-        {...props}
-        className="mt-1 w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+      {/* ===================== PERSONAL INFORMATION ===================== */}
+      <SectionCard
+        title="Personal Information"
+        subtitle="Your personal details and contact information"
+        editing={isEditing}
       >
-        <option value="">Select</option>
-        {options.map((o: string) => <option key={o}>{o}</option>)}
-      </select>
+        <FieldGrid>
+          <Field label="Full Name" value={data.name} editing={isEditing}
+                 onChange={(v) => update("name", v)} />
+          <Field label="Preferred Name" value={data.preferredName} editing={isEditing}
+                 onChange={(v) => update("preferredName", v)} />
+          <Field label="Date of Birth" value={data.dob} editing={isEditing} type="date"
+                 onChange={(v) => update("dob", v)} />
+
+          <SelectField label="Gender" value={data.gender} editing={isEditing}
+                 options={["male", "female", "other"]}
+                 onChange={(v) => update("gender", v)} />
+          <Field label="Blood Group" value={data.bloodGroup} editing={isEditing}
+                 onChange={(v) => update("bloodGroup", v)} />
+          <Field label="Mobile Number" value={data.phone} editing={isEditing}
+                 onChange={(v) => update("phone", v)} />
+
+          <Field label="Personal Email" value={data.email} editing={false}
+                 onChange={() => {}} />
+          <Field label="Current Address" value={data.address} editing={isEditing}
+                 onChange={(v) => update("address", v)} className="sm:col-span-2" />
+          <SelectField label="Marital Status" value={data.maritalStatus} editing={isEditing}
+                 options={["Single", "Married", "Other"]}
+                 onChange={(v) => update("maritalStatus", v)} />
+
+          <Field label="Nationality" value={data.nationality} editing={isEditing}
+                 onChange={(v) => update("nationality", v)} />
+          <Field label="Languages Known" value={data.languagesKnown} editing={isEditing}
+                 onChange={(v) => update("languagesKnown", v)} />
+        </FieldGrid>
+      </SectionCard>
+
+      {/* ===================== EMERGENCY CONTACT ===================== */}
+      <SectionCard title="Emergency Contact" editing={isEditing}>
+        <FieldGrid>
+          <Field label="Contact Name" value={data.emergencyContactName} editing={isEditing}
+                 onChange={(v) => update("emergencyContactName", v)} />
+          <Field label="Relationship" value={data.emergencyRelationship} editing={isEditing}
+                 onChange={(v) => update("emergencyRelationship", v)} />
+          <Field label="Phone Number" value={data.emergencyContact} editing={isEditing}
+                 onChange={(v) => update("emergencyContact", v)} />
+        </FieldGrid>
+      </SectionCard>
+
+      {/* ===================== BANK DETAILS ===================== */}
+      <SectionCard title="Bank Details" editing={isEditing}>
+        <FieldGrid>
+          <Field label="Bank Name" value={data.bankName} editing={isEditing}
+                 onChange={(v) => update("bankName", v)} />
+          <Field
+            label="Account Number"
+            value={
+              isEditing
+                ? data.accountNumber
+                : data.accountNumber
+                  ? "•".repeat(Math.max(0, data.accountNumber.length - 4)) + data.accountNumber.slice(-4)
+                  : ""
+            }
+            editing={isEditing}
+            onChange={(v) => update("accountNumber", v)}
+          />
+          <Field label="IFSC Code" value={data.ifscCode} editing={isEditing}
+                 onChange={(v) => update("ifscCode", v)} />
+          <Field label="Account Type" value={data.accountType} editing={isEditing}
+                 onChange={(v) => update("accountType", v)} />
+        </FieldGrid>
+      </SectionCard>
+
+      {/* ===================== TAX INFORMATION ===================== */}
+      <SectionCard title="Tax Information" editing={isEditing}>
+        <FieldGrid>
+          <Field label="PAN Number" value={data.panNumber} editing={isEditing}
+                 onChange={(v) => update("panNumber", v)} />
+          <Field label="UAN Number" value={data.uanNumber} editing={isEditing}
+                 onChange={(v) => update("uanNumber", v)} />
+          <Field label="PF Number" value={data.pfNumber} editing={isEditing}
+                 onChange={(v) => update("pfNumber", v)} />
+          <SelectField label="Tax Regime" value={data.taxRegime} editing={isEditing}
+                 options={["New Regime", "Old Regime"]}
+                 onChange={(v) => update("taxRegime", v)} />
+        </FieldGrid>
+
+        <div className="mt-4 flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg px-4 py-3">
+          <Info size={16} className="mt-0.5 flex-shrink-0" />
+          All financial data is encrypted and secure
+        </div>
+      </SectionCard>
+
+      {/* ===================== DOCUMENT CENTER ===================== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <h2 className="text-base font-semibold text-gray-900">Document Center</h2>
+        <p className="text-sm text-gray-500 mt-0.5 mb-5">Manage and upload your employment documents</p>
+
+        <input ref={docInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleDocUpload} className="hidden" />
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <DocColumn
+            title="Employee Documents" color="blue" category="employee"
+            documents={documents.filter((d) => d.category === "employee")}
+            uploading={uploadingCat === "employee"}
+            onAdd={() => openDocPicker("employee")}
+            onPreview={handleDocPreview}
+            onDelete={handleDocDelete}
+          />
+          <DocColumn
+            title="Identity Documents" color="pink" category="identity"
+            documents={documents.filter((d) => d.category === "identity")}
+            uploading={uploadingCat === "identity"}
+            onAdd={() => openDocPicker("identity")}
+            onPreview={handleDocPreview}
+            onDelete={handleDocDelete}
+          />
+          <DocColumn
+            title="Tax & Finance" color="amber" category="tax"
+            documents={documents.filter((d) => d.category === "tax")}
+            uploading={uploadingCat === "tax"}
+            onAdd={() => openDocPicker("tax")}
+            onPreview={handleDocPreview}
+            onDelete={handleDocDelete}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+const colorMap: Record<string, string> = {
+  blue:  "bg-blue-50",
+  pink:  "bg-pink-50",
+  amber: "bg-amber-50",
+};
+
+function DocColumn({
+  title, color, documents, uploading, onAdd, onPreview, onDelete,
+}: {
+  title: string; color: string; category: string; documents: DocumentItem[]; uploading: boolean;
+  onAdd: () => void; onPreview: (d: DocumentItem) => void; onDelete: (id: string) => void;
+}) {
+  return (
+    <div className={`${colorMap[color]} rounded-xl p-4 space-y-3`}>
+      <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+
+      {documents.map((doc) => (
+        <div key={doc._id} className="bg-white rounded-lg p-3 flex flex-col gap-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <FileText size={16} className="text-gray-400 mt-0.5 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                <p className="text-xs text-gray-400">
+                  {new Date(doc.uploadedAt).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => onDelete(doc._id)} className="text-gray-300 hover:text-red-500 flex-shrink-0">
+              <Trash2 size={14} />
+            </button>
+          </div>
+          <button
+            onClick={() => onPreview(doc)}
+            className="text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg py-1.5 transition"
+          >
+            Preview
+          </button>
+        </div>
+      ))}
+
+      <button
+        onClick={onAdd}
+        disabled={uploading}
+        className="w-full flex items-center justify-center gap-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 border border-dashed border-gray-300 rounded-lg py-2.5 transition disabled:opacity-50"
+      >
+        {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        Add another document
+      </button>
+    </div>
+  );
+}
+/* ============================================================
+   SUB-COMPONENTS
+   ============================================================ */
+
+function MetaField({
+  label, value, editing, onChange,
+}: {
+  label: string; value: string; editing: boolean; onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      {editing ? (
+        <input
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full text-sm font-semibold text-gray-900 border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+        />
+      ) : (
+        <p className="text-sm font-semibold text-gray-900">{value || "—"}</p>
+      )}
+    </div>
+  );
+}
+
+function SectionCard({
+  title, subtitle, editing, children,
+}: {
+  title: string; subtitle?: string; editing: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+          {subtitle && <p className="text-sm text-gray-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {editing && (
+          <span className="text-xs font-medium text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
+            Editing
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function FieldGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-5">{children}</div>;
+}
+
+function Field({
+  label, value, editing, onChange, type = "text", className = "",
+}: {
+  label: string; value: string; editing: boolean;
+  onChange: (v: string) => void; type?: string; className?: string;
+}) {
+  return (
+    <div className={className}>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      {editing ? (
+        <input
+          type={type}
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+        />
+      ) : (
+        <p className="text-sm font-semibold text-gray-900">{value || "—"}</p>
+      )}
+    </div>
+  );
+}
+
+function SelectField({
+  label, value, editing, options, onChange,
+}: {
+  label: string; value: string; editing: boolean;
+  options: string[]; onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      {editing ? (
+        <select
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full text-sm font-medium text-gray-900 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+        >
+          <option value="">Select…</option>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      ) : (
+        <p className="text-sm font-semibold text-gray-900 capitalize">{value || "—"}</p>
+      )}
     </div>
   );
 }
