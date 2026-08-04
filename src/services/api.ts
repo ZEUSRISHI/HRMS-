@@ -157,11 +157,38 @@ export const profileApi = {
   get: async () => apiFetch("/profile"),
 
   update: async (updates: {
-    name?:        string;
-    phone?:       string;
-    countryCode?: string;   // ✅ added
-    department?:  string;
-    avatar?:      string;
+    name?:                  string;
+    phone?:                 string;
+    countryCode?:           string;
+    department?:            string;
+    avatar?:                string;
+    preferredName?:         string;
+    dob?:                   string;
+    gender?:                string;
+    bloodGroup?:            string;
+    maritalStatus?:         string;
+    nationality?:           string;
+    languagesKnown?:        string;
+    address?:               string;
+    designation?:           string;
+    employeeCode?:          string;
+    employmentType?:        string;
+    workMode?:              string;
+    reportingManager?:      string;
+    workLocation?:          string;
+    joiningDate?:           string;
+    emergencyContact?:      string;
+    emergencyCountryCode?:  string;
+    emergencyContactName?:  string;
+    emergencyRelationship?: string;
+    bankName?:              string;
+    accountNumber?:         string;
+    ifscCode?:              string;
+    accountType?:           string;
+    panNumber?:             string;
+    uanNumber?:             string;
+    pfNumber?:              string;
+    taxRegime?:             string;
   }) =>
     apiFetch("/profile", {
       method: "PUT",
@@ -169,6 +196,12 @@ export const profileApi = {
     }),
 
   deleteAccount: async () => apiFetch("/profile", { method: "DELETE" }),
+
+  uploadDocument: (data: { name: string; category: "employee" | "identity" | "tax"; fileData: string; fileType?: string }) =>
+    apiFetch("/profile/documents", { method: "POST", body: JSON.stringify(data) }),
+
+  deleteDocument: (docId: string) =>
+    apiFetch(`/profile/documents/${docId}`, { method: "DELETE" }),
 };
 
 /* ============================================================
