@@ -496,13 +496,38 @@ export function AttendanceModule() {
   const getCurrentPosition = (): Promise<{ lat: number; lng: number } | null> => {
   return new Promise((resolve) => {
     if (!navigator.geolocation) {
+      console.warn("Geolocation not supported by this browser");
+      showToast("⚠️ Your browser doesn't support location. Attendance will be marked without location.", "error");
       resolve(null);
       return;
     }
+
+    if (!window.isSecureContext) {
+      console.warn("Not a secure context (HTTPS required) — geolocation blocked");
+      showToast("⚠️ Location requires HTTPS. Marking attendance without location.", "error");
+      resolve(null);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      (pos) => {
+        console.log("📍 Location captured:", pos.coords.latitude, pos.coords.longitude, "accuracy:", pos.coords.accuracy);
+        resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      (err) => {
+        console.error("Geolocation error:", err.code, err.message);
+        let msg = "⚠️ Couldn't get your location.";
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = "⚠️ Location permission denied. Enable it in browser settings to record location.";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = "⚠️ Location unavailable right now.";
+        } else if (err.code === err.TIMEOUT) {
+          msg = "⚠️ Location request timed out.";
+        }
+        showToast(msg, "error");
+        resolve(null);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   });
 };
