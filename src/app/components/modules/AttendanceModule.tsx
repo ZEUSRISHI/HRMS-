@@ -431,6 +431,7 @@ export function AttendanceModule() {
 
   const [checkInTagline,    setCheckInTagline]    = useState("");
   const [taglineDialogOpen, setTaglineDialogOpen] = useState(false);
+  const [locationRetryLoading, setLocationRetryLoading] = useState<"checkin" | "checkout" | null>(null);
 
   const [manualAttendanceOpen, setManualAttendanceOpen] = useState(false);
   const [manualAttendance,     setManualAttendance]     = useState(initManualAttendance);
@@ -729,6 +730,28 @@ export function AttendanceModule() {
     setCheckOutLoading(false);
   }
 };
+
+  const handleAddMissingLocation = async (type: "checkin" | "checkout") => {
+    try {
+      setLocationRetryLoading(type);
+      const coords = await getCurrentPosition();
+      if (!coords) {
+        showToast("⚠️ Still couldn't get your location — check the site's location permission and try again.", "error");
+        return;
+      }
+      const res = await attendanceApi.updateLocation({ lat: coords.lat, lng: coords.lng, type });
+      if (res.record) {
+        setTodayRecord(res.record);
+        showToast("📍 Location added successfully");
+      } else {
+        showToast(res.message || "Could not resolve that location", "error");
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to add location", "error");
+    } finally {
+      setLocationRetryLoading(null);
+    }
+  };
 
   /* ============================================================
      ADMIN DAILY ENTRY CRUD
@@ -1037,6 +1060,18 @@ export function AttendanceModule() {
     </div>
   </div>
 )}
+{checkedIn && !todayRecord?.checkInLocation && (
+  <button
+    onClick={() => handleAddMissingLocation("checkin")}
+    disabled={locationRetryLoading === "checkin"}
+    className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl text-left hover:bg-amber-100 transition-colors w-fit"
+  >
+    <span className="text-amber-500 text-sm">📍</span>
+    <span className="text-xs sm:text-sm text-amber-700 font-medium">
+      {locationRetryLoading === "checkin" ? "Capturing location…" : "Check-in location missing — tap to add"}
+    </span>
+  </button>
+)}
 
 {checkedOut && todayRecord?.checkOutLocation && (
   <div className="flex items-start gap-2 bg-red-50 border border-red-200 px-3 py-2 rounded-xl">
@@ -1046,6 +1081,18 @@ export function AttendanceModule() {
       <p className="text-xs sm:text-sm text-red-700">{todayRecord.checkOutLocation}</p>
     </div>
   </div>
+)}
+{checkedOut && !todayRecord?.checkOutLocation && (
+  <button
+    onClick={() => handleAddMissingLocation("checkout")}
+    disabled={locationRetryLoading === "checkout"}
+    className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-2 rounded-xl text-left hover:bg-amber-100 transition-colors w-fit"
+  >
+    <span className="text-amber-500 text-sm">📍</span>
+    <span className="text-xs sm:text-sm text-amber-700 font-medium">
+      {locationRetryLoading === "checkout" ? "Capturing location…" : "Check-out location missing — tap to add"}
+    </span>
+  </button>
 )}
 
               <div className="flex gap-2 sm:gap-3 flex-wrap items-center">
