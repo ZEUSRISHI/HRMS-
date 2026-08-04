@@ -510,25 +510,45 @@ export function AttendanceModule() {
       return;
     }
 
+    const tryLowAccuracy = () => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          console.log("📍 Location captured (low-accuracy fallback):", pos.coords.latitude, pos.coords.longitude, "accuracy:", pos.coords.accuracy);
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => {
+          console.error("Geolocation error (low-accuracy):", err.code, err.message);
+          let msg = "⚠️ Couldn't get your location.";
+          if (err.code === err.PERMISSION_DENIED) {
+            msg = "⚠️ Location permission denied. Enable it in browser settings to record location.";
+          } else if (err.code === err.POSITION_UNAVAILABLE) {
+            msg = "⚠️ Location unavailable right now. Try moving near a window or enabling device GPS.";
+          } else if (err.code === err.TIMEOUT) {
+            msg = "⚠️ Location request timed out. Try again in a moment.";
+          }
+          showToast(msg, "error");
+          resolve(null);
+        },
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 }
+      );
+    };
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         console.log("📍 Location captured:", pos.coords.latitude, pos.coords.longitude, "accuracy:", pos.coords.accuracy);
         resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
-        console.error("Geolocation error:", err.code, err.message);
-        let msg = "⚠️ Couldn't get your location.";
+        console.warn("High-accuracy geolocation failed, retrying with network-based location:", err.code, err.message);
         if (err.code === err.PERMISSION_DENIED) {
-          msg = "⚠️ Location permission denied. Enable it in browser settings to record location.";
-        } else if (err.code === err.POSITION_UNAVAILABLE) {
-          msg = "⚠️ Location unavailable right now.";
-        } else if (err.code === err.TIMEOUT) {
-          msg = "⚠️ Location request timed out.";
+          showToast("⚠️ Location permission denied. Enable it in browser settings to record location.", "error");
+          resolve(null);
+          return;
         }
-        showToast(msg, "error");
-        resolve(null);
+        // POSITION_UNAVAILABLE or TIMEOUT — retry with looser accuracy requirements
+        tryLowAccuracy();
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
   });
 };
