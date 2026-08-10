@@ -254,7 +254,7 @@ function AppContent() {
   const renderModule = () => {
     switch (activeModule) {
       case "dashboard":
-        return <RoleBasedDashboard />;
+        return <RoleBasedDashboard onNavigate={setActiveModule} />;
 
       case "attendance":
         return <AttendanceModule />;
@@ -324,7 +324,7 @@ function AppContent() {
         return <AccountPage />;
 
       default:
-        return <RoleBasedDashboard />;
+        return <RoleBasedDashboard onNavigate={setActiveModule} />;
     }
   };
 
