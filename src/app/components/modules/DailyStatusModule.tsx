@@ -15,6 +15,7 @@ import { FileText, MessageCircle, Plus, Download } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { dailyStatusApi } from "@/services/api";
 import { format } from "date-fns";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 export function DailyStatusModule() {
   const { currentUser } = useAuth();
@@ -127,11 +128,12 @@ export function DailyStatusModule() {
   }
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6 max-w-6xl mx-auto px-3 sm:px-6">
 
       {/* TOAST */}
       {toast && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm">
+        <div className={`fixed top-5 right-5 ${ACCENT_DARK} text-white px-4 py-2 rounded-xl shadow-lg z-50 text-sm`}>
           {toast}
         </div>
       )}
@@ -147,7 +149,7 @@ export function DailyStatusModule() {
 
         <div className="flex gap-2 flex-wrap">
           {isAdmin && (
-            <Button variant="outline" onClick={downloadReport} className="gap-2">
+            <Button variant="outline" onClick={downloadReport} className={`gap-2 rounded-full border-[#EDE7DA]`}>
               <Download className="h-4 w-4" /> Download Report
             </Button>
           )}
@@ -155,7 +157,7 @@ export function DailyStatusModule() {
           {!todayStatus && (
             <Dialog>
               <DialogTrigger asChild>
-                <Button className="gap-2">
+                <Button className={`gap-2 rounded-full ${ACCENT_DARK} hover:bg-black text-white`}>
                   <Plus className="h-4 w-4" /> Submit Status
                 </Button>
               </DialogTrigger>
@@ -208,7 +210,7 @@ export function DailyStatusModule() {
                     />
                   </div>
 
-                  <Button className="w-full" onClick={submitStatus}>
+                  <Button className={`w-full rounded-full ${ACCENT_DARK} hover:bg-black text-white`} onClick={submitStatus}>
                     Submit Status
                   </Button>
                 </div>
@@ -220,7 +222,7 @@ export function DailyStatusModule() {
 
       {/* TODAY STATUS */}
       {todayStatus && (
-        <Card className="border-orange-200 bg-orange-50">
+        <Card className="border-[#EEB877] bg-[#FBE3C4]">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-5 w-5 text-orange-500" />
@@ -241,7 +243,7 @@ export function DailyStatusModule() {
       )}
 
       {/* STATUS LIST */}
-      <Card>
+      <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
         <CardHeader>
           <CardTitle>Status History</CardTitle>
         </CardHeader>
@@ -253,7 +255,7 @@ export function DailyStatusModule() {
           )}
 
           {statuses.map((status) => (
-            <Card key={status._id} className="border">
+            <Card key={status._id} className={`rounded-[20px] border ${PANEL_BORDER}`}>
               <CardHeader className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 pb-2">
                 <div>
                   {canView && status.userId?.name && (
@@ -325,6 +327,7 @@ export function DailyStatusModule() {
           ))}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
