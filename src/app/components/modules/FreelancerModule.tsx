@@ -5,6 +5,7 @@ import {
   User, Phone, Mail, Briefcase, CalendarDays, AlertTriangle,
   Plus, Pencil, Trash2, Download, Bell, X, ChevronDown, ChevronUp,
 } from "lucide-react";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ─── COUNTRY CODE OPTIONS ─── */
 const COUNTRY_CODES: { code: string; name: string; dialCode: string; phoneLength: number }[] = [
@@ -180,23 +181,23 @@ export default function FreelancerModule() {
 
   const stats = [
     { label: "Total",          value: freelancers.length,                                          color: "#2563eb" },
-    { label: "Active",         value: freelancers.filter((f) => f.status === "active").length,     color: "#16a34a" },
+    { label: "Active",         value: freelancers.filter((f) => f.status === "active").length,     color: "#E39A56" },
     { label: "Expiring (30d)", value: expiring.length,                                             color: "#d97706" },
     { label: "Expired",        value: freelancers.filter((f) => f.status === "expired").length,    color: "#dc2626" },
   ];
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-8 h-8 border-4 border-[#E39A56] border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div className={`p-4 md:p-6 space-y-6 ${PAGE_BG} min-h-screen`}>
 
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium ${toast.ok ? "bg-gray-900" : "bg-red-600"}`}>
+        <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium ${toast.ok ? ACCENT_DARK : "bg-red-600"}`}>
           <span>{toast.ok ? "✅" : "❌"}</span>
           <span>{toast.msg}</span>
           <button onClick={() => setToast(null)}><X size={14} /></button>
@@ -267,7 +268,7 @@ export default function FreelancerModule() {
                 <Download size={15} /> Export CSV
               </button>
               <button onClick={() => { setEditId(null); setForm(emptyForm); setShowForm(!showForm); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors">
+                className={`flex items-center gap-2 px-4 py-2.5 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white rounded-full text-sm font-semibold shadow-sm transition-colors`}>
                 <Plus size={15} /> Add Freelancer
               </button>
             </>
@@ -318,7 +319,7 @@ export default function FreelancerModule() {
                 <div key={key}>
                   <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
                   <input
-                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                     value={(form as any)[key]}
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                   />
@@ -330,7 +331,7 @@ export default function FreelancerModule() {
                 <label className="block text-xs font-medium text-gray-600 mb-1">Phone Number</label>
                 <div className="flex gap-2">
                   <select
-                    className="border border-gray-200 rounded-xl px-2 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none w-[110px]"
+                    className="border border-gray-200 rounded-xl px-2 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none w-[110px]"
                     value={form.countryCode}
                     onChange={(e) => setForm({ ...form, countryCode: e.target.value, phone: "" })}
                   >
@@ -342,7 +343,7 @@ export default function FreelancerModule() {
                     type="text"
                     inputMode="numeric"
                     placeholder={`${getPhoneLength(form.countryCode)}-digit number`}
-                    className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                    className="flex-1 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                     value={form.phone}
                     onChange={(e) => {
                       const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, getPhoneLength(form.countryCode));
@@ -364,7 +365,7 @@ export default function FreelancerModule() {
                   type="text"
                   inputMode="decimal"
                   placeholder="e.g. 3000"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                   value={form.rate}
                   onChange={(e) => {
                     const numeric = e.target.value.replace(/[^0-9.]/g, "");
@@ -376,7 +377,7 @@ export default function FreelancerModule() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Contract Start</label>
                 <input type="date"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                   value={form.contractStart}
                   onChange={(e) => setForm({ ...form, contractStart: e.target.value })}
                 />
@@ -387,7 +388,7 @@ export default function FreelancerModule() {
                   <span className="ml-1 text-amber-500 font-normal">(triggers expiry alerts)</span>
                 </label>
                 <input type="date"
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                   value={form.contractEnd}
                   onChange={(e) => setForm({ ...form, contractEnd: e.target.value })}
                 />
@@ -395,7 +396,7 @@ export default function FreelancerModule() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
                 <select
-                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                  className="w-full border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none"
                   value={form.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value as "active" | "expired" })}>
                   <option value="active">Active</option>
@@ -406,7 +407,7 @@ export default function FreelancerModule() {
 
             <div className="flex gap-3 pt-2">
               <button onClick={handleSave} disabled={saving}
-                className="px-6 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors">
+                className={`px-6 py-2.5 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} disabled:opacity-60 text-white rounded-full text-sm font-semibold transition-colors`}>
                 {saving ? "Saving…" : editId ? "Update Freelancer" : "Add Freelancer"}
               </button>
               <button onClick={() => { setShowForm(false); setEditId(null); setForm(emptyForm); }}
@@ -422,7 +423,7 @@ export default function FreelancerModule() {
       <div className="flex items-center gap-3">
         <input
           placeholder="Search by name, email, skill…"
-          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white"
+          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#E39A56] outline-none bg-white"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -444,7 +445,7 @@ export default function FreelancerModule() {
 
           return (
             <div key={f._id}
-              className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${badge && f.daysLeft !== undefined && f.daysLeft <= 7 ? "border-red-200" : ""}`}>
+              className={`bg-white rounded-[24px] border ${PANEL_BORDER} shadow-sm overflow-hidden ${badge && f.daysLeft !== undefined && f.daysLeft <= 7 ? "border-red-200" : ""}`}>
 
               <div className="flex items-start gap-4 p-5">
                 {/* Avatar */}
