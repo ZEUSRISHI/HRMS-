@@ -17,6 +17,7 @@ import {
 import {
   Download, PlusCircle, Calendar,
 } from "lucide-react";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK } from "../../../styles/moduleTheme";
 
 /* ============================================================
    TYPES
@@ -367,6 +368,7 @@ export function LeaveModule() {
      RENDER
      ============================================================ */
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto px-2 sm:px-3 py-3 sm:py-4">
 
       {/* TOAST */}
@@ -382,7 +384,7 @@ export function LeaveModule() {
           LEAVE REPORT CARD
           ══════════════════════════════════════════════════════ */}
       {(isAdmin || isHR || isManager) && (
-        <Card>
+        <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
           <CardHeader className="px-3 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-base"><Download size={17} /> Leave Report</CardTitle>
@@ -448,7 +450,7 @@ export function LeaveModule() {
                         <label className="text-xs font-semibold text-gray-700 mb-1 block">Reason <span className="text-red-500">*</span></label>
                         <input className="border p-2 rounded w-full text-sm" placeholder="Brief reason" value={manualLeave.reason} onChange={e => setML("reason", e.target.value)} />
                       </div>
-                      <Button onClick={submitManualLeave} className="w-full bg-slate-800 hover:bg-slate-900 text-white">Save Leave Entry</Button>
+                      <Button onClick={submitManualLeave} className="w-full {ACCENT_DARK} hover:bg-black text-white rounded-full">Save Leave Entry</Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -541,7 +543,7 @@ export function LeaveModule() {
         <div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-slate-700 text-white hover:bg-slate-800 w-fit text-sm">+ Request Leave</Button>
+              <Button className={`${ACCENT_DARK} text-white hover:bg-black rounded-full w-fit text-sm`}>+ Request Leave</Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto mx-3 sm:mx-auto">
               <DialogHeader><DialogTitle>Submit Leave Request</DialogTitle></DialogHeader>
@@ -606,7 +608,7 @@ export function LeaveModule() {
                     <input className="border p-2 rounded w-full text-sm" placeholder="+91 9XXXXXXXXX" value={form.emergencyContact} onChange={e => setF("emergencyContact", e.target.value)} />
                   </div>
                 )}
-                <Button onClick={submitLeave} className="w-full bg-slate-700 hover:bg-slate-800 text-white">Submit Leave Request</Button>
+                <Button onClick={submitLeave} className={`w-full ${ACCENT_DARK} hover:bg-black text-white rounded-full`}>Submit Leave Request</Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -616,7 +618,7 @@ export function LeaveModule() {
       {/* ══════════════════════════════════════════════════════
           LEAVE TABLE
           ══════════════════════════════════════════════════════ */}
-      <Card>
+      <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
         <CardHeader className="px-3 sm:px-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-sm sm:text-base">
@@ -686,7 +688,7 @@ export function LeaveModule() {
                       <TableCell>
                         {canActOnLeave(l) ? (
                           <div className="flex gap-1.5 sm:gap-2 flex-wrap">
-                            <Button size="sm" className="bg-slate-700 hover:bg-slate-800 text-white text-xs h-7 sm:h-8 px-2 sm:px-3" onClick={() => approveLeave(l._id)}>Approve</Button>
+                            <Button size="sm" className={`${ACCENT_DARK} hover:bg-black text-white rounded-full text-xs h-7 sm:h-8 px-2 sm:px-3`} onClick={() => approveLeave(l._id)}>Approve</Button>
                             <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white text-xs h-7 sm:h-8 px-2 sm:px-3" onClick={() => rejectLeave(l._id)}>Reject</Button>
                           </div>
                         ) : (
@@ -701,6 +703,7 @@ export function LeaveModule() {
           )}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
