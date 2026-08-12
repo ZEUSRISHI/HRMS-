@@ -14,6 +14,7 @@ import {
   format, subDays, startOfWeek, endOfWeek, startOfMonth,
   endOfMonth, parseISO, eachDayOfInterval,
 } from "date-fns";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ================================================================
    TYPES
@@ -137,7 +138,7 @@ function StatCard({ label, value, sub, icon: Icon, accent = "#475569" }: {
   icon: any; accent?: string;
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-all duration-200 group">
+    <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-4 hover:shadow-md transition-all duration-200 group`}>
       <div className="flex items-start justify-between mb-3">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
@@ -301,7 +302,7 @@ function LogTimeDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="flex-1 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className={`flex-1 px-4 py-2.5 ${ACCENT_DARK} hover:bg-black text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-2`}
           >
             {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving…</> : "Save Entry"}
           </button>
@@ -475,6 +476,7 @@ export function TimeTracking() {
   const pendingAll = sheets.filter(s => s.status === "pending");
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6 max-w-7xl mx-auto px-3 sm:px-4 pb-8">
 
       {toast && (
@@ -491,8 +493,8 @@ export function TimeTracking() {
       {/* ── HEADER ── */}
       <div className="flex items-start justify-between flex-wrap gap-4 pt-1">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+          <h1 className="text-2xl font-bold text-[#14110F] flex items-center gap-2.5">
+            <div className={`w-9 h-9 ${ACCENT_ORANGE} rounded-xl flex items-center justify-center`}>
               <Clock size={18} className="text-white" />
             </div>
             Time Tracking
@@ -511,7 +513,7 @@ export function TimeTracking() {
           <button
             onClick={() => load(true)}
             disabled={refreshing}
-            className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-500 transition-colors"
+            className={`p-2.5 rounded-xl border ${PANEL_BORDER} hover:bg-[#F7F3EA] text-[#5b5648] transition-colors`}
             title="Refresh"
           >
             <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
@@ -519,7 +521,7 @@ export function TimeTracking() {
           {canViewAll && (
             <button
               onClick={downloadCSV}
-              className="flex items-center gap-2 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className={`flex items-center gap-2 px-4 py-2.5 border ${PANEL_BORDER} rounded-xl text-sm font-medium text-[#5b5648] hover:bg-[#F7F3EA] transition-colors`}
             >
               <Download size={15} /> Export CSV
             </button>
@@ -527,7 +529,7 @@ export function TimeTracking() {
           {!canViewAll && (
             <button
               onClick={() => setLogOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
+              className={`flex items-center gap-2 px-4 py-2.5 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white text-sm font-medium rounded-xl transition-colors shadow-sm`}
             >
               <Plus size={15} /> Log Time
             </button>
@@ -536,7 +538,7 @@ export function TimeTracking() {
       </div>
 
       {/* ── REAL-TIME CLOCK CARD ── */}
-      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-5 text-white shadow-lg">
+      <div className={`${ACCENT_DARK} rounded-2xl p-5 text-white shadow-lg`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-4">
             <div className="flex flex-col">
@@ -591,8 +593,8 @@ export function TimeTracking() {
             onClick={() => setFilterRange(r)}
             className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all ${
               filterRange === r
-                ? "bg-gray-900 text-white border-gray-900 shadow-sm"
-                : "bg-white text-gray-500 border-gray-200 hover:border-gray-400 hover:text-gray-700"
+                ? "bg-[#14110F] text-white border-[#14110F] shadow-sm"
+                : `bg-white text-[#5b5648] ${PANEL_BORDER} hover:border-[#14110F] hover:text-[#14110F]`
             }`}
           >
             {r === "today" ? "Today" : r === "week" ? "This Week" : r === "month" ? "This Month" : "All Time"}
@@ -602,8 +604,8 @@ export function TimeTracking() {
           onClick={() => setShowFilters(f => !f)}
           className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold border transition-all ml-auto ${
             showFilters || filterCat || filterStatus
-              ? "bg-blue-600 text-white border-blue-600"
-              : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
+              ? `${ACCENT_ORANGE} text-white border-transparent`
+              : `bg-white text-[#5b5648] ${PANEL_BORDER} hover:border-[#14110F]`
           }`}
         >
           <Filter size={12} />
@@ -615,7 +617,7 @@ export function TimeTracking() {
 
       {/* ── EXTRA FILTERS ── */}
       {showFilters && (
-        <div className="flex flex-wrap gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+        <div className={`flex flex-wrap gap-4 p-4 bg-[#F7F3EA] rounded-2xl border ${PANEL_BORDER}`}>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</label>
             <select
@@ -687,7 +689,7 @@ export function TimeTracking() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* 7-day trend */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-gray-800">Last 7 Days</h3>
                 <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-lg">Hours logged</span>
@@ -713,7 +715,7 @@ export function TimeTracking() {
             </div>
 
             {/* Category breakdown */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-gray-800">Category Breakdown</h3>
               </div>
@@ -756,7 +758,7 @@ export function TimeTracking() {
 
           {/* Employee hours bar */}
           {canViewAll && employeeHours.length > 0 && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
               <h3 className="text-sm font-bold text-gray-800 mb-4">Hours by Employee</h3>
               <ResponsiveContainer width="100%" height={230}>
                 <BarChart data={employeeHours} layout="vertical">
@@ -775,7 +777,7 @@ export function TimeTracking() {
           )}
 
           {/* 28-day heatmap */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
             <h3 className="text-sm font-bold text-gray-800 mb-4">Activity — Last 28 Days</h3>
             <div className="flex flex-wrap gap-1.5">
               {weekHeatmap.map(d => {
@@ -806,7 +808,7 @@ export function TimeTracking() {
 
           {/* Pending approvals */}
           {canApprove && (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
                   Pending Approvals
@@ -840,7 +842,7 @@ export function TimeTracking() {
                     <div className="flex gap-2 ml-3 flex-shrink-0">
                       <button
                         onClick={() => handleApprove(s._id)}
-                        className="px-3.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold rounded-xl transition-colors"
+                        className={`px-3.5 py-1.5 ${ACCENT_DARK} hover:bg-black text-white text-xs font-semibold rounded-xl transition-colors`}
                       >
                         Approve
                       </button>
@@ -869,7 +871,7 @@ export function TimeTracking() {
           ENTRIES TAB
       ══════════════════════════════════════════ */}
       {activeTab === "entries" && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm overflow-hidden`}>
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-300">
               <Clock size={40} className="mb-3" />
@@ -935,7 +937,7 @@ export function TimeTracking() {
                               <div className="flex gap-1.5">
                                 <button
                                   onClick={() => handleApprove(s._id)}
-                                  className="px-3 py-1.5 bg-gray-900 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 transition-colors"
+                                  className={`px-3 py-1.5 ${ACCENT_DARK} text-white text-xs font-semibold rounded-lg hover:bg-black transition-colors`}
                                 >
                                   Approve
                                 </button>
@@ -976,7 +978,7 @@ export function TimeTracking() {
       ══════════════════════════════════════════ */}
       {activeTab === "charts" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+         <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
             <h3 className="text-sm font-bold text-gray-800 mb-4">Daily Hours — Last 7 Days</h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={last7} barSize={32}>
@@ -994,7 +996,7 @@ export function TimeTracking() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
               <h3 className="text-sm font-bold text-gray-800 mb-4">Hours by Category</h3>
               <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={catBreak} barSize={28}>
@@ -1016,7 +1018,7 @@ export function TimeTracking() {
             </div>
 
             {canViewAll && employeeHours.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className={`bg-white rounded-2xl border ${PANEL_BORDER} shadow-sm p-5`}>
                 <h3 className="text-sm font-bold text-gray-800 mb-4">Top Contributors</h3>
                 <div className="space-y-3">
                   {employeeHours.slice(0, 6).map((e, i) => {
@@ -1043,6 +1045,7 @@ export function TimeTracking() {
           </div>
         </div>
       )}
+    </div>
     </div>
   );
 }
