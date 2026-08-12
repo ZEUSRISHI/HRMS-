@@ -23,6 +23,7 @@ import { Plus, Pencil, Trash, Download } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "../../contexts/AuthContext";
 import { calendarApi } from "@/services/api";
+import { PAGE_BG, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER, PANEL_BORDER, SOFT_BG } from "../../../styles/moduleTheme";
 
 type RoleType = "admin" | "manager" | "employee" | "hr" | "all";
 
@@ -170,20 +171,19 @@ export function CalendarModule() {
   /* ===== COLORS ===== */
   const bgColor = (type: string) => {
     const t = type.toLowerCase();
-    if (t.includes("meeting"))  return "bg-blue-50 border-blue-200";
-    if (t.includes("holiday"))  return "bg-red-50 border-red-200";
-    if (t.includes("training")) return "bg-yellow-50 border-yellow-200";
-    if (t.includes("event"))    return "bg-green-50 border-green-200";
-    return "bg-purple-50 border-purple-200";
+    if (t.includes("meeting"))  return "bg-[#DCE6FB] border-[#c7d9f7]";
+    if (t.includes("holiday"))  return "bg-[#FBE3C4] border-[#f3d4a5]";
+    if (t.includes("training")) return "bg-[#FBDCE0] border-[#f6c6cd]";
+    if (t.includes("event"))    return "bg-[#D9F0E2] border-[#bfe6cf]";
+    return "bg-[#F4DCEF] border-[#eac6e6]";
   };
-
-  const colorBar = (type: string) => {
+ const colorBar = (type: string) => {
     const t = type.toLowerCase();
-    if (t.includes("meeting"))  return "bg-blue-500";
-    if (t.includes("holiday"))  return "bg-red-500";
-    if (t.includes("training")) return "bg-yellow-500";
-    if (t.includes("event"))    return "bg-green-500";
-    return "bg-purple-500";
+    if (t.includes("meeting"))  return "bg-[#3A6EA5]";
+    if (t.includes("holiday"))  return "bg-[#E39A56]";
+    if (t.includes("training")) return "bg-[#EEB877]";
+    if (t.includes("event"))    return "bg-emerald-500";
+    return "bg-[#14110F]";
   };
 
   if (loading) {
@@ -195,6 +195,7 @@ export function CalendarModule() {
   }
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto">
 
       {/* MESSAGE */}
@@ -220,19 +221,23 @@ export function CalendarModule() {
         <div className="flex gap-2">
           {isAdmin && (
             <>
-              <Button variant="outline" onClick={downloadReport} className="gap-2">
+              <Button
+                variant="outline"
+                onClick={downloadReport}
+                className={`gap-2 rounded-full border-[#EDE7DA] ${SOFT_BG} hover:bg-[#F4DCEF] text-[#14110F]`}
+              >
                 <Download className="h-4 w-4" /> Download
               </Button>
 
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={resetForm} className="gap-2">
+                  <Button onClick={resetForm} className={`gap-2 rounded-full ${ACCENT_DARK} text-white hover:bg-black`}>
                     <Plus className="h-4 w-4" />
                     {isEdit ? "Edit Event" : "Create Event"}
                   </Button>
                 </DialogTrigger>
 
-                <DialogContent className="w-[95%] max-w-md rounded-xl p-5 max-h-[90vh] overflow-y-auto">
+                <DialogContent className="w-[95%] max-w-md rounded-[24px] border border-[#EDE7DA] p-5 max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>
                       {isEdit ? "Edit Event" : "Create Event"}
@@ -320,7 +325,7 @@ export function CalendarModule() {
                       />
                     </div>
 
-                    <Button className="w-full" onClick={handleSubmit}>
+                    <Button className={`w-full rounded-full ${ACCENT_DARK} text-white hover:bg-black`} onClick={handleSubmit}>
                       {isEdit ? "Update Event" : "Create Event"}
                     </Button>
                   </div>
@@ -332,7 +337,7 @@ export function CalendarModule() {
       </div>
 
       {/* EVENTS LIST */}
-      <Card>
+      <Card className="rounded-[28px] border border-[#EDE7DA]">
         <CardHeader>
           <CardTitle>Events</CardTitle>
         </CardHeader>
@@ -346,7 +351,7 @@ export function CalendarModule() {
           {sortedEvents.map((event) => (
             <Card
               key={event._id}
-              className={`rounded-lg border ${bgColor(event.type)}`}
+              className={`rounded-[20px] border ${bgColor(event.type)}`}
             >
               <CardContent className="flex gap-3 py-4 flex-col sm:flex-row">
                 <div className={`w-1 rounded ${colorBar(event.type)}`} />
@@ -399,6 +404,7 @@ export function CalendarModule() {
           ))}
         </CardContent>
       </Card>
+    </div>
     </div>
   );
 }
