@@ -19,6 +19,7 @@ import {
   AlertCircle, Search, ShieldCheck, ChevronLeft, ChevronRight,
   TrendingUp, Edit2, Trash2, Plus,
 } from "lucide-react";
+import { PAGE_BG, PANEL_BORDER, SOFT_BG, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ============================================================
    TYPES
@@ -999,6 +1000,7 @@ export function AttendanceModule() {
      RENDER
      ============================================================ */
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto px-2 sm:px-3 py-3 sm:py-4">
 
       {/* TOAST */}
@@ -1014,7 +1016,7 @@ export function AttendanceModule() {
           TODAY'S ATTENDANCE — CHECK IN / CHECK OUT (own)
           ══════════════════════════════════════════════════════ */}
       {canCheckInOut && (
-        <Card className="border-2 border-gray-100">
+        <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
           <CardHeader className="pb-3 px-3 sm:px-6">
             <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm sm:text-base">
               <div className="flex items-center gap-2">
@@ -1042,12 +1044,12 @@ export function AttendanceModule() {
           <CardContent className="px-3 sm:px-6">
             <div className="flex flex-col gap-4">
               <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
-                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${checkedIn ? "border-slate-400 bg-slate-50" : "border-dashed border-gray-300 bg-gray-50"}`}>
+                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${checkedIn ? "border-[#EEB877] bg-[#FBE3C4]" : "border-dashed border-gray-300 bg-[#FAF8F3]"}`}>
                   <CheckCircle2 size={20} className={checkedIn ? "text-slate-600" : "text-gray-300"} />
                   <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Check In</p>
                   <p className={`text-xs sm:text-sm font-bold mt-0.5 ${checkedIn ? "text-slate-700" : "text-gray-400"}`}>{todayRecord?.checkIn ?? "—"}</p>
                 </div>
-                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${checkedOut ? "border-slate-500 bg-slate-100" : "border-dashed border-gray-300 bg-gray-50"}`}>
+                <div className={`flex-shrink-0 flex flex-col items-center justify-center w-28 sm:w-36 h-20 sm:h-24 rounded-2xl border-2 transition-all ${checkedOut ? "border-[#3A6EA5] bg-[#DCE6FB]" : "border-dashed border-gray-300 bg-[#FAF8F3]"}`}>
                   <XCircle size={20} className={checkedOut ? "text-slate-600" : "text-gray-300"} />
                   <p className="text-[10px] sm:text-xs text-gray-500 mt-1">Check Out</p>
                   <p className={`text-xs sm:text-sm font-bold mt-0.5 ${checkedOut ? "text-slate-700" : "text-gray-400"}`}>{todayRecord?.checkOut ?? "—"}</p>
@@ -1118,7 +1120,7 @@ export function AttendanceModule() {
               <div className="flex gap-2 sm:gap-3 flex-wrap items-center">
                 {!checkedIn && (
                   <Button onClick={() => setTaglineDialogOpen(true)} disabled={checkInLoading}
-                    className="bg-slate-700 text-white hover:bg-slate-800 h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm">
+                    className={`${ACCENT_DARK} text-white hover:bg-black rounded-full h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm`}>
                     {checkInLoading
                       ? <span className="flex items-center gap-1.5"><RefreshCw size={13} className="animate-spin" /> Checking in…</span>
                       : <span className="flex items-center gap-1.5"><LogIn size={14} /> Check In</span>}
@@ -1126,7 +1128,7 @@ export function AttendanceModule() {
                 )}
                 {checkedIn && !checkedOut && (
                   <Button onClick={handleCheckOut} disabled={checkOutLoading}
-                    className="bg-slate-600 text-white hover:bg-slate-700 h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm">
+                    className={`${ACCENT_DARK} text-white hover:bg-black rounded-full h-10 sm:h-11 px-4 sm:px-6 text-xs sm:text-sm`}>
                     {checkOutLoading
                       ? <span className="flex items-center gap-1.5"><RefreshCw size={13} className="animate-spin" /> Checking out…</span>
                       : <span className="flex items-center gap-1.5"><LogOut size={14} /> Check Out</span>}
@@ -1161,7 +1163,7 @@ export function AttendanceModule() {
           <div className="space-y-4 mt-1">
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => { setTaglineDialogOpen(false); setCheckInTagline(""); }} className="flex-1 text-sm">Cancel</Button>
-              <Button onClick={() => handleCheckIn(checkInTagline)} disabled={checkInLoading} className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-sm">
+              <Button onClick={() => handleCheckIn(checkInTagline)} disabled={checkInLoading} className={`flex-1 ${ACCENT_DARK} hover:bg-black text-white rounded-full text-sm`}>
                 {checkInLoading
                   ? <span className="flex items-center gap-1.5 justify-center"><RefreshCw size={13} className="animate-spin" /> Checking in…</span>
                   : <span className="flex items-center gap-1.5 justify-center"><LogIn size={14} /> Check In</span>}
@@ -1174,7 +1176,7 @@ export function AttendanceModule() {
       {/* ══════════════════════════════════════════════════════
           MONTHLY ATTENDANCE CALENDAR — OWN
           ══════════════════════════════════════════════════════ */}
-      <Card className="border-2 border-gray-100">
+      <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
         <CardHeader className="px-3 sm:px-6 pb-3">
           <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
             <Calendar size={17} />
@@ -1197,7 +1199,7 @@ export function AttendanceModule() {
           ADMIN / HR: TEAM MONTHLY ATTENDANCE CALENDAR
           ══════════════════════════════════════════════════════ */}
       {(isAdmin || isHR) && (
-        <Card className="border-2 border-slate-200">
+        <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
           <CardHeader className="px-3 sm:px-6 pb-3">
             <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
               <Users size={17} />
@@ -1249,7 +1251,7 @@ export function AttendanceModule() {
           ADMIN / HR: USER ATTENDANCE CONTROL PANEL (with CRUD)
           ══════════════════════════════════════════════════════ */}
       {canAdminControl && (
-        <Card className="border-2 border-slate-200">
+        <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
           <CardHeader className="px-3 sm:px-6 pb-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
@@ -1268,7 +1270,7 @@ export function AttendanceModule() {
                       setAdminDailyEditId(null);
                       setAdminDailyEntryOpen(true);
                     }}
-                    className="bg-slate-700 hover:bg-slate-800 text-white text-xs flex items-center gap-1.5 h-8 px-3"
+                    className={`${ACCENT_DARK} hover:bg-black text-white rounded-full text-xs flex items-center gap-1.5 h-8 px-3`}
                   >
                     <Plus size={13} /> Add Entry
                   </Button>
@@ -1809,7 +1811,7 @@ export function AttendanceModule() {
           ATTENDANCE REPORT
           ══════════════════════════════════════════════════════ */}
       {(isAdmin || isManager) && (
-        <Card>
+        <Card className={`rounded-[28px] border ${PANEL_BORDER}`}>
           <CardHeader className="px-3 sm:px-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <CardTitle className="flex items-center gap-2 text-sm sm:text-base"><Calendar size={17} /> Attendance Report</CardTitle>
@@ -1987,13 +1989,14 @@ export function AttendanceModule() {
 
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">{previewCount} record{previewCount !== 1 ? "s" : ""} matched</span>
-              <Button onClick={downloadAttendance} className="bg-slate-800 text-white flex items-center gap-2 text-xs sm:text-sm">
+              <Button onClick={downloadAttendance} className={`${ACCENT_DARK} hover:bg-black rounded-full text-white flex items-center gap-2 text-xs sm:text-sm`}>
                 <Download size={14} /> Download CSV
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
+    </div>
     </div>
   );
 }
