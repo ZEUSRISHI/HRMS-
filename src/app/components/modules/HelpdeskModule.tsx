@@ -17,6 +17,7 @@ import {
   MessageSquare, ChevronDown, ChevronUp, AlertCircle,
   Clock, CheckCircle2, XCircle,
 } from "lucide-react";
+import { PAGE_BG, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ─────────── constants ─────────── */
 
@@ -246,6 +247,7 @@ export function HelpdeskModule() {
   );
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6">
 
       {/* ── flash message ── */}
@@ -282,7 +284,7 @@ export function HelpdeskModule() {
           {!isAdmin && (
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button className="gap-2 bg-orange-500 hover:bg-orange-600">
+                <Button className={`gap-2 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} rounded-full`}>
                   <Plus className="h-4 w-4" /> Raise Ticket
                 </Button>
               </DialogTrigger>
@@ -329,7 +331,7 @@ export function HelpdeskModule() {
                     </div>
                   </div>
                   <Button
-                    className="w-full bg-orange-500 hover:bg-orange-600"
+                    className="w-full bg-[#E39A56] hover:bg-[#d4863f] rounded-full"
                     onClick={handleCreate}
                   >
                     Submit Ticket
@@ -663,7 +665,7 @@ export function HelpdeskModule() {
                                     />
                                     <Button
                                       size="sm"
-                                      className="h-8 bg-orange-500 hover:bg-orange-600"
+                                      className="h-8 bg-[#E39A56] hover:bg-[#d4863f] rounded-full"
                                       onClick={() => handleAddComment(ticket._id)}
                                     >
                                       Send
@@ -737,7 +739,7 @@ export function HelpdeskModule() {
                 </div>
               </div>
               <Button
-                className="w-full bg-orange-500 hover:bg-orange-600"
+                className="w-full bg-[#E39A56] hover:bg-[#d4863f] rounded-full"
                 onClick={handleEdit}
               >
                 Save Changes
@@ -802,7 +804,7 @@ export function HelpdeskModule() {
               </div>
 
               <Button
-                className="w-full bg-orange-500 hover:bg-orange-600"
+                className="w-full bg-[#E39A56] hover:bg-[#d4863f] rounded-full"
                 onClick={handleAdminUpdate}
               >
                 Update Ticket
@@ -812,6 +814,7 @@ export function HelpdeskModule() {
         </Dialog>
       )}
 
+    </div>
     </div>
   );
 }
