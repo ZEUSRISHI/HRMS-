@@ -23,14 +23,9 @@ import type { ModuleType } from "../../App";
 /* ======================================================================
    DESIGN TOKENS
    ====================================================================== */
-const PAGE_BG   = "bg-[#F7F3EA]";
-const CARD      = "bg-white rounded-[28px] border border-[#EDE7DA]";
-const TILE_PINK = "bg-[#F4DCEF]";
-const TILE_PEACH= "bg-[#FBE3C4]";
-const TILE_BLUE = "bg-[#DCE6FB]";
-const TILE_MINT = "bg-[#D9F0E2]";
-const TILE_ROSE = "bg-[#FBDCE0]";
-const BAR_COLOR = "#E39A56";
+import {
+  PAGE_BG, CARD, TILE_PINK, TILE_PEACH, TILE_BLUE, TILE_MINT, TILE_ROSE, BAR_COLOR,
+} from "../../../styles/moduleTheme";
 
 function getGreeting() {
   const h = new Date().getHours();
