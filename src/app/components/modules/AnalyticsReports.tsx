@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { format, subDays, subMonths, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, parseISO, eachDayOfInterval } from "date-fns";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE } from "../../../styles/moduleTheme";
 
 /* ================================================================
    TYPES
@@ -84,15 +85,15 @@ function KpiCard({ label, value, sub, icon: Icon, color = "slate", trend }: {
   icon: any; color?: string; trend?: number;
 }) {
   const colorMap: Record<string, string> = {
-    slate:  "bg-slate-100 text-slate-600",
-    green:  "bg-green-50  text-green-600",
-    yellow: "bg-yellow-50 text-yellow-600",
-    red:    "bg-red-50    text-red-600",
-    blue:   "bg-slate-100 text-slate-500",
-    purple: "bg-purple-50 text-purple-600",
+    slate:  "bg-[#DCE6FB] text-[#14110F]",
+    green:  "bg-[#D9F0E2] text-[#14110F]",
+    yellow: "bg-[#FBE3C4] text-[#14110F]",
+    red:    "bg-[#FBDCE0] text-[#14110F]",
+    blue:   "bg-[#DCE6FB] text-[#14110F]",
+    purple: "bg-[#F4DCEF] text-[#14110F]",
   };
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+    <div className={`bg-white rounded-[20px] border ${PANEL_BORDER} shadow-sm p-4 hover:shadow-md transition-shadow`}>
       <div className="flex items-start justify-between mb-2">
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${colorMap[color] || colorMap.slate}`}>
           <Icon size={18} />
@@ -112,7 +113,7 @@ function KpiCard({ label, value, sub, icon: Icon, color = "slate", trend }: {
 
 function SectionCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+    <div className={`bg-white rounded-[20px] border ${PANEL_BORDER} shadow-sm p-5`}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
         {action}
@@ -413,6 +414,7 @@ export function AnalyticsReports() {
   );
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-5 max-w-7xl mx-auto px-3 sm:px-0">
 
       {/* ── HEADER ── */}
@@ -436,7 +438,7 @@ export function AnalyticsReports() {
           </button>
           <button
             onClick={() => downloadReport("all")}
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+            className={`flex items-center gap-1.5 px-3 py-2 border ${PANEL_BORDER} rounded-full text-sm text-[#14110F] hover:bg-[#F7F3EA]`}
           >
             <Download size={15} /> Export All
           </button>
@@ -482,24 +484,24 @@ export function AnalyticsReports() {
         <div className="space-y-4">
 
           {/* Today banner */}
-          <div className="bg-gradient-to-r from-slate-800 to-slate-700 rounded-2xl p-5 text-white">
+          <div className={`bg-white rounded-[24px] border ${PANEL_BORDER} shadow-sm p-5`}>
             <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div>
-                <h2 className="text-base font-semibold">Today's Snapshot</h2>
-                <p className="text-slate-400 text-xs mt-0.5">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
+                <h2 className="text-base font-semibold text-gray-900">Today's Snapshot</h2>
+                <p className="text-gray-400 text-xs mt-0.5">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
               </div>
               <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: "Checked In",       value: checkedIn                        },
-                { label: "Checked Out",      value: checkedOut                       },
-                { label: "Absent",           value: absentToday,  danger: true       },
-                { label: "Pending Leaves",   value: data.pendingLeaves.length        },
+                { label: "Checked In",       value: checkedIn,                     bg: "bg-[#D9F0E2]" },
+                { label: "Checked Out",      value: checkedOut,                    bg: "bg-[#DCE6FB]" },
+                { label: "Absent",           value: absentToday,                   bg: "bg-[#FBDCE0]" },
+                { label: "Pending Leaves",   value: data.pendingLeaves.length,     bg: "bg-[#FBE3C4]" },
               ].map(s => (
-                <div key={s.label} className={`rounded-xl p-3 text-center ${s.danger ? "bg-red-500/25" : "bg-white/10"}`}>
-                  <p className="text-2xl font-bold">{s.value}</p>
-                  <p className="text-xs text-slate-300 mt-0.5">{s.label}</p>
+                <div key={s.label} className={`rounded-xl p-3 text-center border ${PANEL_BORDER} ${s.bg}`}>
+                  <p className="text-2xl font-bold text-[#14110F]">{s.value}</p>
+                  <p className="text-xs text-[#5b5648] mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -514,17 +516,17 @@ export function AnalyticsReports() {
                 <AreaChart data={attTrend}>
                   <defs>
                     <linearGradient id="ag1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%"  stopColor="#475569" stopOpacity={0.25} />
-                      <stop offset="95%" stopColor="#475569" stopOpacity={0}    />
+                      <stop offset="5%"  stopColor="#E39A56" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#E39A56" stopOpacity={0}    />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EDE7DA" />
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip content={<CustomTooltip />} />
                   <Legend />
-                  <Area type="monotone" dataKey="present" name="Present" stroke="#475569" fill="url(#ag1)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="absent"  name="Absent"  stroke="#94a3b8" fill="none"       strokeWidth={1.5} strokeDasharray="4 2" />
+                  <Area type="monotone" dataKey="present" name="Present" stroke="#E39A56" fill="url(#ag1)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="absent"  name="Absent"  stroke="#c9c2b0" fill="none"       strokeWidth={1.5} strokeDasharray="4 2" />
                 </AreaChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -564,7 +566,7 @@ export function AnalyticsReports() {
                   <XAxis type="number" tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Projects" fill="#475569" radius={3} />
+                  <Bar dataKey="count" name="Projects" fill="#E39A56" radius={3} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -578,8 +580,8 @@ export function AnalyticsReports() {
                   <YAxis tick={{ fontSize: 10 }} tickFormatter={v => `${v}K`} />
                   <Tooltip formatter={(v: number) => [`₹${v.toLocaleString()}`]} />
                   <Legend />
-                  <Bar dataKey="gross" name="Gross"  fill="#94a3b8" radius={3} />
-                  <Bar dataKey="net"   name="Net"    fill="#475569" radius={3} />
+                  <Bar dataKey="gross" name="Gross"  fill="#f3d4a5" radius={3} />
+                  <Bar dataKey="net"   name="Net"    fill="#E39A56" radius={3} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -594,7 +596,7 @@ export function AnalyticsReports() {
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Requests" fill="#64748b" radius={3} />
+                  <Bar dataKey="count" name="Requests" fill="#E39A56" radius={3} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -603,12 +605,12 @@ export function AnalyticsReports() {
               {data.hdStats ? (
                 <div className="grid grid-cols-2 gap-3 h-full">
                   {[
-                    { label: "Total",       value: data.hdStats.total,      bg: "bg-slate-50",  txt: "text-slate-700"  },
-                    { label: "Open",        value: data.hdStats.open,       bg: "bg-yellow-50", txt: "text-yellow-700" },
-                    { label: "In Progress", value: data.hdStats.inProgress, bg: "bg-blue-50",   txt: "text-blue-700"   },
-                    { label: "Critical",    value: data.hdStats.critical,   bg: "bg-red-50",    txt: "text-red-700"    },
+                    { label: "Total",       value: data.hdStats.total,      bg: "bg-[#DCE6FB]",  txt: "text-[#14110F]"  },
+                    { label: "Open",        value: data.hdStats.open,       bg: "bg-[#FBE3C4]", txt: "text-[#14110F]" },
+                    { label: "In Progress", value: data.hdStats.inProgress, bg: "bg-[#F4DCEF]",   txt: "text-[#14110F]"   },
+                    { label: "Critical",    value: data.hdStats.critical,   bg: "bg-[#FBDCE0]",    txt: "text-[#14110F]"    },
                   ].map(s => (
-                    <div key={s.label} className={`${s.bg} rounded-xl p-4 text-center`}>
+                    <div key={s.label} className={`${s.bg} rounded-xl p-4 text-center border border-[#EDE7DA]`}>
                       <p className={`text-3xl font-bold ${s.txt}`}>{s.value ?? 0}</p>
                       <p className="text-xs text-gray-500 mt-1">{s.label}</p>
                     </div>
@@ -648,16 +650,16 @@ export function AnalyticsReports() {
               <AreaChart data={attTrend}>
                 <defs>
                   <linearGradient id="ag2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#475569" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#475569" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#E39A56" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#E39A56" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#EDE7DA" />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
-                <Area type="monotone" dataKey="present" name="Present" stroke="#475569" fill="url(#ag2)" strokeWidth={2} />
+                <Area type="monotone" dataKey="present" name="Present" stroke="#E39A56" fill="url(#ag2)" strokeWidth={2} />
                 <Area type="monotone" dataKey="absent"  name="Absent"  stroke="#e24b4a" fill="none"       strokeWidth={1.5} strokeDasharray="4 2" />
               </AreaChart>
             </ResponsiveContainer>
@@ -671,7 +673,7 @@ export function AnalyticsReports() {
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10 }} unit="%" domain={[0, 100]} />
                   <Tooltip content={<CustomTooltip unit="%" />} />
-                  <Line type="monotone" dataKey="rate" name="Rate" stroke="#475569" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="rate" name="Rate" stroke="#E39A56" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -909,7 +911,7 @@ export function AnalyticsReports() {
                   <XAxis type="number" tick={{ fontSize: 10 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={80} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Bar dataKey="count" name="Projects" fill="#475569" radius={3} />
+                  <Bar dataKey="count" name="Projects" fill="#E39A56" radius={3} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>
@@ -995,6 +997,7 @@ export function AnalyticsReports() {
           </SectionCard>
         </div>
       )}
+    </div>
     </div>
   );
 }
