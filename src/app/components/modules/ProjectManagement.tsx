@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { projectApi } from "@/services/api";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ══════════════════════════════════════════════════════════
    TYPES
@@ -2081,6 +2082,7 @@ export function ProjectManagement() {
         }
       `}</style>
 
+      <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
       <div className="space-y-6 max-w-5xl mx-auto px-3 sm:px-4 pb-16">
         <Toast msg={toastMsg} type={toastType} />
 
@@ -2103,7 +2105,7 @@ export function ProjectManagement() {
               isManual
             />
             <button onClick={handleManualSubmit} disabled={submitting}
-              className="w-full mt-4 h-11 text-sm font-bold bg-gray-900 text-white rounded-2xl hover:bg-gray-800 disabled:opacity-50 transition-colors">
+              className={`w-full mt-4 h-11 text-sm font-bold ${ACCENT_DARK} text-white rounded-2xl hover:bg-black disabled:opacity-50 transition-colors`}>
               {submitting ? "Saving…" : "💾 Save Historical Record"}
             </button>
           </DialogContent>
@@ -2125,7 +2127,7 @@ export function ProjectManagement() {
               onToggleMember={id => toggle(id, false)}
             />
             <button onClick={handleSubmit} disabled={submitting}
-              className="w-full mt-4 h-11 text-sm font-bold bg-gray-900 text-white rounded-2xl hover:bg-gray-800 disabled:opacity-50 transition-colors">
+              className={`w-full mt-4 h-11 text-sm font-bold ${ACCENT_DARK} text-white rounded-2xl hover:bg-black disabled:opacity-50 transition-colors`}>
               {submitting ? "Saving…" : isEdit ? "Update Project" : "Create Project"}
             </button>
           </DialogContent>
@@ -2134,8 +2136,8 @@ export function ProjectManagement() {
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
           <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-md shadow-orange-200">
+            <h1 className="text-xl font-bold text-[#14110F] flex items-center gap-3">
+              <div className={`w-9 h-9 ${ACCENT_ORANGE} rounded-2xl flex items-center justify-center shadow-sm`}>
                 <FolderOpen className="h-4 w-4 text-white" />
               </div>
               Project Management
@@ -2153,12 +2155,12 @@ export function ProjectManagement() {
             {isAdmin && (
               <>
                 <button onClick={() => setManualOpen(true)}
-                  className="h-9 px-3.5 flex items-center gap-1.5 text-xs font-semibold border border-gray-200 rounded-xl bg-white hover:bg-gray-50 text-gray-700 transition-colors">
+                  className={`h-9 px-3.5 flex items-center gap-1.5 text-xs font-semibold border ${PANEL_BORDER} rounded-xl bg-white hover:bg-[#F7F3EA] text-[#14110F] transition-colors`}>
                   <ClipboardList className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Manual Entry</span>
                 </button>
                 <button onClick={() => { resetForm(); setOpen(true); }}
-                  className="h-9 px-4 flex items-center gap-1.5 text-xs font-bold bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-colors shadow-sm">
+                  className={`h-9 px-4 flex items-center gap-1.5 text-xs font-bold ${ACCENT_ORANGE} text-white rounded-xl ${ACCENT_ORANGE_HOVER} transition-colors shadow-sm`}>
                   <Plus className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">New Project</span>
                 </button>
@@ -2183,7 +2185,7 @@ export function ProjectManagement() {
               sub: `${byStatus["on-hold"] ?? 0} on hold`,
             },
           ].map((s, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-sm transition-shadow">
+            <div key={i} className={`bg-white border ${PANEL_BORDER} rounded-[20px] p-4 hover:shadow-sm transition-shadow`}>
               <div className="flex items-center gap-2.5 mb-3">
                 <div className={`w-9 h-9 ${s.bg} rounded-xl flex items-center justify-center`}>{s.icon}</div>
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{s.label}</span>
@@ -2286,6 +2288,7 @@ export function ProjectManagement() {
             ))}
           </div>
         )}
+      </div>
       </div>
     </>
   );
