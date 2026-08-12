@@ -24,6 +24,7 @@ import {
 import { format, isToday, isYesterday } from "date-fns";
 import { useAuth } from "../../contexts/AuthContext";
 import { messageApi } from "@/services/api";
+import { PAGE_BG, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 /* ─── Types ─────────────────────────────── */
 interface Participant {
@@ -334,17 +335,18 @@ useEffect(() => {
      RENDER
   ═══════════════════════════════════════ */
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="h-[calc(100vh-80px)] flex flex-col max-w-6xl mx-auto px-2 sm:px-4 py-2">
 
       {/* TOAST */}
       {toast && (
   <div className="fixed top-5 right-5 bg-white border border-gray-200 text-gray-800 px-4 py-3 rounded-xl shadow-lg z-50 text-sm max-w-xs animate-in slide-in-from-top-2 fade-in duration-200 flex items-start gap-2">
-    <MessageSquare className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+    <MessageSquare className="h-4 w-4 text-[#E39A56] mt-0.5 flex-shrink-0" />
     <span className="leading-snug">{toast}</span>
   </div>
 )}
 
-      <div className="flex-1 flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex-1 flex overflow-hidden rounded-[24px] border border-[#EDE7DA] bg-white shadow-sm">
 
         {/* ══════════════════════════════
             LEFT PANEL — CONVERSATION LIST
@@ -359,7 +361,7 @@ useEffect(() => {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-orange-500" />
+              <MessageSquare className="h-4 w-4 text-[#E39A56]" />
               <h2 className="font-semibold text-sm">Messages</h2>
             </div>
 
@@ -456,7 +458,7 @@ useEffect(() => {
                                   type="checkbox"
                                   checked={selectedMembers.includes(u._id)}
                                   onChange={() => toggleMember(u._id)}
-                                  className="accent-orange-500"
+                                  className="accent-[#E39A56]"
                                 />
                                 <Avatar name={u.name} size="sm" />
                                 <div className="min-w-0">
@@ -467,7 +469,7 @@ useEffect(() => {
                             ))}
                         </div>
                       </div>
-                      <Button className="w-full" onClick={handleCreateGroup}>
+                      <Button className={`w-full rounded-full ${ACCENT_DARK} hover:bg-black text-white`} onClick={handleCreateGroup}>
                         Create Group
                       </Button>
                     </div>
@@ -494,7 +496,7 @@ useEffect(() => {
           <div className="flex-1 overflow-y-auto">
             {loadingConvs ? (
               <div className="flex justify-center py-12">
-                <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-6 h-6 border-2 border-[#E39A56] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : filteredConvs.length === 0 ? (
               <div className="text-center py-16 px-4">
@@ -516,7 +518,7 @@ useEffect(() => {
       key={conv._id}
       onClick={() => selectConversation(conv)}
       className={`w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 transition-colors border-b border-gray-50 text-left ${
-        isActive ? "bg-orange-50 border-l-2 border-l-orange-500" : ""
+        isActive ? "bg-[#FBE3C4]/40 border-l-2 border-l-[#E39A56]" : ""
       }`}
     >
       <div className="relative">
@@ -544,7 +546,7 @@ useEffect(() => {
             </p>
           )}
           {unread > 0 && (
-            <span className="ml-2 flex-shrink-0 bg-orange-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+            <span className="ml-2 flex-shrink-0 bg-[#E39A56] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
               {unread > 9 ? "9+" : unread}
             </span>
           )}
@@ -612,7 +614,7 @@ useEffect(() => {
               <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
                 {loadingMsgs ? (
                   <div className="flex justify-center py-12">
-                    <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+                    <div className="w-6 h-6 border-2 border-[#E39A56] border-t-transparent rounded-full animate-spin" />
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="text-center py-12">
@@ -643,7 +645,7 @@ useEffect(() => {
                           <div
                             className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                               isOwn
-                                ? "bg-orange-500 text-white rounded-br-sm"
+                                ? "bg-[#E39A56] text-white rounded-br-sm"
                                 : "bg-white text-gray-800 rounded-bl-sm shadow-sm border border-gray-100"
                             }`}
                           >
@@ -683,14 +685,14 @@ useEffect(() => {
                     value={msgInput}
                     onChange={(e) => setMsgInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    className="flex-1 rounded-full border-gray-200 focus:border-orange-400"
+                    className="flex-1 rounded-full border-gray-200 focus:border-[#E39A56]"
                     disabled={sending}
                   />
                   <Button
                     size="icon"
                     onClick={handleSend}
                     disabled={!msgInput.trim() || sending}
-                    className="rounded-full bg-orange-500 hover:bg-orange-600 flex-shrink-0"
+                    className={`rounded-full ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} flex-shrink-0`}
                   >
                     {sending ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -706,7 +708,8 @@ useEffect(() => {
             </>
           )}
         </div>
-      </div>
+     </div>
+    </div>
     </div>
   );
 }
