@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { AuthProvider, useAuth, Role } from "./contexts/AuthContext";
 import { WorkforceProvider } from "./contexts/WorkforceContext";
@@ -92,6 +92,32 @@ export type ModuleType =
   | "profile"
   | "account";
 
+// ✅ Maps each module to the URL segment shown in the address bar, e.g.
+// activeModule "attendance" -> https://www.quibohrms.app/Attendance
+export const MODULE_ROUTES: Record<ModuleType, string> = {
+  dashboard:             "Dashboard",
+  attendance:            "Attendance",
+  leave:                 "Leave",
+  tasks:                 "Tasks",
+  status:                "DailyStatus",
+  calendar:              "Calendar",
+  payroll:               "Payroll",
+  clients:               "Clients",
+  projects:              "Projects",
+  onboarding:            "Onboarding",
+  "time-tracking":       "TimeTracking",
+  analytics:             "Analytics",
+  "workforce-overview":  "Workforce",
+  "hr-employees":        "EmployeeRecords",
+  "hr-attendance-leave": "AttendanceLeave",
+  helpdesk:              "Helpdesk",
+  "user-management":     "UserManagement",
+  messaging:             "Messages",
+  "email-comm":          "EmailComm",
+  profile:               "Profile",
+  account:               "Account",
+};
+
 interface MenuItem {
   id: ModuleType;
   name: string;
@@ -105,7 +131,32 @@ function AppContent() {
   const { counts, markSeen } = useUnreadCounts(); // ✅ unread badge counts
 
   const [activeModule, setActiveModuleRaw] =
-    useState<ModuleType>("dashboard");
+    useState<ModuleType>(() => {
+      const path = window.location.pathname.slice(1);
+      const match = (Object.keys(MODULE_ROUTES) as ModuleType[])
+        .find(k => MODULE_ROUTES[k] === path);
+      return match ?? "dashboard";
+    });
+
+  // Keep the URL in sync whenever the active module changes
+  useEffect(() => {
+    const newPath = `/${MODULE_ROUTES[activeModule]}`;
+    if (window.location.pathname !== newPath) {
+      window.history.pushState({}, "", newPath);
+    }
+  }, [activeModule]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const onPopState = () => {
+      const path = window.location.pathname.slice(1);
+      const match = (Object.keys(MODULE_ROUTES) as ModuleType[])
+        .find(k => MODULE_ROUTES[k] === path);
+      if (match) setActiveModuleRaw(match);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // ✅ wrap setActiveModule so opening a module clears its badge
   const setActiveModule = (m: ModuleType) => {
