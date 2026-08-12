@@ -18,6 +18,7 @@ import {
   Loader2, ShieldOff, Download, ClipboardList,
 } from "lucide-react";
 import { onboardingApi } from "@/services/api";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK } from "../../../styles/moduleTheme";
 
 /* ================= TYPES ================= */
 type Task = {
@@ -527,11 +528,12 @@ export function OnboardingModule() {
   const clearanceKeys: (keyof ClearanceStatus)[] = ["hr", "it", "finance", "product"];
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6 max-w-6xl mx-auto">
 
       {/* POPUP */}
       {popup && (
-        <div className="fixed top-5 right-5 bg-black text-white px-4 py-3 rounded-lg shadow-lg z-50 text-sm max-w-xs">
+        <div className={`fixed top-5 right-5 ${ACCENT_DARK} text-white px-4 py-3 rounded-xl shadow-lg z-50 text-sm max-w-xs`}>
           {popup}
         </div>
       )}
@@ -717,7 +719,7 @@ export function OnboardingModule() {
                         <Input type="date" value={onStartDate} onChange={e => setOnStartDate(e.target.value)} />
                       </div>
                     </div>
-                    <Button className="w-full" onClick={handleCreateOnboarding} disabled={submitting}>
+                    <Button className={`w-full rounded-full ${ACCENT_DARK} hover:bg-black text-white`} onClick={handleCreateOnboarding} disabled={submitting}>
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
                       Create Account & Start Onboarding
                     </Button>
@@ -746,7 +748,7 @@ export function OnboardingModule() {
               const progress = o.tasks.length > 0 ? (done / o.tasks.length) * 100 : 0;
 
               return (
-                <Card key={o._id} className="rounded-xl">
+                <Card key={o._id} className={`rounded-[24px] border ${PANEL_BORDER}`}>
                   <CardHeader className="flex flex-row items-start justify-between pb-2">
                     <div className="space-y-1">
                       <CardTitle className="text-base flex items-center gap-2 flex-wrap">
@@ -993,7 +995,7 @@ export function OnboardingModule() {
               const totalKeys = Object.keys(o.clearanceStatus).length;
 
               return (
-                <Card key={o._id} className="rounded-xl">
+                <Card key={o._id} className={`rounded-[24px] border ${PANEL_BORDER}`}>
                   <CardHeader className="flex flex-row items-start justify-between pb-2">
                     <div className="space-y-1">
                       <CardTitle className="text-base flex items-center gap-2 flex-wrap">
@@ -1049,6 +1051,7 @@ export function OnboardingModule() {
           )}
         </TabsContent>
       </Tabs>
+    </div>
     </div>
   );
 }
