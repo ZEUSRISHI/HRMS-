@@ -7,6 +7,7 @@ import {
   Inbox, Clock, RefreshCw, Zap, Shield,
   CheckCircle2, XCircle,
 } from "lucide-react";
+import { ACCENT_DARK } from "../../../styles/moduleTheme";
 
 /* ─── Types ──────────────────────────────────────────────── */
 interface TeamUser {
@@ -151,7 +152,7 @@ const SendRow = ({ onSend, onClear, disabled, label, count, sending }: {
         className={`flex items-center gap-2.5 px-8 py-3 rounded-2xl text-sm font-black transition-all shadow-lg ${
           disabled || sending
             ? "bg-slate-100 text-slate-400 cursor-not-allowed shadow-none"
-            : "bg-gradient-to-r from-slate-700 to-slate-900 hover:from-slate-800 hover:to-black text-white shadow-slate-300 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+            : `${ACCENT_DARK} hover:bg-black text-white shadow-slate-300 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0`
         }`}>
         {sending ? <><Loader2 className="w-4 h-4 animate-spin" />Sending…</> : <><Send className="w-4 h-4" />Send Email</>}
       </button>
@@ -406,7 +407,7 @@ export function EmailCommunicationModule() {
      RENDER
   ══════════════════════════════════════════════════════════ */
   return (
-    <div className="flex flex-col bg-slate-50" style={{ height: "calc(100vh - 72px)" }}>
+    <div className="flex flex-col bg-[#F7F3EA]" style={{ height: "calc(100vh - 72px)" }}>
       <style>{`
         .email-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
         .email-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 99px; }
@@ -441,7 +442,7 @@ export function EmailCommunicationModule() {
       <header className="flex-shrink-0 bg-white border-b border-slate-200 px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="w-11 h-11 bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
+            <div className={`w-11 h-11 ${ACCENT_DARK} rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0`}>
               <Mail className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
@@ -501,7 +502,7 @@ export function EmailCommunicationModule() {
           ] as { id: Panel; label: string; icon: any; sub: string; badge: number }[]).map(n => (
             <button key={n.id} onClick={() => setPanel(n.id)}
               className={`w-full flex items-center gap-3 px-3 py-3.5 rounded-2xl text-left transition-all ${
-                panel === n.id ? "bg-slate-800 text-white shadow-lg" : "text-slate-600 hover:bg-slate-50"
+                panel === n.id ? `${ACCENT_DARK} text-white shadow-lg` : "text-slate-600 hover:bg-[#F7F3EA]"
               }`}>
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${panel === n.id ? "bg-white/20" : "bg-slate-100"}`}>
                 <n.icon className={`w-4 h-4 ${panel === n.id ? "text-white" : "text-slate-500"}`} />
@@ -535,7 +536,7 @@ export function EmailCommunicationModule() {
 
           {/* Sender card */}
           <div className="mt-auto pt-3 border-t border-slate-100">
-            <div className="bg-slate-800 rounded-2xl p-4 text-white">
+            <div className={`${ACCENT_DARK} rounded-2xl p-4 text-white`}>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Sending As</p>
               <div className="flex items-center gap-2 mb-3">
                 <Av name={currentUser.name} size="sm" />
@@ -629,7 +630,7 @@ export function EmailCommunicationModule() {
                             <button key={r} type="button"
                               onClick={() => setRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
                               className={`flex items-center justify-between px-4 py-4 rounded-2xl border-2 font-black transition-all ${
-                                sel ? "border-slate-800 bg-slate-800 text-white shadow-lg" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                sel ? `border-[#14110F] ${ACCENT_DARK} text-white shadow-lg` : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                               }`}>
                               <span className="flex items-center gap-3">
                                 <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${sel ? "border-white bg-white" : "border-slate-300"}`}>
@@ -711,7 +712,7 @@ export function EmailCommunicationModule() {
                     <p className="text-sm font-black text-slate-500 mb-2">No emails sent yet</p>
                     <p className="text-xs text-slate-400 mb-5">Your sent history will appear here</p>
                     <button onClick={() => setPanel("compose")}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 text-white text-sm font-black rounded-2xl shadow-lg hover:-translate-y-0.5 transition-all">
+                      className={`flex items-center gap-2 px-5 py-2.5 ${ACCENT_DARK} hover:bg-black text-white text-sm font-black rounded-2xl shadow-lg hover:-translate-y-0.5 transition-all`}>
                       <Mail className="w-4 h-4" /> Compose Email
                     </button>
                   </div>
@@ -720,7 +721,7 @@ export function EmailCommunicationModule() {
                     {hist.map((item: any) => (
                       <div key={item._id} className="bg-white border border-slate-200 rounded-2xl p-5 hover:border-slate-300 hover:shadow-md transition-all">
                         <div className="flex items-start gap-4 mb-3">
-                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${item.type === "team" ? "bg-slate-700" : "bg-slate-800"}`}>
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0 ${item.type === "team" ? "bg-slate-700" : ACCENT_DARK}`}>
                             {item.type === "team" ? <Zap className="w-5 h-5 text-white" /> : <Mail className="w-5 h-5 text-white" />}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -825,7 +826,7 @@ export function EmailCommunicationModule() {
                               </div>
                               <button type="button"
                                 onClick={() => { addTo(u); setPanel("compose"); setTab("compose"); flash(`${u.name} added as recipient`, "info"); }}
-                                className="opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-[11px] bg-slate-800 text-white px-3 py-2 rounded-xl font-black transition-all flex-shrink-0 hover:-translate-y-0.5 shadow-md">
+                                className={`opacity-0 group-hover:opacity-100 flex items-center gap-1.5 text-[11px] ${ACCENT_DARK} hover:bg-black text-white px-3 py-2 rounded-xl font-black transition-all flex-shrink-0 hover:-translate-y-0.5 shadow-md`}>
                                 <Mail className="w-3 h-3" /> Email
                               </button>
                             </div>
