@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { payrollApi, attendanceApi } from "@/services/api";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 import { format } from "date-fns";
 
 
@@ -106,24 +107,22 @@ const roleConfig: Record<string, { bg: string; text: string }> = {
   intern:   { bg: "bg-gray-100",    text: "text-gray-600"    },
 };
 
-const StatCard = ({ label, value, sub, icon, gradient, trend }: {
+const StatCard = ({ label, value, sub, icon, tile, trend }: {
   label: string; value: string; sub?: string; icon: React.ReactNode;
-  gradient: string; trend?: "up" | "down" | "neutral";
+  tile: string; trend?: "up" | "down" | "neutral";
 }) => (
-  <div className={`relative overflow-hidden rounded-2xl p-4 sm:p-5 ${gradient}`}>
+  <div className={`relative overflow-hidden rounded-[24px] border border-[#EDE7DA] p-4 sm:p-5 ${tile}`}>
     <div className="flex items-start justify-between mb-2 sm:mb-3">
-      <div className="p-2 sm:p-2.5 bg-white/20 rounded-xl">{icon}</div>
+      <div className="p-2 sm:p-2.5 bg-white/60 rounded-xl">{icon}</div>
       {trend && trend !== "neutral" && (
-        <div className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full bg-white/20 ${trend === "up" ? "text-emerald-100" : "text-red-100"}`}>
+        <div className={`flex items-center text-[10px] font-bold px-2 py-1 rounded-full bg-white/60 ${trend === "up" ? "text-emerald-700" : "text-red-600"}`}>
           {trend === "up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
         </div>
       )}
     </div>
-    <p className="text-xl sm:text-2xl font-black text-white tracking-tight">{value}</p>
-    <p className="text-xs sm:text-sm text-white/70 font-medium mt-0.5">{label}</p>
-    {sub && <p className="text-[10px] sm:text-xs text-white/50 mt-1">{sub}</p>}
-    <div className="absolute -bottom-3 -right-3 w-16 h-16 bg-white/5 rounded-full pointer-events-none" />
-    <div className="absolute -bottom-6 -right-6 w-24 h-24 bg-white/5 rounded-full pointer-events-none" />
+    <p className="text-xl sm:text-2xl font-black text-[#14110F] tracking-tight">{value}</p>
+    <p className="text-xs sm:text-sm text-[#5b5648] font-medium mt-0.5">{label}</p>
+    {sub && <p className="text-[10px] sm:text-xs text-[#5b5648]/70 mt-1">{sub}</p>}
   </div>
 );
 
@@ -550,6 +549,7 @@ export function PayrollModule() {
   );
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-4 sm:space-y-6 pb-10 px-3 sm:px-0">
 
       {toast && (
@@ -564,7 +564,7 @@ export function PayrollModule() {
       )}
 
       {/* Header */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl sm:rounded-3xl p-5 sm:p-8">
+      <div className={`bg-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 border ${PANEL_BORDER} shadow-sm`}>
         <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -572,29 +572,29 @@ export function PayrollModule() {
                 <Wallet className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-2xl font-black text-white">Payroll Management</h1>
-                <p className="text-slate-400 text-xs sm:text-sm">Quibo Technologies · Basic Salary</p>
+                <h1 className="text-lg sm:text-2xl font-black text-[#14110F]">Payroll Management</h1>
+                <p className="text-[#5b5648] text-xs sm:text-sm">Quibo Technologies · Basic Salary</p>
               </div>
             </div>
             <button onClick={() => { loadPayroll(); loadAttendance(); }}
-              className="p-2.5 text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all flex-shrink-0">
+              className="p-2.5 text-[#14110F] bg-[#F7F3EA] hover:bg-[#EDE7DA] rounded-full border border-[#EDE7DA] transition-all flex-shrink-0">
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />{presentToday} present today
+            <span className="flex items-center gap-1.5 text-[11px] text-[#5b5648] bg-[#F7F3EA] px-3 py-1.5 rounded-full border border-[#EDE7DA]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />{presentToday} present today
             </span>
-            <span className="text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">{records.length} records</span>
-            <span className="text-[11px] text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-full border border-slate-700">{stats.headcount} employees</span>
+            <span className="text-[11px] text-[#5b5648] bg-[#F7F3EA] px-3 py-1.5 rounded-full border border-[#EDE7DA]">{records.length} records</span>
+            <span className="text-[11px] text-[#5b5648] bg-[#F7F3EA] px-3 py-1.5 rounded-full border border-[#EDE7DA]">{stats.headcount} employees</span>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {/* Backfill */}
             <Dialog open={backfillOpen} onOpenChange={setBackfillOpen}>
               <DialogTrigger asChild>
-                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all">
+                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-[#14110F] bg-[#F7F3EA] hover:bg-[#EDE7DA] rounded-full border border-[#EDE7DA] transition-all">
                   <History className="h-3.5 w-3.5" /> Backfill
                 </button>
               </DialogTrigger>
@@ -609,7 +609,7 @@ export function PayrollModule() {
                   <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     Creates "paid" records for past months. Skips existing records.
                   </p>
-                  <Button className="w-full bg-slate-800 hover:bg-slate-900 text-white rounded-xl" onClick={handleBackfill}>Run Backfill</Button>
+                  <Button className={`w-full ${ACCENT_DARK} hover:bg-black text-white rounded-full`} onClick={handleBackfill}>Run Backfill</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -617,7 +617,7 @@ export function PayrollModule() {
             {/* Bulk */}
             <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
               <DialogTrigger asChild>
-                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-all">
+                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-[#14110F] bg-[#F7F3EA] hover:bg-[#EDE7DA] rounded-full border border-[#EDE7DA] transition-all">
                   <Zap className="h-3.5 w-3.5" /> Auto-Generate
                 </button>
               </DialogTrigger>
@@ -631,7 +631,7 @@ export function PayrollModule() {
                   <p className="text-xs text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200">
                     Creates draft payrolls for all active employees using their profile basicSalary + attendance.
                   </p>
-                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl" onClick={handleBulk}>Generate</Button>
+                  <Button className={`w-full ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white rounded-full`} onClick={handleBulk}>Generate</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -639,7 +639,7 @@ export function PayrollModule() {
             {/* Add Record */}
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <button className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-all shadow-lg shadow-orange-500/30">
+                <button className={`flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-white ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} rounded-full transition-all shadow-lg shadow-orange-500/30`}>
                   <Plus className="h-3.5 w-3.5" /> Add Record
                 </button>
               </DialogTrigger>
@@ -710,7 +710,7 @@ export function PayrollModule() {
                       value={createRemarks} onChange={e => setCreateRemarks(e.target.value)} />
                   </div>
 
-                  <Button className="w-full bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-11 font-semibold" onClick={handleCreate}>
+                  <Button className={`w-full ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white rounded-full h-11 font-semibold`} onClick={handleCreate}>
                     Create Record
                   </Button>
                 </div>
@@ -719,7 +719,7 @@ export function PayrollModule() {
 
             {/* Process */}
             <button onClick={handleProcess}
-              className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-emerald-300 bg-emerald-900/30 hover:bg-emerald-900/50 rounded-xl border border-emerald-800/60 transition-all">
+              className="flex items-center gap-2 px-3 py-2 text-xs sm:text-sm font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-all">
               <CheckCircle className="h-3.5 w-3.5" /> Process & Email
             </button>
           </div>
@@ -728,16 +728,16 @@ export function PayrollModule() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard label="Present Today" value={String(presentToday)} icon={<UserCheck className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" trend="up" />
-        <StatCard label="Checked Out"   value={String(checkedOut)}   icon={<LogOut   className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-blue-500 to-blue-600"    trend="neutral" />
-        <StatCard label="Not Yet In"    value={String(notYet)}       icon={<UserX    className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-amber-500 to-orange-500"  trend="down" />
-        <StatCard label="Total Staff"   value={String(allUsers.length)} icon={<Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-slate-600 to-slate-700"   trend="neutral" />
+        <StatCard label="Present Today" value={String(presentToday)} icon={<UserCheck className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#D9F0E2]" trend="up" />
+        <StatCard label="Checked Out"   value={String(checkedOut)}   icon={<LogOut   className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#DCE6FB]" trend="neutral" />
+        <StatCard label="Not Yet In"    value={String(notYet)}       icon={<UserX    className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#FBDCE0]" trend="down" />
+        <StatCard label="Total Staff"   value={String(allUsers.length)} icon={<Users className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#FBE3C4]" trend="neutral" />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total Paid"      value={fmtK(stats.totalPaid)}      sub={`${stats.paidCount} records`}   icon={<CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-emerald-600 to-teal-700"  trend="up" />
-        <StatCard label="Processed"       value={fmtK(stats.totalProcessed)} sub="awaiting payment"               icon={<TrendingUp  className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-violet-500 to-purple-600" trend="neutral" />
-        <StatCard label="Pending / Draft" value={fmtK(stats.totalPending)}   sub={`${stats.draftCount} drafts`}   icon={<Clock       className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-orange-500 to-red-500"    trend="down" />
-        <StatCard label="Total Gross"     value={fmtK(stats.totalGross)}     sub={`${stats.headcount} employees`} icon={<Building2   className="h-4 w-4 sm:h-5 sm:w-5 text-white" />} gradient="bg-gradient-to-br from-slate-700 to-slate-800"   trend="neutral" />
+        <StatCard label="Total Paid"      value={fmtK(stats.totalPaid)}      sub={`${stats.paidCount} records`}   icon={<CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#D9F0E2]" trend="up" />
+        <StatCard label="Processed"       value={fmtK(stats.totalProcessed)} sub="awaiting payment"               icon={<TrendingUp  className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#F4DCEF]" trend="neutral" />
+        <StatCard label="Pending / Draft" value={fmtK(stats.totalPending)}   sub={`${stats.draftCount} drafts`}   icon={<Clock       className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#FBE3C4]" trend="down" />
+        <StatCard label="Total Gross"     value={fmtK(stats.totalGross)}     sub={`${stats.headcount} employees`} icon={<Building2   className="h-4 w-4 sm:h-5 sm:w-5 text-[#14110F]" />} tile="bg-[#DCE6FB]" trend="neutral" />
       </div>
 
       {/* Tabs */}
@@ -750,7 +750,7 @@ export function PayrollModule() {
       {/* ══ TAB: ATTENDANCE ══ */}
       {activeTab === "attendance" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-[28px] border border-[#EDE7DA] shadow-sm overflow-hidden">
             <div className="px-4 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -809,7 +809,7 @@ export function PayrollModule() {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-[28px] border border-[#EDE7DA] shadow-sm overflow-hidden">
             <div className="px-4 sm:px-6 py-4 border-b border-slate-100">
               <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
@@ -907,25 +907,24 @@ export function PayrollModule() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Total Net Paid",  value: fmtK(stats.totalPaid),      icon: "✅", g: "from-emerald-500 to-teal-600"  },
-              { label: "Processed Queue", value: fmtK(stats.totalProcessed), icon: "⚙️", g: "from-amber-500 to-orange-500"  },
-              { label: "Pending Amount",  value: fmtK(stats.totalPending),   icon: "⏳", g: "from-slate-500 to-slate-600"   },
-              { label: "Total Gross",     value: fmtK(stats.totalGross),     icon: "💼", g: "from-slate-700 to-slate-800"   },
-              { label: "Paid Records",    value: String(stats.paidCount),    icon: "💳", g: "from-blue-500 to-blue-600"     },
-              { label: "Draft Records",   value: String(stats.draftCount),   icon: "📝", g: "from-rose-500 to-rose-600"     },
-              { label: "Total Records",   value: String(records.length),     icon: "📊", g: "from-violet-500 to-purple-600" },
-              { label: "Employees",       value: String(stats.headcount),    icon: "👥", g: "from-indigo-500 to-indigo-600" },
+              { label: "Total Net Paid",  value: fmtK(stats.totalPaid),      icon: "✅", tile: "bg-[#D9F0E2]" },
+              { label: "Processed Queue", value: fmtK(stats.totalProcessed), icon: "⚙️", tile: "bg-[#F4DCEF]" },
+              { label: "Pending Amount",  value: fmtK(stats.totalPending),   icon: "⏳", tile: "bg-[#FBE3C4]" },
+              { label: "Total Gross",     value: fmtK(stats.totalGross),     icon: "💼", tile: "bg-[#DCE6FB]" },
+              { label: "Paid Records",    value: String(stats.paidCount),    icon: "💳", tile: "bg-[#D9F0E2]" },
+              { label: "Draft Records",   value: String(stats.draftCount),   icon: "📝", tile: "bg-[#FBDCE0]" },
+              { label: "Total Records",   value: String(records.length),     icon: "📊", tile: "bg-[#F4DCEF]" },
+              { label: "Employees",       value: String(stats.headcount),    icon: "👥", tile: "bg-[#DCE6FB]" },
             ].map(s => (
-              <div key={s.label} className={`bg-gradient-to-br ${s.g} rounded-2xl p-4 sm:p-5 relative overflow-hidden`}>
+              <div key={s.label} className={`${s.tile} rounded-[24px] border border-[#EDE7DA] p-4 sm:p-5 relative overflow-hidden`}>
                 <div className="text-xl sm:text-2xl mb-2">{s.icon}</div>
-                <p className="text-xl sm:text-2xl font-black text-white">{s.value}</p>
-                <p className="text-[11px] sm:text-xs text-white/70 font-medium mt-1">{s.label}</p>
-                <div className="absolute -bottom-3 -right-3 w-14 h-14 bg-white/10 rounded-full pointer-events-none" />
+                <p className="text-xl sm:text-2xl font-black text-[#14110F]">{s.value}</p>
+                <p className="text-[11px] sm:text-xs text-[#5b5648] font-medium mt-1">{s.label}</p>
               </div>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 sm:p-6">
+          <div className="bg-white rounded-[28px] border border-[#EDE7DA] shadow-sm p-5 sm:p-6">
             <h3 className="text-sm font-black text-slate-800 mb-4">Net Salary by Role</h3>
             <div className="space-y-3">
               {["admin", "hr", "manager", "employee", "intern"].map(r => {
@@ -938,7 +937,7 @@ export function PayrollModule() {
                   <div key={r} className="flex items-center gap-3">
                     <span className={`text-[10px] sm:text-xs font-black px-2.5 py-1.5 rounded-xl capitalize w-20 text-center flex-shrink-0 ${rc.bg} ${rc.text}`}>{r}</span>
                     <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-[#E39A56] rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-xs sm:text-sm font-black text-slate-700 w-16 sm:w-20 text-right flex-shrink-0">{fmtK(total)}</span>
                     <span className="text-[10px] text-slate-400 w-8 text-right flex-shrink-0">{recs.length}e</span>
@@ -954,7 +953,7 @@ export function PayrollModule() {
               const cnt = records.filter(r => r.status === s).length;
               const amt = records.filter(r => r.status === s).reduce((a, r) => a + r.netSalary, 0);
               return (
-                <div key={s} className="bg-white rounded-2xl border border-slate-100 p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
+                <div key={s} className="bg-white rounded-[24px] border border-[#EDE7DA] p-4 sm:p-5 shadow-sm hover:shadow-md transition-all">
                   <div className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1.5 rounded-full mb-3 ${sc.bg} ${sc.color}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                     {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -972,7 +971,7 @@ export function PayrollModule() {
       {/* ══ TAB: RECORDS ══ */}
       {activeTab === "records" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+          <div className="bg-white rounded-[28px] border border-[#EDE7DA] shadow-sm p-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end flex-wrap">
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Report Type</p>
@@ -1002,7 +1001,7 @@ export function PayrollModule() {
                 </div>
               </>)}
               <button onClick={downloadReport}
-                className="flex items-center gap-2 h-9 px-4 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded-xl transition-all">
+                className="flex items-center gap-2 h-9 px-4 text-xs font-semibold bg-white hover:bg-[#F7F3EA] text-[#14110F] border border-[#EDE7DA] rounded-full transition-all">
                 <Download className="h-3.5 w-3.5" /> Export CSV
               </button>
             </div>
@@ -1026,7 +1025,7 @@ export function PayrollModule() {
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-[28px] border border-[#EDE7DA] shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <Table className="min-w-[860px]">
                 <TableHeader>
@@ -1226,7 +1225,7 @@ export function PayrollModule() {
                       </div>
                     </div>
                     {liveAtt && (
-                      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-3 border border-slate-700 text-center">
+                      <div className={`${ACCENT_DARK} rounded-xl p-3 border border-slate-700 text-center`}>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block mr-1.5 animate-pulse" />Salary Preview
                         </p>
@@ -1254,10 +1253,10 @@ export function PayrollModule() {
           <DialogContent className="max-w-sm mx-4 rounded-2xl">
             <DialogHeader><DialogTitle className="text-sm sm:text-base font-black">Mark as Paid — {paidDialog.userId?.name}</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-2">
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-center">
-                <p className="text-xs text-emerald-100 mb-1">Net Salary</p>
-                <p className="text-3xl font-black text-white">{fmt(paidDialog.netSalary)}</p>
-                <p className="text-xs text-emerald-200 mt-1">{paidDialog.month}</p>
+              <div className="bg-[#D9F0E2] rounded-2xl p-5 text-center border border-[#EDE7DA]">
+                <p className="text-xs text-[#14110F]/60 mb-1">Net Salary</p>
+                <p className="text-3xl font-black text-[#14110F]">{fmt(paidDialog.netSalary)}</p>
+                <p className="text-xs text-[#14110F]/60 mt-1">{paidDialog.month}</p>
               </div>
               <div>
                 <Label className="text-xs font-semibold text-slate-700">Payment Date</Label>
@@ -1296,7 +1295,7 @@ export function PayrollModule() {
             </DialogHeader>
             <div className="space-y-4 mt-2">
               {liveEdit && (
-                <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-4 border border-slate-700">
+                <div className={`${ACCENT_DARK} rounded-2xl p-4 border border-slate-700`}>
                   <div className="flex items-center gap-2 mb-3">
                     <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Preview</p>
@@ -1395,7 +1394,7 @@ export function PayrollModule() {
               </div>
 
               <div className="flex gap-2">
-                <Button disabled={saving} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white rounded-xl h-11 font-semibold" onClick={handleEdit}>
+                <Button disabled={saving} className={`flex-1 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white rounded-full h-11 font-semibold`} onClick={handleEdit}>
                   {saving ? <><RefreshCw className="h-3.5 w-3.5 animate-spin mr-2" />Saving…</> : "Save & Recalculate"}
                 </Button>
                 <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setEditRecord(null)}>Cancel</Button>
@@ -1405,6 +1404,7 @@ export function PayrollModule() {
         </Dialog>
       )}
 
+    </div>
     </div>
   );
 }
