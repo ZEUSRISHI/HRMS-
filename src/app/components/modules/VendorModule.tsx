@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { vendorApi } from "@/services/api";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 import {
   Building2, Phone, Mail, Tag, CalendarDays, AlertTriangle,
   Plus, Pencil, Trash2, Download, Bell, X, ChevronDown, ChevronUp,
@@ -219,7 +220,7 @@ export default function VendorModule() {
   );
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-gray-50 min-h-screen">
+    <div className={`p-4 md:p-6 space-y-6 ${PAGE_BG} min-h-full`}>
 
       {/* TOAST */}
       {toast && (
@@ -276,13 +277,13 @@ export default function VendorModule() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{vendors.length} vendors · Quibo Tech HRMS</p>
+          <h1 className="text-2xl font-bold text-[#14110F]">Vendor Management</h1>
+          <p className="text-[#5b5648] text-sm mt-0.5">{vendors.length} vendors · Quibo Tech HRMS</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={() => setShowBell(!showBell)}
-            className="relative p-2.5 bg-white border rounded-xl shadow-sm hover:bg-gray-50 transition-colors">
-            <Bell size={18} className="text-gray-600" />
+            className={`relative p-2.5 bg-white border ${PANEL_BORDER} rounded-xl shadow-sm hover:bg-[#F7F3EA] transition-colors`}>
+            <Bell size={18} className="text-[#5b5648]" />
             {expiring.length > 0 && (
               <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                 {expiring.length}
@@ -292,12 +293,12 @@ export default function VendorModule() {
           {isAdmin && (
             <>
               <button onClick={downloadCSV}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors">
+                className={`flex items-center gap-2 px-4 py-2.5 bg-white border ${PANEL_BORDER} rounded-xl text-sm font-medium text-[#14110F] shadow-sm hover:bg-[#F7F3EA] transition-colors`}>
                 <Download size={15} /> Export CSV
               </button>
               <button
                 onClick={() => { setEditId(null); setForm(emptyForm); setShowForm(!showForm); }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold shadow-sm transition-colors">
+                className={`flex items-center gap-2 px-4 py-2.5 ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white rounded-xl text-sm font-semibold shadow-sm transition-colors`}>
                 <Plus size={15} /> Add Vendor
               </button>
             </>
@@ -308,8 +309,8 @@ export default function VendorModule() {
       {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {stats.map((s) => (
-          <div key={s.label} className="bg-white rounded-2xl border shadow-sm p-5">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{s.label}</p>
+          <div key={s.label} className={`bg-white rounded-[20px] border ${PANEL_BORDER} shadow-sm p-5`}>
+            <p className="text-xs font-semibold text-[#5b5648] uppercase tracking-wide">{s.label}</p>
             <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
           </div>
         ))}
@@ -450,7 +451,7 @@ export default function VendorModule() {
 
             <div className="flex gap-3 pt-2">
               <button onClick={handleSave} disabled={saving}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors">
+                className={`px-6 py-2.5 ${ACCENT_DARK} hover:bg-black disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors`}>
                 {saving ? "Saving…" : editId ? "Update Vendor" : "Add Vendor"}
               </button>
               <button onClick={() => { setShowForm(false); setEditId(null); setForm(emptyForm); }}
@@ -489,7 +490,7 @@ export default function VendorModule() {
 
           return (
             <div key={v._id}
-              className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${
+              className={`bg-white rounded-[20px] border ${PANEL_BORDER} shadow-sm overflow-hidden transition-all ${
                 badge && v.daysLeft !== undefined && v.daysLeft <= 7 ? "border-red-200" : ""
               }`}>
 
