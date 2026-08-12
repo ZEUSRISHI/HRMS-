@@ -18,6 +18,7 @@ import {
   ShieldCheck, ShieldOff, KeyRound, Eye, EyeOff,
   UserCheck,
 } from "lucide-react";
+import { PAGE_BG, PANEL_BORDER, ACCENT_DARK } from "../../../styles/moduleTheme";
 
 /* ── country dial codes (major countries — extend as needed) ── */
 const COUNTRIES: { code: string; name: string; flag: string; length: number }[] = [
@@ -454,6 +455,7 @@ export function UserManagementModule() {
      RENDER
      ================================================================ */
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-6 max-w-7xl mx-auto px-3 py-4">
 
       {/* TOAST */}
@@ -468,13 +470,13 @@ export function UserManagementModule() {
       {/* ── HEADER ── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Users size={22} className="text-gray-700" />
-          <h1 className="text-xl font-bold text-gray-800">User Management</h1>
+          <Users size={22} className="text-[#14110F]" />
+          <h1 className="text-xl font-bold text-[#14110F]">User Management</h1>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={loadData}
-            className="p-2 rounded-lg border hover:bg-gray-50 text-gray-500"
+            className={`p-2 rounded-lg border ${PANEL_BORDER} hover:bg-[#F7F3EA] text-[#5b5648]`}
             title="Refresh"
           >
             <RefreshCw size={16} />
@@ -483,7 +485,7 @@ export function UserManagementModule() {
           {/* ── CREATE BUTTON ── */}
           <Button
             onClick={() => { setForm(initForm); setCreateOpen(true); }}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+            className={`${ACCENT_DARK} hover:bg-black text-white flex items-center gap-2`}
           >
             <UserPlus size={16} /> Add New User
           </Button>
@@ -494,15 +496,15 @@ export function UserManagementModule() {
       {stats && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3">
           {[
-            { label: "Total",    value: stats.total,            cls: "bg-gray-900 text-white"   },
-            { label: "Active",   value: stats.active,           cls: "bg-green-600 text-white"  },
-            { label: "Inactive", value: stats.inactive,         cls: "bg-red-500 text-white"    },
-            { label: "Admin",    value: stats.byRole?.admin,    cls: "bg-red-400 text-white"    },
-            { label: "Manager",  value: stats.byRole?.manager,  cls: "bg-purple-500 text-white" },
-            { label: "HR",       value: stats.byRole?.hr,       cls: "bg-blue-500 text-white"   },
-            { label: "Employee", value: stats.byRole?.employee, cls: "bg-gray-500 text-white"   },
+            { label: "Total",    value: stats.total,            cls: `${ACCENT_DARK} text-white`            },
+            { label: "Active",   value: stats.active,           cls: "bg-[#D9F0E2] text-[#14110F]"          },
+            { label: "Inactive", value: stats.inactive,         cls: "bg-[#FBDCE0] text-[#14110F]"          },
+            { label: "Admin",    value: stats.byRole?.admin,    cls: "bg-[#FBDCE0] text-[#14110F]"          },
+            { label: "Manager",  value: stats.byRole?.manager,  cls: "bg-[#F4DCEF] text-[#14110F]"          },
+            { label: "HR",       value: stats.byRole?.hr,       cls: "bg-[#DCE6FB] text-[#14110F]"          },
+            { label: "Employee", value: stats.byRole?.employee, cls: "bg-[#FBE3C4] text-[#14110F]"          },
           ].map(s => (
-            <div key={s.label} className={`rounded-xl px-4 py-3 flex flex-col items-center ${s.cls}`}>
+            <div key={s.label} className={`rounded-xl px-4 py-3 flex flex-col items-center border ${PANEL_BORDER} ${s.cls}`}>
               <span className="text-2xl font-bold">{s.value ?? 0}</span>
               <span className="text-xs mt-0.5 opacity-80">{s.label}</span>
             </div>
@@ -530,8 +532,8 @@ export function UserManagementModule() {
                   onClick={() => setFilterRole(r)}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors capitalize ${
                     filterRole === r
-                      ? "bg-black text-white border-black"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-gray-500"
+                      ? "bg-[#14110F] text-white border-[#14110F]"
+                      : `bg-white text-[#5b5648] ${PANEL_BORDER} hover:border-[#14110F]`
                   }`}
                 >
                   {r === "all" ? "All Roles" : r}
@@ -1010,6 +1012,7 @@ export function UserManagementModule() {
         </DialogContent>
       </Dialog>
 
+    </div>
     </div>
   );
 }
