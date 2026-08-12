@@ -19,6 +19,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useUnreadCounts } from "../../contexts/UnreadCountsContext";
 import { taskApi } from "@/services/api";
+import { PAGE_BG, PANEL_BORDER, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 
 type TaskStatus = "pending" | "in-progress" | "completed";
 type Priority   = "low" | "medium" | "high";
@@ -579,6 +580,7 @@ export function TaskManagement() {
   }
 
   return (
+    <div className={`${PAGE_BG} -m-4 sm:-m-6 p-4 sm:p-6 min-h-full`}>
     <div className="space-y-4 px-2 sm:px-0">
 
       {/* ── NEW TASK ASSIGNED POPUP ── */}
@@ -631,7 +633,7 @@ export function TaskManagement() {
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold">Task Management</h1>
+            <h1 className="text-lg sm:text-xl font-semibold text-[#14110F]">Task Management</h1>
             <p className="text-xs sm:text-sm text-gray-500">
               {filteredTasks.length} task{filteredTasks.length !== 1 ? "s" : ""}
               {(filterStatus || filterPriority) && " (filtered)"}
@@ -663,7 +665,7 @@ export function TaskManagement() {
             {canCreate && (
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button size="sm" onClick={() => resetForm()} className="gap-1 h-8 text-xs">
+                  <Button size="sm" onClick={() => resetForm()} className={`gap-1 h-8 text-xs ${ACCENT_ORANGE} ${ACCENT_ORANGE_HOVER} text-white border-0`}>
                     <Plus className="h-3 w-3" /> New Task
                   </Button>
                 </DialogTrigger>
@@ -777,7 +779,7 @@ export function TaskManagement() {
           {filteredTasks.map(task => (
             <Card
               key={task._id}
-              className={`hover:shadow-lg transition-all duration-200 border-l-4 ${
+              className={`hover:shadow-lg transition-all duration-200 border-l-4 rounded-2xl ${PANEL_BORDER} ${
                 task.status === "completed"   ? "border-l-emerald-500" :
                 task.status === "in-progress" ? "border-l-blue-500"    :
                                                  "border-l-gray-300"
@@ -1228,6 +1230,7 @@ export function TaskManagement() {
         </DialogContent>
       </Dialog>
 
+    </div>
     </div>
   );
 }
