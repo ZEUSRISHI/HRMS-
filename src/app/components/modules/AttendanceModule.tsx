@@ -59,6 +59,39 @@ const LiveClock = () => {
   );
 };
 
+
+/* ============================================================
+   WORKING HOURS HELPERS
+   ============================================================ */
+const parseTimeToMinutes = (timeStr?: string | null): number | null => {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const ampm = match[3].toUpperCase();
+  if (ampm === "PM" && hours !== 12) hours += 12;
+  if (ampm === "AM" && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+const formatMinutesAsHM = (totalMins: number): string => {
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+};
+
+const calculateWorkingHours = (checkIn?: string | null, checkOut?: string | null): string | null => {
+  const inMins = parseTimeToMinutes(checkIn);
+  const outMins = parseTimeToMinutes(checkOut);
+  if (inMins === null || outMins === null) return null;
+  let diff = outMins - inMins;
+  if (diff < 0) diff += 24 * 60; // overnight shift safety
+  return formatMinutesAsHM(diff);
+};
+
 /* ============================================================
    MONTHLY ATTENDANCE CALENDAR COMPONENT
    ============================================================ */
@@ -139,7 +172,7 @@ const MonthlyAttendanceCalendar = ({
     else if (attRecord?.checkIn && !attRecord?.checkOut) status = "partial";
     else                  status = "absent";
 
-    return {
+        return {
   day, dateStr, isToday, isFuture, isWeekend, status,
   checkIn:   attRecord?.checkIn  ?? null,
   checkOut:  attRecord?.checkOut ?? null,
@@ -148,6 +181,7 @@ const MonthlyAttendanceCalendar = ({
   checkOutLocation: attRecord?.checkOutLocation ?? null,
   leaveType: leaveRecord?.type   ?? null,
   isManual:  attRecord?.isManual ?? false,
+  workingHours: calculateWorkingHours(attRecord?.checkIn, attRecord?.checkOut),
 };
   });
 
@@ -156,6 +190,18 @@ const MonthlyAttendanceCalendar = ({
   const absentDays  = dayData.filter(d => d.status === "absent").length;
   const leaveDays   = dayData.filter(d => d.status === "leave").length;
   const percentage  = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
+
+  const totalWorkedMinutes = dayData.reduce((sum, d) => {
+    const inMins  = parseTimeToMinutes(d.checkIn);
+    const outMins = parseTimeToMinutes(d.checkOut);
+    if (inMins === null || outMins === null) return sum;
+    let diff = outMins - inMins;
+    if (diff < 0) diff += 24 * 60;
+    return sum + diff;
+  }, 0);
+  const totalWorkedLabel = formatMinutesAsHM(totalWorkedMinutes);
+  const avgWorkedMinutesPerDay = presentDays > 0 ? Math.round(totalWorkedMinutes / presentDays) : 0;
+  const avgWorkedLabel = formatMinutesAsHM(avgWorkedMinutesPerDay);
 
   const isCurrentMonth =
     format(viewMonth, "yyyy-MM") === format(new Date(), "yyyy-MM");
@@ -211,12 +257,13 @@ const MonthlyAttendanceCalendar = ({
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-5 gap-1.5">
         {[
-          { label: "Rate",    value: `${percentage}%`, bg: "bg-slate-800",   text: "text-white"       },
-          { label: "Present", value: presentDays,       bg: "bg-emerald-50", text: "text-emerald-800" },
-          { label: "Absent",  value: absentDays,        bg: "bg-red-50",     text: "text-red-800"     },
-          { label: "Leave",   value: leaveDays,         bg: "bg-amber-50",   text: "text-amber-800"   },
+          { label: "Rate",    value: `${percentage}%`,   bg: "bg-slate-800",   text: "text-white"       },
+          { label: "Present", value: presentDays,         bg: "bg-emerald-50", text: "text-emerald-800" },
+          { label: "Absent",  value: absentDays,          bg: "bg-red-50",     text: "text-red-800"     },
+          { label: "Leave",   value: leaveDays,           bg: "bg-amber-50",   text: "text-amber-800"   },
+          { label: "Hours",   value: totalWorkedLabel,    bg: "bg-blue-50",    text: "text-blue-800"    },
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-lg py-2 px-1 text-center border border-gray-100`}>
             <p className={`text-sm font-black leading-none ${s.text}`}>{s.value}</p>
@@ -345,6 +392,13 @@ const MonthlyAttendanceCalendar = ({
     Out: <span className="text-red-400 font-mono font-bold">{d.checkOut}</span>
   </p>
 )}
+
+{d.workingHours && (
+  <p className="text-[10px] text-gray-300 mt-0.5">
+    ⏱ Hours: <span className="text-blue-300 font-mono font-bold">{d.workingHours}</span>
+  </p>
+)}
+
 {d.checkInLocation && (
   <p className="text-[10px] text-emerald-300 mt-0.5 max-w-[170px] whitespace-normal">
     📍 In: {d.checkInLocation}
