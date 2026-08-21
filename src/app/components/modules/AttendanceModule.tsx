@@ -104,6 +104,9 @@ interface MonthlyAttendanceProps {
   allUsers?: any[];
   currentUserName?: string;
   currentUserId?: string;
+  canForceCheckout?: boolean;
+  onForceCheckout?: (payload: { recordId: string; userId: string; date: string }) => void;
+  forceCheckoutLoadingId?: string | null;
 }
 
 const MonthlyAttendanceCalendar = ({
@@ -115,6 +118,9 @@ const MonthlyAttendanceCalendar = ({
   allUsers = [],
   currentUserName = "",
   currentUserId = "",
+  canForceCheckout = false,
+  onForceCheckout,
+  forceCheckoutLoadingId = null,
 }: MonthlyAttendanceProps) => {
   const [viewMonth, setViewMonth] = useState(new Date());
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
@@ -172,6 +178,10 @@ const MonthlyAttendanceCalendar = ({
     else if (attRecord?.checkIn && !attRecord?.checkOut) status = "partial";
     else                  status = "absent";
 
+        const recordUserId = attRecord?.userId
+          ? (typeof attRecord.userId === "object" ? attRecord.userId._id : attRecord.userId)
+          : null;
+
         return {
   day, dateStr, isToday, isFuture, isWeekend, status,
   checkIn:   attRecord?.checkIn  ?? null,
@@ -182,6 +192,8 @@ const MonthlyAttendanceCalendar = ({
   leaveType: leaveRecord?.type   ?? null,
   isManual:  attRecord?.isManual ?? false,
   workingHours: calculateWorkingHours(attRecord?.checkIn, attRecord?.checkOut),
+  recordId:     attRecord?._id ?? null,
+  recordUserId,
 };
   });
 
@@ -192,15 +204,29 @@ const MonthlyAttendanceCalendar = ({
   const percentage  = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
 
   const totalWorkedMinutes = dayData.reduce((sum, d) => {
+    // Only count days that are actually present/partial with a real check-in.
+    // Skip future, weekend-with-no-record, and any day missing a valid check-in.
+    if (d.status !== "present" && d.status !== "partial") return sum;
+
     const inMins  = parseTimeToMinutes(d.checkIn);
     const outMins = parseTimeToMinutes(d.checkOut);
-    if (inMins === null || outMins === null) return sum;
+    if (inMins === null) return sum;
+
+    // Partial day (checked in, not checked out yet) contributes 0 to total hours
+    if (outMins === null) return sum;
+
     let diff = outMins - inMins;
-    if (diff < 0) diff += 24 * 60;
+    if (diff < 0) diff += 24 * 60; // overnight shift safety
+    if (diff <= 0 || diff > 20 * 60) return sum; // guard against corrupt entries (>20h)
+
     return sum + diff;
   }, 0);
   const totalWorkedLabel = formatMinutesAsHM(totalWorkedMinutes);
-  const avgWorkedMinutesPerDay = presentDays > 0 ? Math.round(totalWorkedMinutes / presentDays) : 0;
+
+  const completedDaysCount = dayData.filter(
+    d => (d.status === "present") && d.checkIn && d.checkOut
+  ).length;
+  const avgWorkedMinutesPerDay = completedDaysCount > 0 ? Math.round(totalWorkedMinutes / completedDaysCount) : 0;
   const avgWorkedLabel = formatMinutesAsHM(avgWorkedMinutesPerDay);
 
   const isCurrentMonth =
@@ -367,7 +393,7 @@ const MonthlyAttendanceCalendar = ({
                       minWidth: "130px",
                     }}
                   >
-                    <div className="bg-gray-900 text-white rounded-xl shadow-2xl px-3 py-2 text-left whitespace-normal max-w-[200px]">
+                    <div className="bg-gray-900 text-white rounded-xl shadow-2xl px-3 py-2 text-left whitespace-normal max-w-[200px] pointer-events-auto">
                       <p className="text-[11px] font-bold mb-1">
                         {format(parseISO(d.dateStr), "d MMM yyyy")}
                       </p>
@@ -416,6 +442,18 @@ const MonthlyAttendanceCalendar = ({
                         <p className="text-[10px] text-gray-400 italic mt-0.5 max-w-[150px] truncate">
                           "{d.tagline}"
                         </p>
+                      )}
+                      {canForceCheckout && d.status === "partial" && d.recordUserId && d.recordId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onForceCheckout?.({ recordId: d.recordId, userId: d.recordUserId, date: d.dateStr });
+                          }}
+                          disabled={forceCheckoutLoadingId === d.recordId}
+                          className="mt-1.5 w-full flex items-center justify-center gap-1 text-[10px] font-semibold bg-blue-600 hover:bg-blue-500 text-white rounded-md py-1 transition-colors disabled:opacity-50"
+                        >
+                          {forceCheckoutLoadingId === d.recordId ? "Checking out…" : "⏻ Check Out Now"}
+                        </button>
                       )}
                     </div>
                     <div className="flex justify-center" style={{ marginTop: "-1px" }}>
@@ -614,10 +652,10 @@ export function AttendanceModule() {
   const loadTodayOnly = useCallback(async () => {
     try {
       const todayRes = await attendanceApi.getToday();
-      setTodayRecord(todayRes.record || null);
+      setTodayRecord(todayRes.record ? { ...todayRes.record } : null);
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
-        setAllAttendance(allRes.records || []);
+        setAllAttendance(allRes.records ? [...allRes.records] : []);
       }
     } catch (err: any) {
       console.error("loadTodayOnly error:", err.message);
@@ -737,6 +775,67 @@ export function AttendanceModule() {
     }
   };
 
+  /* Force checkout for any user on any past/present date (missed checkout) */
+  const handleForceCheckoutDate = async (record: any) => {
+    const targetUserId = record.userId
+      ? (typeof record.userId === "object" ? record.userId._id : record.userId)
+      : null;
+    if (!targetUserId) { showToast("This record has no linked user to check out.", "error"); return; }
+
+    const isToday = record.date === todayStr;
+    let checkOutTime: string | undefined;
+    if (!isToday) {
+      const input = window.prompt(`Enter check-out time for ${record.date} (24h HH:MM, e.g. 18:30):`, "18:00");
+      if (!input) return;
+      checkOutTime = input.trim();
+    }
+
+    try {
+      setAdminActionLoading(`${record._id}-force`);
+      const res = await attendanceApi.adminCheckOutForDate(targetUserId, { date: record.date, checkOutTime });
+      showToast(`✅ ${res.message}`);
+      const [manualRes, allRes] = await Promise.all([
+        attendanceApi.getManual(),
+        attendanceApi.getAll(),
+      ]);
+      setManualDbRecords(manualRes.records || []);
+      setAllAttendance(allRes.records || []);
+    } catch (err: any) {
+      showToast(err.message || "Force checkout failed", "error");
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  /* Force checkout triggered from the Team Monthly Attendance calendar (partial-day tooltip) */
+  const [calendarForceCheckoutLoadingId, setCalendarForceCheckoutLoadingId] = useState<string | null>(null);
+
+  const handleCalendarForceCheckout = async (payload: { recordId: string; userId: string; date: string }) => {
+    const isToday = payload.date === todayStr;
+    let checkOutTime: string | undefined;
+    if (!isToday) {
+      const input = window.prompt(`Enter check-out time for ${payload.date} (24h HH:MM, e.g. 18:30):`, "18:00");
+      if (!input) return;
+      checkOutTime = input.trim();
+    }
+
+    try {
+      setCalendarForceCheckoutLoadingId(payload.recordId);
+      const res = await attendanceApi.adminCheckOutForDate(payload.userId, { date: payload.date, checkOutTime });
+      showToast(`✅ ${res.message}`);
+      const [manualRes, allRes] = await Promise.all([
+        attendanceApi.getManual(),
+        attendanceApi.getAll(),
+      ]);
+      setManualDbRecords(manualRes.records || []);
+      setAllAttendance(allRes.records || []);
+    } catch (err: any) {
+      showToast(err.message || "Force checkout failed", "error");
+    } finally {
+      setCalendarForceCheckoutLoadingId(null);
+    }
+  };
+
   const handleSendReminder = async (user: any) => {
     try {
       setReminderLoading(user._id);
@@ -761,7 +860,7 @@ export function AttendanceModule() {
       lat: coords?.lat,
       lng: coords?.lng,
     });
-    setTodayRecord(res.record);
+    setTodayRecord({ ...res.record });
     showToast(
       res.record.checkInLocation
         ? `✅ Checked in at ${res.record.checkIn} · 📍 ${res.record.checkInLocation}`
@@ -787,7 +886,7 @@ export function AttendanceModule() {
     setCheckOutLoading(true);
     const coords = await getCurrentPosition();
     const res = await attendanceApi.checkOut({ lat: coords?.lat, lng: coords?.lng });
-    setTodayRecord(res.record);
+      setTodayRecord({ ...res.record });
     showToast(
       res.record.checkOutLocation
         ? `✅ Checked out at ${res.record.checkOut} · 📍 ${res.record.checkOutLocation}`
@@ -816,7 +915,7 @@ export function AttendanceModule() {
       }
       const res = await attendanceApi.updateLocation({ lat: coords.lat, lng: coords.lng, type });
       if (res.record) {
-        setTodayRecord(res.record);
+        setTodayRecord({ ...res.record });
         showToast("📍 Location added successfully");
       } else {
         showToast(res.message || "Could not resolve that location", "error");
@@ -1289,6 +1388,9 @@ export function AttendanceModule() {
                   userName={calendarSelectedUser.name}
                   isAdminView
                   allUsers={allUsersList}
+                  canForceCheckout={isAdmin || isHR}
+                  onForceCheckout={handleCalendarForceCheckout}
+                  forceCheckoutLoadingId={calendarForceCheckoutLoadingId}
                 />
               </div>
             ) : (
@@ -1533,8 +1635,20 @@ export function AttendanceModule() {
                                     {r.checkOut ? "✓ Complete" : r.checkIn ? "● Active" : "Pending"}
                                   </span>
                                 </td>
-                                <td className="px-3 py-2.5">
+                                 <td className="px-3 py-2.5">
                                   <div className="flex items-center justify-center gap-1.5">
+                                    {r.checkIn && !r.checkOut && (
+                                      <button
+                                        onClick={() => handleForceCheckoutDate(r)}
+                                        disabled={adminActionLoading === `${r._id}-force`}
+                                        className="p-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 transition-colors"
+                                        title="Check out (missed checkout)"
+                                      >
+                                        {adminActionLoading === `${r._id}-force`
+                                          ? <RefreshCw size={12} className="animate-spin" />
+                                          : <LogOut size={12} />}
+                                      </button>
+                                    )}
                                     <button onClick={() => openEditAdminDaily(r)}
                                       className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors" title="Edit">
                                       <Edit2 size={12} />
