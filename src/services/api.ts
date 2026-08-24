@@ -262,10 +262,16 @@ export const attendanceApi = {
       body: JSON.stringify(body ?? {}),
     }),
 
-  adminCheckOut: (userId: string) =>
+    adminCheckOut: (userId: string) =>
     apiFetch(`/attendance/admin-checkout/${userId}`, {
       method: "POST",
       body: JSON.stringify({}),
+    }),
+
+  adminCheckOutForDate: (userId: string, data: { date: string; checkOutTime?: string }) =>
+    apiFetch(`/attendance/admin-checkout-date/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
     }),
 
   sendCheckoutReminder: (userId: string) =>
