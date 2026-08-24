@@ -1097,13 +1097,13 @@ export function AttendanceModule() {
     const { start, end } = getReportDateRange();
     const apiFiltered    = filterApiAttendance(allAttendance, start, end);
     const manualFiltered = filterManualDbAttendance(manualDbRecords, start, end);
-    const apiRows = apiFiltered.map(r => ({ date: r.date ?? "", name: r.userId?.name ?? "Unknown", role: r.userId?.role ?? "", checkIn: r.checkIn ?? "", checkOut: r.checkOut ?? "", tagline: r.tagline ?? "", source: "System" }));
-    const manualRows = manualFiltered.map(r => ({ date: r.date ?? "", name: r.manualEmployeeName ?? "", role: r.manualEmployeeRole ?? "", checkIn: r.checkIn ?? "", checkOut: r.checkOut ?? "", tagline: r.tagline ?? "", source: `Manual (by ${r.enteredByName ?? "Admin"})` }));
+    const apiRows = apiFiltered.map(r => ({ date: r.date ?? "", name: r.userId?.name ?? "Unknown", role: r.userId?.role ?? "", checkIn: r.checkIn ?? "", checkOut: r.checkOut ?? "", workingHours: calculateWorkingHours(r.checkIn, r.checkOut) ?? "", tagline: r.tagline ?? "", source: "System" }));
+    const manualRows = manualFiltered.map(r => ({ date: r.date ?? "", name: r.manualEmployeeName ?? "", role: r.manualEmployeeRole ?? "", checkIn: r.checkIn ?? "", checkOut: r.checkOut ?? "", workingHours: calculateWorkingHours(r.checkIn, r.checkOut) ?? "", tagline: r.tagline ?? "", source: `Manual (by ${r.enteredByName ?? "Admin"})` }));
     const combined = [...apiRows, ...manualRows];
     if (combined.length === 0) { showToast("No records match the selected filters", "error"); return; }
     combined.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.name || "").localeCompare(b.name || ""));
-    const header = "Date,Name,Role,Check In,Check Out,Tagline,Source";
-    const rows   = combined.map(r => `${r.date},${r.name},${r.role},${r.checkIn},${r.checkOut},"${(r.tagline || "").replace(/"/g, '""')}",${r.source}`);
+    const header = "Date,Name,Role,Check In,Check Out,Working Hours,Tagline,Source";
+    const rows   = combined.map(r => `${r.date},${r.name},${r.role},${r.checkIn},${r.checkOut},${r.workingHours},"${(r.tagline || "").replace(/"/g, '""')}",${r.source}`);
     triggerDownload([header, ...rows].join("\n"), `attendance_report_${start || "all"}_to_${end || "all"}.csv`);
   };
 
