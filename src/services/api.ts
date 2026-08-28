@@ -340,6 +340,7 @@ export const leaveApi = {
 
   addManual: (data: {
     employeeName: string;
+    userId?:      string;
     type:         string;
     startDate:    string;
     endDate:      string;
@@ -351,7 +352,6 @@ export const leaveApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
-
   getManual:    ()           => apiFetch("/leaves/manual"),
   deleteManual: (id: string) => apiFetch(`/leaves/manual/${id}`, { method: "DELETE" }),
 };
