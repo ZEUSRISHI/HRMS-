@@ -8,7 +8,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "../ui/dialog";
 import { useAuth } from "../../contexts/AuthContext";
-import { attendanceApi } from "@/services/api";
+import { attendanceApi, leaveApi } from "@/services/api";
 import {
   format, startOfWeek, endOfWeek, startOfMonth, endOfMonth,
   subWeeks, subMonths, eachDayOfInterval, parseISO, getDaysInMonth,
@@ -107,6 +107,9 @@ interface MonthlyAttendanceProps {
   canForceCheckout?: boolean;
   onForceCheckout?: (payload: { recordId: string; userId: string; date: string }) => void;
   forceCheckoutLoadingId?: string | null;
+  canMarkLeave?: boolean;
+  onMarkLeave?: (payload: { userId: string; userName: string; date: string }) => void;
+  markLeaveLoadingId?: string | null;
 }
 
 const MonthlyAttendanceCalendar = ({
@@ -121,6 +124,9 @@ const MonthlyAttendanceCalendar = ({
   canForceCheckout = false,
   onForceCheckout,
   forceCheckoutLoadingId = null,
+  canMarkLeave = false,
+  onMarkLeave,
+  markLeaveLoadingId = null,
 }: MonthlyAttendanceProps) => {
   const [viewMonth, setViewMonth] = useState(new Date());
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
@@ -170,10 +176,11 @@ const MonthlyAttendanceCalendar = ({
       return dateStr >= l.startDate && dateStr <= l.endDate;
     });
 
-    let status: "present" | "absent" | "leave" | "weekend" | "future" | "partial" = "absent";
+    let status: "present" | "absent" | "leave" | "weekend" | "future" | "partial" | "manual_tagged" = "absent";
     if (isFuture)         status = "future";
     else if (isWeekend)   status = "weekend";
     else if (leaveRecord) status = "leave";
+    else if (attRecord?.isManual && attRecord?.tagline && attRecord?.checkIn) status = "manual_tagged";
     else if (attRecord?.checkIn && attRecord?.checkOut) status = "present";
     else if (attRecord?.checkIn && !attRecord?.checkOut) status = "partial";
     else                  status = "absent";
@@ -234,24 +241,26 @@ const MonthlyAttendanceCalendar = ({
 
   const cellBg = (status: string) => {
     switch (status) {
-      case "present": return "bg-emerald-100 border border-emerald-200";
-      case "partial":  return "bg-blue-50 border border-blue-200";
-      case "absent":   return "bg-red-50 border border-red-200";
-      case "leave":    return "bg-amber-50 border border-amber-200";
-      case "weekend":  return "bg-gray-50 border border-gray-100";
-      default:         return "bg-white border border-gray-100";
+      case "present":      return "bg-emerald-100 border border-emerald-200";
+      case "manual_tagged":return "bg-purple-100 border border-purple-200";
+      case "partial":      return "bg-blue-50 border border-blue-200";
+      case "absent":       return "bg-red-50 border border-red-200";
+      case "leave":        return "bg-amber-50 border border-amber-200";
+      case "weekend":      return "bg-gray-50 border border-gray-100";
+      default:             return "bg-white border border-gray-100";
     }
   };
 
   const cellTextColor = (status: string) => {
     switch (status) {
-      case "present": return "text-emerald-800";
-      case "partial":  return "text-blue-700";
-      case "absent":   return "text-red-700";
-      case "leave":    return "text-amber-700";
+      case "present":       return "text-emerald-800";
+      case "manual_tagged": return "text-purple-800";
+      case "partial":       return "text-blue-700";
+      case "absent":        return "text-red-700";
+      case "leave":         return "text-amber-700";
       case "weekend":
-      case "future":   return "text-gray-300";
-      default:         return "text-gray-700";
+      case "future":        return "text-gray-300";
+      default:              return "text-gray-700";
     }
   };
 
@@ -372,6 +381,9 @@ const MonthlyAttendanceCalendar = ({
                   {d.status === "present" && d.isManual && (
                     <span className="text-[6px] font-black text-emerald-600 mt-0.5 leading-none">M</span>
                   )}
+                  {d.status === "manual_tagged" && (
+                    <span className="text-[6px] font-black text-purple-600 mt-0.5 leading-none">M</span>
+                  )}
                   {d.status === "partial" && (
                     <span className="w-1 h-1 rounded-full bg-blue-400 mt-0.5 opacity-80" />
                   )}
@@ -398,12 +410,13 @@ const MonthlyAttendanceCalendar = ({
                         {format(parseISO(d.dateStr), "d MMM yyyy")}
                       </p>
                       <p className={`text-[10px] font-semibold capitalize mb-1 ${
-                        d.status === "present" ? "text-emerald-400" :
-                        d.status === "partial"  ? "text-blue-400"    :
-                        d.status === "leave"    ? "text-amber-400"   :
+                        d.status === "present"       ? "text-emerald-400" :
+                        d.status === "manual_tagged" ? "text-purple-400"  :
+                        d.status === "partial"       ? "text-blue-400"    :
+                        d.status === "leave"         ? "text-amber-400"   :
                         "text-red-400"
                       }`}>
-                        {d.status === "partial" ? "Partial day" : d.status}
+                        {d.status === "partial" ? "Partial day" : d.status === "manual_tagged" ? "Manual entry" : d.status}
                         {d.isManual && (
                           <span className="ml-1 text-[9px] text-slate-400">(manual)</span>
                         )}
@@ -455,6 +468,18 @@ const MonthlyAttendanceCalendar = ({
                           {forceCheckoutLoadingId === d.recordId ? "Checking out…" : "⏻ Check Out Now"}
                         </button>
                       )}
+                      {canMarkLeave && isAdminView && userId && d.status !== "leave" && d.status !== "future" && onMarkLeave && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onMarkLeave({ userId, userName: userName || "", date: d.dateStr });
+                          }}
+                          disabled={markLeaveLoadingId === `${userId}-${d.dateStr}`}
+                          className="mt-1.5 w-full flex items-center justify-center gap-1 text-[10px] font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-md py-1 transition-colors disabled:opacity-50"
+                        >
+                          {markLeaveLoadingId === `${userId}-${d.dateStr}` ? "Marking…" : "🏖 Mark Leave"}
+                        </button>
+                      )}
                     </div>
                     <div className="flex justify-center" style={{ marginTop: "-1px" }}>
                       <div style={{
@@ -475,6 +500,7 @@ const MonthlyAttendanceCalendar = ({
       <div className="flex flex-wrap gap-x-3 gap-y-1 pt-2 border-t border-gray-100">
         {[
           { color: "bg-emerald-100 border border-emerald-200", label: "Present" },
+          { color: "bg-purple-100 border border-purple-200",   label: "Manual + Note" },
           { color: "bg-blue-50 border border-blue-200",        label: "Partial" },
           { color: "bg-red-50 border border-red-200",          label: "Absent"  },
           { color: "bg-amber-50 border border-amber-200",      label: "Leave"   },
@@ -548,6 +574,9 @@ export function AttendanceModule() {
 
   const [userSearch,           setUserSearch]           = useState("");
   const [calendarSelectedUser, setCalendarSelectedUser] = useState<any>(null);
+  const [myLeaveRecords,       setMyLeaveRecords]       = useState<any[]>([]);
+  const [allLeaveRecords,      setAllLeaveRecords]      = useState<any[]>([]);
+  const [calendarMarkLeaveLoadingId, setCalendarMarkLeaveLoadingId] = useState<string | null>(null);
 
   /* ── Admin CRUD entry state ── */
   const [adminDailyEntryOpen,  setAdminDailyEntryOpen]  = useState(false);
@@ -675,6 +704,9 @@ export function AttendanceModule() {
       const myRes = await attendanceApi.getMy();
       setMyAttendance(myRes.records || []);
 
+      const myLeavesRes = await leaveApi.getMy();
+      setMyLeaveRecords(myLeavesRes.leaves || []);
+
       if (isAdmin || isHR || isManager) {
         const allRes = await attendanceApi.getAll();
         setAllAttendance(allRes.records || []);
@@ -682,6 +714,8 @@ export function AttendanceModule() {
       if (canAdminControl) {
         const usersRes = await attendanceApi.getUsersList();
         setAllUsersList(usersRes.users || []);
+        const allLeavesRes = await leaveApi.getAll();
+        setAllLeaveRecords(allLeavesRes.leaves || []);
       }
       if (isAdmin) {
   const manualRes = await attendanceApi.getManual();
@@ -833,6 +867,39 @@ export function AttendanceModule() {
       showToast(err.message || "Force checkout failed", "error");
     } finally {
       setCalendarForceCheckoutLoadingId(null);
+    }
+  };
+
+  const handleCalendarMarkLeave = async (payload: { userId: string; userName: string; date: string }) => {
+    const type = window.prompt(
+      `Leave type for ${payload.userName} on ${payload.date} (e.g. "Government Holiday", "Sick Leave"):`,
+      "Government Holiday"
+    );
+    if (!type) return;
+    const reason = window.prompt("Reason / note for this leave:", type) || type;
+
+    try {
+      setCalendarMarkLeaveLoadingId(`${payload.userId}-${payload.date}`);
+      await leaveApi.addManual({
+        employeeName: payload.userName,
+        userId:       payload.userId,
+        type,
+        startDate:    payload.date,
+        endDate:      payload.date,
+        reason,
+        status:       "approved",
+      });
+      showToast(`✅ Marked ${payload.userName} on leave for ${payload.date}`);
+      const [allLeavesRes, myLeavesRes] = await Promise.all([
+        leaveApi.getAll(),
+        leaveApi.getMy(),
+      ]);
+      setAllLeaveRecords(allLeavesRes.leaves || []);
+      setMyLeaveRecords(myLeavesRes.leaves || []);
+    } catch (err: any) {
+      showToast(err.message || "Failed to mark leave", "error");
+    } finally {
+      setCalendarMarkLeaveLoadingId(null);
     }
   };
 
@@ -1341,7 +1408,7 @@ export function AttendanceModule() {
         <CardContent className="px-3 sm:px-6">
           <MonthlyAttendanceCalendar
             records={myCalendarRecords}
-            leaveRecords={[]}
+            leaveRecords={myLeaveRecords}
             currentUserName={currentUser?.name ?? ""}
             currentUserId={currentUser?._id ?? ""}
           />
@@ -1383,7 +1450,7 @@ export function AttendanceModule() {
               <div className="border border-slate-100 rounded-xl p-3 sm:p-4 bg-slate-50/30">
                 <MonthlyAttendanceCalendar
                   records={teamCalendarRecords}
-                  leaveRecords={[]}
+                  leaveRecords={allLeaveRecords}
                   userId={calendarSelectedUser._id}
                   userName={calendarSelectedUser.name}
                   isAdminView
@@ -1391,6 +1458,9 @@ export function AttendanceModule() {
                   canForceCheckout={isAdmin || isHR}
                   onForceCheckout={handleCalendarForceCheckout}
                   forceCheckoutLoadingId={calendarForceCheckoutLoadingId}
+                  canMarkLeave={isAdmin || isHR}
+                  onMarkLeave={handleCalendarMarkLeave}
+                  markLeaveLoadingId={calendarMarkLeaveLoadingId}
                 />
               </div>
             ) : (
