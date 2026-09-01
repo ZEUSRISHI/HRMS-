@@ -204,16 +204,19 @@ const MonthlyAttendanceCalendar = ({
 };
   });
 
-  const workingDays = dayData.filter(d => !d.isWeekend && !d.isFuture).length;
-  const presentDays = dayData.filter(d => d.status === "present" || d.status === "partial").length;
-  const absentDays  = dayData.filter(d => d.status === "absent").length;
-  const leaveDays   = dayData.filter(d => d.status === "leave").length;
-  const percentage  = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
+const workingDays = dayData.filter(d => !d.isWeekend && !d.isFuture).length;
+const presentDays = dayData.filter(
+  d => d.status === "present" || d.status === "partial" || d.status === "manual_tagged"
+).length;
+const absentDays  = dayData.filter(d => d.status === "absent").length;
+const leaveDays   = dayData.filter(d => d.status === "leave").length;
+const percentage  = workingDays > 0 ? Math.round((presentDays / workingDays) * 100) : 0;
+const totalDays  = presentDays + absentDays + leaveDays;
 
-  const totalWorkedMinutes = dayData.reduce((sum, d) => {
-    // Only count days that are actually present/partial with a real check-in.
+const totalWorkedMinutes = dayData.reduce((sum, d) => {
+    // Count present/partial/manual-tagged days with a real check-in.
     // Skip future, weekend-with-no-record, and any day missing a valid check-in.
-    if (d.status !== "present" && d.status !== "partial") return sum;
+    if (d.status !== "present" && d.status !== "partial" && d.status !== "manual_tagged") return sum;
 
     const inMins  = parseTimeToMinutes(d.checkIn);
     const outMins = parseTimeToMinutes(d.checkOut);
@@ -231,7 +234,7 @@ const MonthlyAttendanceCalendar = ({
   const totalWorkedLabel = formatMinutesAsHM(totalWorkedMinutes);
 
   const completedDaysCount = dayData.filter(
-    d => (d.status === "present") && d.checkIn && d.checkOut
+    d => (d.status === "present" || d.status === "manual_tagged") && d.checkIn && d.checkOut
   ).length;
   const avgWorkedMinutesPerDay = completedDaysCount > 0 ? Math.round(totalWorkedMinutes / completedDaysCount) : 0;
   const avgWorkedLabel = formatMinutesAsHM(avgWorkedMinutesPerDay);
@@ -292,12 +295,13 @@ const MonthlyAttendanceCalendar = ({
         )}
       </div>
 
-            <div className="grid grid-cols-5 gap-1.5">
+<div className="grid grid-cols-6 gap-1.5">
         {[
           { label: "Rate",    value: `${percentage}%`,   bg: "bg-slate-800",   text: "text-white"       },
           { label: "Present", value: presentDays,         bg: "bg-emerald-50", text: "text-emerald-800" },
           { label: "Absent",  value: absentDays,          bg: "bg-red-50",     text: "text-red-800"     },
           { label: "Leave",   value: leaveDays,           bg: "bg-amber-50",   text: "text-amber-800"   },
+          { label: "Total",   value: totalDays,           bg: "bg-slate-100",  text: "text-slate-800"   },
           { label: "Hours",   value: totalWorkedLabel,    bg: "bg-blue-50",    text: "text-blue-800"    },
         ].map(s => (
           <div key={s.label} className={`${s.bg} rounded-lg py-2 px-1 text-center border border-gray-100`}>
@@ -757,23 +761,61 @@ export function AttendanceModule() {
   /* ============================================================
      TODAY's OVERVIEW
      ============================================================ */
-  const todayStr = format(new Date(), "yyyy-MM-dd");
+const todayStr = format(new Date(), "yyyy-MM-dd");
 
-  const todayPresentRecords = allAttendance.filter(r => r.date === todayStr && !r.isManual);
+/* ── Step 1: real (non-manual) check-ins today ── */
+const todayPresentRecords = allAttendance.filter(r => r.date === todayStr && !r.isManual);
 
-  const knownUserMap: Record<string, any> = {};
-  allAttendance.forEach(r => {
-    if (r.userId?._id && !knownUserMap[r.userId._id]) knownUserMap[r.userId._id] = r.userId;
+/* ── Step 2: manual entries today ── */
+const todayManualPresentRecords = manualDbRecords.filter(r => r.date === todayStr);
+
+/* ── Step 3: merge real + manual into one map, keyed by userId ── */
+const mergedTodayRecordsMap = new Map<string, any>();
+todayPresentRecords.forEach(r => {
+  const uid = r.userId?._id || r.userId;
+  if (uid) mergedTodayRecordsMap.set(uid, r);
+});
+todayManualPresentRecords.forEach(r => {
+  const uid = r.userId?._id || r.userId;
+  if (uid) mergedTodayRecordsMap.set(uid, r);
+});
+
+/* ── Step 4: merge in approved leave for today (counts as present) ── */
+allLeaveRecords
+  .filter(l => {
+    const approved = l.status === "approved" || l.status === "emergency_approved";
+    return approved && todayStr >= l.startDate && todayStr <= l.endDate;
+  })
+  .forEach(l => {
+    const uid = l.userId?._id || l.userId;
+    if (uid && !mergedTodayRecordsMap.has(uid)) {
+      mergedTodayRecordsMap.set(uid, {
+        _id: `leave-${uid}`,
+        userId: l.userId,
+        checkIn: null,
+        checkOut: null,
+        tagline: `On Leave: ${l.type}`,
+        isLeave: true,
+      });
+    }
   });
-  allUsersList.forEach(u => {
-    if (u._id && !knownUserMap[u._id]) knownUserMap[u._id] = u;
-  });
 
-  const presentUserIds = new Set(todayPresentRecords.map(r => r.userId?._id));
-  const absentUsers    = Object.values(knownUserMap).filter(u => !presentUserIds.has(u._id));
+/* ── Step 5: final merged list used everywhere below ── */
+const mergedTodayRecords = Array.from(mergedTodayRecordsMap.values());
 
-  const getUserTodayRecord = (userId: string) =>
-    todayPresentRecords.find(r => r.userId?._id === userId) || null;
+const knownUserMap: Record<string, any> = {};
+allAttendance.forEach(r => {
+  if (r.userId?._id && !knownUserMap[r.userId._id]) knownUserMap[r.userId._id] = r.userId;
+});
+allUsersList.forEach(u => {
+  if (u._id && !knownUserMap[u._id]) knownUserMap[u._id] = u;
+});
+
+const presentUserIds = new Set(mergedTodayRecords.map(r => r.userId?._id || r.userId));
+const absentUsers    = Object.values(knownUserMap).filter(u => !presentUserIds.has(u._id));
+
+const getUserTodayRecord = (userId: string) =>
+  mergedTodayRecords.find(r => (r.userId?._id || r.userId) === userId) || null;
 
   /* ============================================================
      ADMIN / HR: Direct Check-In / Check-Out
@@ -1991,7 +2033,7 @@ export function AttendanceModule() {
                 <div className="flex flex-col items-center justify-center py-10 text-gray-400"><Users size={32} className="mb-2 opacity-30" /><p className="text-sm">No one has checked in yet today.</p></div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {todayPresentRecords.map(r => (
+                  {mergedTodayRecords.map(r => (
                     <div key={r._id} className="border rounded-xl p-3 sm:p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex justify-between items-start gap-2">
                         <div className="min-w-0 flex-1">
@@ -2005,9 +2047,9 @@ export function AttendanceModule() {
                         <Badge className={`${roleColor(r.userId?.role)} text-[10px] flex-shrink-0`}>{r.userId?.role}</Badge>
                       </div>
                       <div className="mt-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.checkOut ? "bg-slate-100 text-slate-700" : r.checkIn ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                          {r.checkOut ? "✓ Completed" : r.checkIn ? "● Working" : "Absent"}
-                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${r.isLeave ? "bg-amber-100 text-amber-700" : r.checkOut ? "bg-slate-100 text-slate-700" : r.checkIn ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+  {r.isLeave ? "🏖 On Leave" : r.checkOut ? "✓ Completed" : r.checkIn ? "● Working" : "Absent"}
+</span>
                       </div>
                     </div>
                   ))}
