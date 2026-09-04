@@ -19,7 +19,7 @@ import {
   ArrowUpRight, ArrowDownRight, Building2, Shield,FileText
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { payrollApi, attendanceApi } from "@/services/api";
+import { payrollApi, attendanceApi, leaveApi } from "@/services/api";
 import { PAGE_BG, PANEL_BORDER, ACCENT_DARK, ACCENT_ORANGE, ACCENT_ORANGE_HOVER } from "../../../styles/moduleTheme";
 import { format } from "date-fns";
 
@@ -168,6 +168,7 @@ export function PayrollModule() {
 
   const [allAttendance, setAllAttendance] = useState<AttendanceRecord[]>([]);
   const [allUsers,      setAllUsers]      = useState<UserRecord[]>([]);
+  const [allLeaveRecordsForPayroll, setAllLeaveRecordsForPayroll] = useState<any[]>([]);
   const [attLoading,    setAttLoading]    = useState(false);
   const [attMonth,      setAttMonth]      = useState(format(new Date(), "yyyy-MM"));
   const [attSearch,     setAttSearch]     = useState("");
@@ -234,12 +235,14 @@ export function PayrollModule() {
     if (!isAdmin && !isHR) return;
     try {
       setAttLoading(true);
-      const [attRes, usersRes] = await Promise.all([
+      const [attRes, usersRes, leavesRes] = await Promise.all([
         attendanceApi.getAll(),
         attendanceApi.getUsersList(),
+        leaveApi.getAll(),
       ]);
       setAllAttendance(attRes.records || []);
       setAllUsers(usersRes.users     || []);
+      setAllLeaveRecordsForPayroll(leavesRes.leaves || []);
     } catch {
       showToast("Failed to load attendance", "error");
     } finally {
@@ -281,29 +284,87 @@ export function PayrollModule() {
     const [y, m]      = attMonth.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
     const monthPrefix = attMonth + "-";
+
+    // Exclude BOTH Saturday (6) and Sunday (0) from working days
+    const isWeekday = (dow: number) => dow !== 0 && dow !== 6;
+
     const workingDays = Array.from({ length: daysInMonth }, (_, i) =>
-      new Date(y, m - 1, i + 1).getDay() !== 0 ? 1 : 0
+      isWeekday(new Date(y, m - 1, i + 1).getDay()) ? 1 : 0
     ).reduce((a: number, b) => a + b, 0);
+
     const passedWorkingDays = Array.from({ length: daysInMonth }, (_, i) => {
       const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`;
-      return new Date(y, m - 1, i + 1).getDay() !== 0 && dateStr <= todayStr ? 1 : 0;
+      return isWeekday(new Date(y, m - 1, i + 1).getDay()) && dateStr <= todayStr ? 1 : 0;
     }).reduce((a: number, b) => a + b, 0);
+
     const summary: Record<string, any> = {};
     allUsers.forEach(u => {
       summary[u._id] = { userId: u._id, name: u.name, role: u.role, department: u.department,
         presentDays: 0, leaveDays: 0, workingDays, absentDays: 0 };
     });
-    allAttendance.forEach(r => {
-      if (!r.date.startsWith(monthPrefix) || r.date > todayStr) return;
-      const uid = r.userId?._id;
-      if (!uid || !summary[uid]) return;
-      if (r.checkIn) summary[uid].presentDays++;
+
+    // Map lowercased/trimmed name -> userId, so MANUAL attendance records
+    // that have no linked userId (only manualEmployeeName) can still be
+    // matched to the right employee — same fallback AttendanceModule uses.
+    const nameToId: Record<string, string> = {};
+    allUsers.forEach(u => {
+      if (u.name) nameToId[u.name.trim().toLowerCase()] = u._id;
     });
+
+    const resolveUid = (r: any): string | null => {
+      if (r.userId?._id) return String(r.userId._id);
+      if (typeof r.userId === "string" && r.userId) return r.userId;
+      const nm = (r.manualEmployeeName || "").trim().toLowerCase();
+      if (nm && nameToId[nm]) return nameToId[nm];
+      return null;
+    };
+
+    // De-dupe attendance per user per date (avoids double counting
+    // when both a real and a manual record exist for the same day)
+    const attendedDatesByUser: Record<string, Set<string>> = {};
+    allAttendance.forEach((r: any) => {
+      if (!r.date.startsWith(monthPrefix) || r.date > todayStr) return;
+      if (!r.checkIn) return;
+      const dow = new Date(r.date + "T00:00:00").getDay();
+      if (!isWeekday(dow)) return; // ignore weekend check-ins in the count
+      const uid = resolveUid(r);
+      if (!uid || !summary[uid]) return;
+      if (!attendedDatesByUser[uid]) attendedDatesByUser[uid] = new Set();
+      attendedDatesByUser[uid].add(r.date);
+    });
+    Object.entries(attendedDatesByUser).forEach(([uid, dates]) => {
+      summary[uid].presentDays = dates.size;
+    });
+
+    // Approved leave days (weekdays only) that fall within this month and have passed
+    const leaveDatesByUser: Record<string, Set<string>> = {};
+    allLeaveRecordsForPayroll.forEach((l: any) => {
+      const approved = l.status === "approved" || l.status === "emergency_approved";
+      if (!approved) return;
+      const uid = resolveUid(l.userId ? l : { ...l, manualEmployeeName: l.employeeName });
+      if (!uid || !summary[uid]) return;
+      const monthStart = new Date(y, m - 1, 1);
+      const monthEnd   = new Date(y, m - 1, daysInMonth);
+      let cur = new Date(Math.max(new Date(l.startDate).getTime(), monthStart.getTime()));
+      const end = new Date(Math.min(new Date(l.endDate).getTime(), monthEnd.getTime()));
+      while (cur <= end) {
+        const dStr = format(cur, "yyyy-MM-dd");
+        if (dStr <= todayStr && isWeekday(cur.getDay())) {
+          if (!leaveDatesByUser[uid]) leaveDatesByUser[uid] = new Set();
+          leaveDatesByUser[uid].add(dStr);
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+    Object.entries(leaveDatesByUser).forEach(([uid, dates]) => {
+      summary[uid].leaveDays = dates.size;
+    });
+
     Object.values(summary).forEach((s: any) => {
       s.absentDays = Math.max(0, passedWorkingDays - s.presentDays - s.leaveDays);
     });
     return Object.values(summary);
-  }, [allAttendance, allUsers, attMonth, todayStr]);
+  }, [allAttendance, allUsers, attMonth, todayStr, allLeaveRecordsForPayroll]);
 
   const filteredAtt = useMemo(() =>
     attSummary.filter((s: any) => {
