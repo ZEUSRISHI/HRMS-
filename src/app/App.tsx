@@ -28,7 +28,6 @@ import {
   Building2,
   FolderKanban,
   UserPlus,
-  Timer,
   BarChart3,
   Briefcase,
   Users as UsersIcon,
@@ -51,7 +50,6 @@ import { PayrollModule } from "./components/modules/PayrollModule";
 import { ClientManagement } from "./components/modules/ClientManagement";
 import { ProjectManagement } from "./components/modules/ProjectManagement";
 import { OnboardingModule } from "./components/modules/OnboardingModule";
-import { TimeTracking } from "./components/modules/TimeTracking";
 import { AnalyticsReports } from "./components/modules/AnalyticsReports";
 import { HelpdeskModule } from "./components/modules/HelpdeskModule";
 import { UserManagementModule } from "./components/modules/UserManagementModule";
@@ -80,7 +78,6 @@ export type ModuleType =
   | "clients"
   | "projects"
   | "onboarding"
-  | "time-tracking"
   | "analytics"
   | "workforce-overview"
   | "hr-employees"
@@ -105,7 +102,6 @@ export const MODULE_ROUTES: Record<ModuleType, string> = {
   clients:               "Clients",
   projects:              "Projects",
   onboarding:            "Onboarding",
-  "time-tracking":       "TimeTracking",
   analytics:             "Analytics",
   "workforce-overview":  "Workforce",
   "hr-employees":        "EmployeeRecords",
@@ -239,12 +235,6 @@ function AppContent() {
       roles: ["admin", "hr"],
     },
     {
-      id: "time-tracking",
-      name: "Time Tracking",
-      icon: Timer,
-      roles: ["admin", "manager", "employee"],
-    },
-    {
       id: "analytics",
       name: "Analytics",
       icon: BarChart3,
@@ -333,9 +323,6 @@ function AppContent() {
 
       case "onboarding":
         return <OnboardingModule />;
-
-      case "time-tracking":
-        return <TimeTracking />;
 
       case "analytics":
         return <AnalyticsReports />;
