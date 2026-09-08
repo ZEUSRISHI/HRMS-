@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth, Role } from "../app/contexts/AuthContext";
 import { ModuleType } from "../app/App";
-
+import quiboLogo from "../assets/quibo 11.png";
 /* ================= MENU TYPE ================= */
 interface MenuItem {
   id: ModuleType;
@@ -68,9 +68,7 @@ export default function MainLayout({
         {/* HEADER */}
         <div className="flex items-center justify-between p-4 border-b">
           {!collapsed && (
-            <h2 className="font-bold text-orange-500 text-lg">
-              Quibo Tech HRMS
-            </h2>
+            <img src={quiboLogo.src ?? quiboLogo} alt="Quibo Tech HRMS" className="h-8 w-auto" />
           )}
 
           {/* DESKTOP COLLAPSE */}
@@ -156,7 +154,7 @@ export default function MainLayout({
             <button className="lg:hidden" onClick={() => setMobileOpen(true)}>
               <Menu />
             </button>
-            <h1 className="text-lg font-semibold text-orange-500">Quibo Tech HRMS</h1>
+            <img src={quiboLogo.src ?? quiboLogo} alt="Quibo Tech HRMS" className="h-8 w-auto" />
           </div>
 
           {/* USER MENU */}
