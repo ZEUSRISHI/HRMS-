@@ -15,6 +15,7 @@ import { Label } from "../ui/label";
 import {
   Plus, Pencil, Trash, Download, FileText, Upload,
   Filter, ChevronDown, ChevronUp, Calendar, BarChart2,
+  MoreVertical, User, Clock, ChevronRight, Code2,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useUnreadCounts } from "../../contexts/UnreadCountsContext";
@@ -779,76 +780,132 @@ export function TaskManagement() {
           {filteredTasks.map(task => (
             <Card
               key={task._id}
-              className={`hover:shadow-lg transition-all duration-200 border-l-4 rounded-2xl ${PANEL_BORDER} ${
+              className={`hover:shadow-lg transition-all duration-200 border-l-4 rounded-2xl bg-white ${PANEL_BORDER} ${
                 task.status === "completed"   ? "border-l-emerald-500" :
                 task.status === "in-progress" ? "border-l-blue-500"    :
                                                  "border-l-gray-300"
               }`}
             >
-              <CardHeader className="flex flex-row items-start justify-between pb-2 pt-4 px-4">
-                <div className="space-y-1.5 flex-1 min-w-0 pr-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <CardTitle className="text-sm sm:text-base font-semibold">{task.title}</CardTitle>
-                    {isAssignedToMe(task) && !isAdmin && (
-                      <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">Mine</span>
-                    )}
-                    {isAssignedByMe(task) && !isAssignedToMe(task) && !isAdmin && (
-                      <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">By me</span>
-                    )}
+              <CardContent className="px-4 pt-4 pb-3 space-y-3">
+                {/* Top row: icon badge + title + priority/menu */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <Code2 className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-sm font-bold uppercase tracking-wide truncate">{task.title}</CardTitle>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        {isAssignedToMe(task) && !isAdmin && (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-medium">Mine</span>
+                        )}
+                        {isAssignedByMe(task) && !isAssignedToMe(task) && !isAdmin && (
+                          <span className="text-[10px] bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full font-semibold">By me</span>
+                        )}
+                        <span className={`text-[10px] flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wide ${priorityColor(task.priority)}`}>
+                          <BarChart2 className="h-3 w-3" /> {task.priority}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  {task.description && (
-                    <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{task.description}</p>
-                  )}
+                  <button className="text-gray-400 hover:text-gray-600 shrink-0 p-1">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
                 </div>
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold uppercase tracking-wide ${priorityColor(task.priority)}`}>{task.priority}</span>
-                  <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold ${statusColor(task.status)}`}>
+
+                {/* Description */}
+                {task.description && (
+                  <p className="text-xs text-gray-500 leading-relaxed">{task.description}</p>
+                )}
+
+                {/* Status pill / dropdown */}
+                {isAssignedToMe(task) ? (
+                  <Select value={task.status} onValueChange={(v: TaskStatus) => handleStatusChange(task._id, v)}>
+                    <SelectTrigger className={`w-fit h-8 rounded-full text-xs font-semibold border-0 px-4 gap-2 ${statusColor(task.status)}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in-progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className={`inline-block text-xs font-semibold px-4 py-1.5 rounded-full ${statusColor(task.status)}`}>
                     {task.status === "in-progress" ? "In Progress" : task.status.charAt(0).toUpperCase() + task.status.slice(1)}
                   </span>
+                )}
+
+                {/* Info grid: Assigned To / Created By, Due Date / Completed On */}
+                <div className="grid grid-cols-2 gap-y-3 gap-x-2 pt-1">
+                  <div>
+                    <div className="text-[10px] text-gray-400">Assigned To</div>
+                    {task.assignedTo?.name ? (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <User className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-xs font-medium text-gray-700">{task.assignedTo.name}</span>
+                        <Badge className={`${roleColor(task.assignedTo.role)} text-[9px] px-1.5 py-0`}>{task.assignedTo.role}</Badge>
+                      </div>
+                    ) : <span className="text-xs text-gray-400">Unassigned</span>}
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-gray-400">Created By</div>
+                    {task.assignedBy?.name ? (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <User className="h-3.5 w-3.5 text-gray-400" />
+                        <span className="text-xs font-medium text-gray-700">{task.assignedBy.name}</span>
+                        <Badge className={`${roleColor(task.assignedBy.role)} text-[9px] px-1.5 py-0`}>{task.assignedBy.role}</Badge>
+                      </div>
+                    ) : <span className="text-xs text-gray-400">—</span>}
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-gray-400">Due Date</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700">{task.dueDate || "—"}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-gray-400">
+                      {task.status === "completed" ? "Completed On" : "Created On"}
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Clock className="h-3.5 w-3.5 text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700">
+                        {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : "—"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2 px-4 pb-4">
-                <div className="flex flex-wrap gap-2">
-                  {userChip(task.assignedTo, "To")}
-                  {userChip(task.assignedBy, "By")}
-                  {task.dueDate && <div className="flex items-center gap-1 text-xs text-gray-500"><span>📅</span><span>{task.dueDate}</span></div>}
-                  {task.createdAt && <div className="text-xs text-gray-400">🕐 {new Date(task.createdAt).toLocaleDateString()}</div>}
-                  {task.updates?.length > 0 && <div className="text-xs text-gray-400">📝 {task.updates.length} update{task.updates.length !== 1 ? "s" : ""}</div>}
-                </div>
+
                 {task.updates?.length > 0 && task.updates[0].note && (
                   <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-600">
                     <span className="font-semibold text-slate-700">Latest note: </span>{task.updates[0].note}
                   </div>
                 )}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {isAssignedToMe(task) && (
-                    <Select value={task.status} onValueChange={(v: TaskStatus) => handleStatusChange(task._id, v)}>
-                      <SelectTrigger className="w-32 h-7 text-xs"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="in-progress">In Progress</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
 
-                  {/* Employee self-update: edit their own progress notes on a completed/in-progress task assigned to them */}
-                  {isAssignedToMe(task) && !isAdmin && !isAssignedByMe(task) && (
-                    <Button size="sm" variant="outline" onClick={() => handleSelfEdit(task)} className="h-7 text-xs px-2">
-                      <Pencil className="h-3 w-3 mr-1" /> Update Details
-                    </Button>
-                  )}
-
-                  {(isAdmin || isAssignedByMe(task)) && (
-                    <Button size="sm" variant="outline" onClick={() => handleEdit(task)} className="h-7 text-xs px-2">
-                      <Pencil className="h-3 w-3 mr-1" /> Edit
-                    </Button>
-                  )}
-                  {(isAdmin || isAssignedByMe(task)) && (
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(task._id)} className="h-7 text-xs px-2">
-                      <Trash className="h-3 w-3 mr-1" /> Delete
-                    </Button>
-                  )}
+                {/* Divider */}
+                <div className="border-t border-gray-100 pt-3 flex items-center justify-between">
+                  <div className="flex gap-2">
+                    {isAssignedToMe(task) && !isAdmin && !isAssignedByMe(task) && (
+                      <Button size="sm" variant="outline" onClick={() => handleSelfEdit(task)} className="h-8 text-xs px-3 rounded-lg">
+                        <Pencil className="h-3 w-3 mr-1.5" /> Update Details
+                      </Button>
+                    )}
+                    {(isAdmin || isAssignedByMe(task)) && (
+                      <Button size="sm" variant="outline" onClick={() => handleEdit(task)} className="h-8 text-xs px-3 rounded-lg">
+                        <Pencil className="h-3 w-3 mr-1.5" /> Edit
+                      </Button>
+                    )}
+                    {(isAdmin || isAssignedByMe(task)) && (
+                      <Button size="sm" variant="outline" onClick={() => handleDelete(task._id)} className="h-8 text-xs px-3 rounded-lg text-red-600 border-red-200 hover:bg-red-50">
+                        <Trash className="h-3 w-3 mr-1.5" /> Delete
+                      </Button>
+                    )}
+                  </div>
+                  <button className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 px-2">
+                    View Details <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </CardContent>
             </Card>
